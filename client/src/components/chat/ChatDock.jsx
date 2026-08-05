@@ -306,6 +306,23 @@ const formatThreadTime = (value) => {
   }).format(date);
 };
 
+const formatMessageDay = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+};
+
 const formatPresenceTimestamp = (value) => {
   if (!value) return "";
   const date = new Date(value);
@@ -1027,9 +1044,12 @@ const ChatDock = ({ user, theme = "light" }) => {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesHasOlder, setMessagesHasOlder] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [activeMessageDay, setActiveMessageDay] = useState("");
   const [composer, setComposer] = useState("");
   const [sending, setSending] = useState(false);
   const [sidebarMode, setSidebarMode] = useState("threads");
+  const [threadQuery, setThreadQuery] = useState("");
+  const [threadFilter, setThreadFilter] = useState("all");
   const [mobilePanelView, setMobilePanelView] = useState("sidebar");
   const [userQuery, setUserQuery] = useState("");
   const [userResults, setUserResults] = useState([]);
@@ -1185,6 +1205,23 @@ const ChatDock = ({ user, theme = "light" }) => {
       threads.reduce((sum, thread) => sum + (Number(thread.unreadCount) || 0), 0),
     [threads],
   );
+  const visibleThreads = useMemo(() => {
+    const normalizedQuery = threadQuery.trim().toLowerCase();
+
+    return threads.filter((thread) => {
+      if (threadFilter === "unread" && (Number(thread?.unreadCount) || 0) === 0) {
+        return false;
+      }
+      if (threadFilter === "groups" && thread?.type !== "public") {
+        return false;
+      }
+      if (!normalizedQuery) return true;
+
+      return [thread?.name, thread?.lastMessagePreview, thread?.counterpart?.name]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+    });
+  }, [threadFilter, threadQuery, threads]);
   const unreadPreviewData = useMemo(() => {
     if (isOpen) {
       return { threads: [], hiddenCount: 0 };
@@ -3775,6 +3812,26 @@ const ChatDock = ({ user, theme = "light" }) => {
     }
   };
 
+  const handleMessageListScroll = useCallback((event) => {
+    const container = event.currentTarget;
+    const dayMarkers = Array.from(
+      container.querySelectorAll("[data-chat-day]"),
+    );
+    if (dayMarkers.length === 0) return;
+
+    const activationLine = container.scrollTop + 48;
+    let nextDay = dayMarkers[0]?.dataset?.chatDay || "";
+    dayMarkers.forEach((marker) => {
+      if (marker.offsetTop <= activationLine) {
+        nextDay = marker.dataset.chatDay || nextDay;
+      }
+    });
+
+    setActiveMessageDay((currentDay) =>
+      currentDay === nextDay ? currentDay : nextDay,
+    );
+  }, []);
+
   return (
     <>
       {isOpen && (
@@ -3793,8 +3850,9 @@ const ChatDock = ({ user, theme = "light" }) => {
             <div className="chat-dock-sidebar">
               <div className="chat-dock-sidebar-head">
                 <div>
-                  <h2>Chat</h2>
-                  <p>Public room and direct messages</p>
+                  <span className="chat-dock-eyebrow">Workspace</span>
+                  <h2>Messages</h2>
+                  <p>{unreadTotal > 0 ? `${unreadTotal} unread messages` : "You’re all caught up"}</p>
                 </div>
                 <button
                   type="button"
@@ -3814,7 +3872,7 @@ const ChatDock = ({ user, theme = "light" }) => {
                   }`}
                   onClick={() => handleSidebarModeChange("threads")}
                 >
-                  Threads
+                  Inbox
                 </button>
                 <button
                   type="button"
@@ -3823,7 +3881,7 @@ const ChatDock = ({ user, theme = "light" }) => {
                   }`}
                   onClick={() => handleSidebarModeChange("users")}
                 >
-                  New DM
+                  <span aria-hidden="true">+</span> New chat
                 </button>
               </div>
 
@@ -3889,11 +3947,45 @@ const ChatDock = ({ user, theme = "light" }) => {
                   </div>
                 </div>
               ) : (
-                <div className="chat-dock-thread-list">
+                <>
+                  <div className="chat-dock-inbox-tools">
+                    <div className="chat-dock-search-input chat-dock-thread-search">
+                      <SearchIcon width="16" height="16" />
+                      <input
+                        type="search"
+                        value={threadQuery}
+                        onChange={(event) => setThreadQuery(event.target.value)}
+                        placeholder="Search conversations"
+                        aria-label="Search conversations"
+                      />
+                    </div>
+                    <div className="chat-dock-filter-tabs" aria-label="Filter conversations">
+                      {[
+                        ["all", "All"],
+                        ["unread", "Unread"],
+                        ["groups", "Groups"],
+                      ].map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={threadFilter === value ? "active" : ""}
+                          onClick={() => setThreadFilter(value)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="chat-dock-thread-list">
                   {threadsLoading && threads.length === 0 ? (
                     <p className="chat-dock-muted">Loading chats...</p>
+                  ) : visibleThreads.length === 0 ? (
+                    <div className="chat-dock-list-empty">
+                      <SearchIcon width="18" height="18" />
+                      <span>No conversations match</span>
+                    </div>
                   ) : (
-                    threads.map((thread) => {
+                    visibleThreads.map((thread) => {
                       const isActive = thread._id === activeThreadId;
                       const unreadCount = Number(thread.unreadCount) || 0;
                       const isThreadTyping =
@@ -3950,7 +4042,8 @@ const ChatDock = ({ user, theme = "light" }) => {
                       );
                     })
                   )}
-                </div>
+                  </div>
+                </>
               )}
             </div>
 
@@ -3969,10 +4062,14 @@ const ChatDock = ({ user, theme = "light" }) => {
                         <span>Chats</span>
                       </button>
                       <div className="chat-dock-thread-title">
-                        <span className="chat-dock-thread-badge">
-                          {activeThread.type === "public" ? "Public" : "Direct"}
-                        </span>
                         <h3>{activeThread.name}</h3>
+                        <span className="chat-dock-thread-subtitle">
+                          {activeTypingThread
+                            ? getTypingLabel(activeTypingThread.userName)
+                            : activeThread.type === "public"
+                              ? "Team conversation"
+                              : "Direct message"}
+                        </span>
                       </div>
                     </div>
                     <div className="chat-dock-main-head-secondary">
@@ -4054,7 +4151,19 @@ const ChatDock = ({ user, theme = "light" }) => {
                     </div>
                   </div>
 
-                  <div className="chat-dock-messages" ref={messagesContainerRef}>
+                  <div
+                    className="chat-dock-messages"
+                    ref={messagesContainerRef}
+                    onScroll={handleMessageListScroll}
+                  >
+                    {messages.length > 0 && (
+                      <div className="chat-dock-active-day" aria-hidden="true">
+                        <span>
+                          {activeMessageDay ||
+                            formatMessageDay(messages[messages.length - 1]?.createdAt)}
+                        </span>
+                      </div>
+                    )}
                     {(messagesHasOlder || loadingOlderMessages) && messages.length > 0 && (
                       <div className="chat-dock-load-older-wrap">
                         <button
@@ -4077,9 +4186,21 @@ const ChatDock = ({ user, theme = "light" }) => {
                         <p>Start the conversation here.</p>
                       </div>
                     ) : (
-                      messages.map((message) => {
+                      messages.map((message, messageIndex) => {
                         const senderId = toIdString(message?.sender?._id);
                         const isMine = senderId === currentUserId;
+                        const previousMessage = messages[messageIndex - 1];
+                        const previousSenderId = toIdString(previousMessage?.sender?._id);
+                        const messageTime = getMessageTimestamp(message);
+                        const previousMessageTime = getMessageTimestamp(previousMessage);
+                        const startsNewDay =
+                          !previousMessage ||
+                          new Date(messageTime).toDateString() !==
+                            new Date(previousMessageTime).toDateString();
+                        const startsMessageGroup =
+                          startsNewDay ||
+                          previousSenderId !== senderId ||
+                          messageTime - previousMessageTime > 5 * 60 * 1000;
                         const isDeleted = Boolean(message?.isDeleted);
                         const isArchivedMessage = Boolean(message?.isArchived);
                         const wasEdited = Boolean(message?.editedAt) && !isDeleted;
@@ -4113,12 +4234,24 @@ const ChatDock = ({ user, theme = "light" }) => {
                         ].filter(Boolean);
 
                         return (
+                          <React.Fragment key={message._id}>
+                          {startsNewDay && (
+                            <div
+                              className="chat-dock-day-divider"
+                              role="separator"
+                              aria-label={formatMessageDay(message.createdAt)}
+                              data-chat-day={formatMessageDay(message.createdAt)}
+                            >
+                              <span>{formatMessageDay(message.createdAt)}</span>
+                            </div>
+                          )}
                           <div
-                            key={message._id}
                             id={`chat-dock-message-${message._id}`}
-                            className={`chat-dock-message-row ${isMine ? "mine" : ""}`}
+                            className={`chat-dock-message-row ${isMine ? "mine" : ""} ${
+                              startsMessageGroup ? "group-start" : "group-continuation"
+                            }`}
                           >
-                            {!isMine && (
+                            {!isMine && startsMessageGroup && (
                               <span className="chat-dock-user-avatar-wrap chat-dock-message-avatar">
                                 <UserAvatar
                                   name={message?.sender?.name}
@@ -4134,7 +4267,9 @@ const ChatDock = ({ user, theme = "light" }) => {
                               } ${isDeleted ? "deleted" : ""}`}
                             >
                               <div className="chat-dock-message-meta">
-                                <strong>{isMine ? "You" : message?.sender?.name || "User"}</strong>
+                                {startsMessageGroup && (
+                                  <strong>{isMine ? "You" : message?.sender?.name || "User"}</strong>
+                                )}
                                 <div className="chat-dock-message-meta-actions">
                                   <span>{formatThreadTime(message.createdAt)}</span>
                                 </div>
@@ -4551,6 +4686,7 @@ const ChatDock = ({ user, theme = "light" }) => {
                               )}
                             </div>
                           </div>
+                          </React.Fragment>
                         );
                       })
                     )}
