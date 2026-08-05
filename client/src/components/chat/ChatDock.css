@@ -4678,7 +4678,18 @@ html body .chat-dock-shell .chat-dock-active-day {
   height: 0;
   display: flex;
   justify-content: center;
+  visibility: hidden;
+  opacity: 0;
   pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    visibility 0s linear 0.18s;
+}
+
+html body .chat-dock-shell .chat-dock-active-day.visible {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0s;
 }
 
 html body .chat-dock-shell .chat-dock-active-day span {
@@ -4695,6 +4706,12 @@ html body .chat-dock-shell .chat-dock-active-day span {
   backdrop-filter: blur(8px);
   font-size: 0.64rem;
   font-weight: 700;
+  transform: translateY(-4px);
+  transition: transform 0.18s ease;
+}
+
+html body .chat-dock-shell .chat-dock-active-day.visible span {
+  transform: translateY(0);
 }
 
 html body .chat-dock-shell .chat-dock-day-divider {

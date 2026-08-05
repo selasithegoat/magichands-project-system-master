@@ -45,6 +45,8 @@ const CHAT_UNREAD_PREVIEW_LIMIT = 5;
 const CHAT_TYPING_PING_INTERVAL_MS = 2200;
 const CHAT_TYPING_IDLE_TIMEOUT_MS = 3200;
 const CHAT_TYPING_REMOTE_TIMEOUT_MS = 4600;
+const CHAT_DATE_INITIAL_PEEK_MS = 5000;
+const CHAT_DATE_SCROLL_IDLE_MS = 650;
 const CHAT_DEFAULT_REACTIONS = [
   "1f44d",
   "2764-fe0f",
@@ -1045,6 +1047,7 @@ const ChatDock = ({ user, theme = "light" }) => {
   const [messagesHasOlder, setMessagesHasOlder] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [activeMessageDay, setActiveMessageDay] = useState("");
+  const [isActiveMessageDayVisible, setIsActiveMessageDayVisible] = useState(false);
   const [composer, setComposer] = useState("");
   const [sending, setSending] = useState(false);
   const [sidebarMode, setSidebarMode] = useState("threads");
@@ -1132,6 +1135,9 @@ const ChatDock = ({ user, theme = "light" }) => {
   const typingIndicatorTimersRef = useRef(new Map());
   const incomingPreviewHideTimerRef = useRef(null);
   const incomingPreviewClearTimerRef = useRef(null);
+  const activeMessageDayHideTimerRef = useRef(null);
+  const activeMessageDayInitialPeekUntilRef = useRef(0);
+  const activeMessageDayPeekedThreadRef = useRef("");
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread._id === activeThreadId) || null,
@@ -3812,25 +3818,89 @@ const ChatDock = ({ user, theme = "light" }) => {
     }
   };
 
-  const handleMessageListScroll = useCallback((event) => {
-    const container = event.currentTarget;
-    const dayMarkers = Array.from(
-      container.querySelectorAll("[data-chat-day]"),
-    );
-    if (dayMarkers.length === 0) return;
+  const showActiveMessageDay = useCallback((visibleForMs) => {
+    if (activeMessageDayHideTimerRef.current) {
+      window.clearTimeout(activeMessageDayHideTimerRef.current);
+    }
 
-    const activationLine = container.scrollTop + 48;
-    let nextDay = dayMarkers[0]?.dataset?.chatDay || "";
-    dayMarkers.forEach((marker) => {
-      if (marker.offsetTop <= activationLine) {
-        nextDay = marker.dataset.chatDay || nextDay;
-      }
-    });
-
-    setActiveMessageDay((currentDay) =>
-      currentDay === nextDay ? currentDay : nextDay,
-    );
+    setIsActiveMessageDayVisible(true);
+    activeMessageDayHideTimerRef.current = window.setTimeout(() => {
+      setIsActiveMessageDayVisible(false);
+      activeMessageDayHideTimerRef.current = null;
+    }, visibleForMs);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen || !activeThreadId) {
+      activeMessageDayPeekedThreadRef.current = "";
+      activeMessageDayInitialPeekUntilRef.current = 0;
+      if (activeMessageDayHideTimerRef.current) {
+        window.clearTimeout(activeMessageDayHideTimerRef.current);
+        activeMessageDayHideTimerRef.current = null;
+      }
+      setIsActiveMessageDayVisible(false);
+      return;
+    }
+
+    if (
+      messagesLoading ||
+      messages.length === 0 ||
+      activeMessageDayPeekedThreadRef.current === activeThreadId
+    ) {
+      return;
+    }
+
+    activeMessageDayPeekedThreadRef.current = activeThreadId;
+    activeMessageDayInitialPeekUntilRef.current =
+      Date.now() + CHAT_DATE_INITIAL_PEEK_MS;
+    showActiveMessageDay(CHAT_DATE_INITIAL_PEEK_MS);
+  }, [
+    activeThreadId,
+    isOpen,
+    messages.length,
+    messagesLoading,
+    showActiveMessageDay,
+  ]);
+
+  useEffect(
+    () => () => {
+      if (activeMessageDayHideTimerRef.current) {
+        window.clearTimeout(activeMessageDayHideTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const handleMessageListScroll = useCallback(
+    (event) => {
+      const container = event.currentTarget;
+      const dayMarkers = Array.from(
+        container.querySelectorAll("[data-chat-day]"),
+      );
+      if (dayMarkers.length === 0) return;
+
+      const activationLine = container.scrollTop + 48;
+      let nextDay = dayMarkers[0]?.dataset?.chatDay || "";
+      dayMarkers.forEach((marker) => {
+        if (marker.offsetTop <= activationLine) {
+          nextDay = marker.dataset.chatDay || nextDay;
+        }
+      });
+
+      setActiveMessageDay((currentDay) =>
+        currentDay === nextDay ? currentDay : nextDay,
+      );
+
+      const initialPeekRemaining = Math.max(
+        activeMessageDayInitialPeekUntilRef.current - Date.now(),
+        0,
+      );
+      showActiveMessageDay(
+        Math.max(CHAT_DATE_SCROLL_IDLE_MS, initialPeekRemaining),
+      );
+    },
+    [showActiveMessageDay],
+  );
 
   return (
     <>
@@ -4157,7 +4227,12 @@ const ChatDock = ({ user, theme = "light" }) => {
                     onScroll={handleMessageListScroll}
                   >
                     {messages.length > 0 && (
-                      <div className="chat-dock-active-day" aria-hidden="true">
+                      <div
+                        className={`chat-dock-active-day ${
+                          isActiveMessageDayVisible ? "visible" : ""
+                        }`}
+                        aria-hidden="true"
+                      >
                         <span>
                           {activeMessageDay ||
                             formatMessageDay(messages[messages.length - 1]?.createdAt)}
