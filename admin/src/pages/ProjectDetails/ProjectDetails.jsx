@@ -255,6 +255,14 @@ const STANDARD_STATUS_FLOW = [
   "Finished",
 ];
 
+const MEETING_FIRST_STANDARD_STATUS_FLOW = [
+  "Order Created",
+  "Pending Departmental Meeting",
+  ...STANDARD_STATUS_FLOW.slice(1).filter(
+    (status) => status !== "Pending Departmental Meeting",
+  ),
+];
+
 const QUOTE_STATUS_FLOW_BY_MODE = {
   cost: [
     "Quote Created",
@@ -396,8 +404,16 @@ const getQuoteSelectableStatusOptions = (
   return options;
 };
 
-const getStatusFlow = (isQuoteProject, requirementMode = "") =>
-  isQuoteProject ? getQuoteStatusFlow(requirementMode) : STANDARD_STATUS_FLOW;
+const getStatusFlow = (
+  isQuoteProject,
+  requirementMode = "",
+  meetingFirst = false,
+) =>
+  isQuoteProject
+    ? getQuoteStatusFlow(requirementMode)
+    : meetingFirst
+      ? MEETING_FIRST_STANDARD_STATUS_FLOW
+      : STANDARD_STATUS_FLOW;
 
 const buildStatusConfirmPhrase = (status, projectId) => {
   const normalizedStatus = String(status || "").trim();
@@ -416,10 +432,11 @@ const getStatusMovementNote = (
   targetStatus,
   isQuoteProject,
   requirementMode = "",
+  meetingFirst = false,
 ) => {
   if (!currentStatus || !targetStatus) return "";
 
-  const flow = getStatusFlow(isQuoteProject, requirementMode);
+  const flow = getStatusFlow(isQuoteProject, requirementMode, meetingFirst);
   const currentIndex = flow.indexOf(currentStatus);
   const targetIndex = flow.indexOf(targetStatus);
 
@@ -2815,29 +2832,10 @@ const ProjectDetails = ({ user }) => {
   const statusSelectOptions = isQuoteProject
     ? getQuoteSelectableStatusOptions(quoteRequirementMode, isProjectOnHold)
     : [
-        "Order Created",
-        "Pending Scope Approval",
-        "Scope Approval Completed",
-        "Pending Departmental Meeting",
-        "Pending Departmental Engagement",
-        "Departmental Engagement Completed",
-        "Pending Mockup",
-        "Mockup Completed",
-        "Pending Master Approval",
-        "Master Approval Completed",
-        "Pending Production",
-        "Production Completed",
-        "Pending Quality Control",
-        "Quality Control Completed",
-        "Pending Photography",
-        "Photography Completed",
-        "Pending Packaging",
-        "Packaging Completed",
-        "Pending Delivery/Pickup",
-        "Delivered",
-        "Pending Feedback",
-        "Feedback Completed",
-        "Completed",
+        ...(project?.projectType === "Corporate Job" || isGroupedOrder
+          ? MEETING_FIRST_STANDARD_STATUS_FLOW
+          : STANDARD_STATUS_FLOW
+        ).filter((status) => status !== "Finished"),
         ...(isProjectOnHold ? ["On Hold"] : []),
       ].map((status) => ({
         value: status,
@@ -2864,6 +2862,7 @@ const ProjectDetails = ({ user }) => {
         statusConfirmModal.targetStatus,
         isQuoteProject,
         quoteRequirementMode,
+        project?.projectType === "Corporate Job" || isGroupedOrder,
       )
     : "";
   const quoteDecisionState = isQuoteProject
@@ -5248,7 +5247,11 @@ const ProjectDetails = ({ user }) => {
             }
             onMeetingOverrideChange={refreshMeetingOrderState}
           />
-          <ProjectRemindersCard project={project} user={user} />
+          <ProjectRemindersCard
+            project={project}
+            user={user}
+            isGroupedProject={isGroupedOrder}
+          />
           <div className="detail-card">
             <h3
               className="card-title"
@@ -5747,6 +5750,7 @@ const ProjectDetails = ({ user }) => {
         currentPriority={project?.priority}
         currentSampleRequired={Boolean(project?.sampleRequirement?.isRequired)}
         currentCorporateEmergency={Boolean(project?.corporateEmergency?.isEnabled)}
+        isGroupedProject={isGroupedOrder}
       />
     </div>
   );

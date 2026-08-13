@@ -97,12 +97,12 @@ import ProductionAssignmentsEditor from "../../components/features/ProductionAss
 const STATUS_STEPS = [
   { label: "Order Created", statuses: ["Order Created"] },
   {
-    label: "Scope Approval",
-    statuses: ["Pending Scope Approval", "Scope Approval Completed"],
-  },
-  {
     label: "Departmental Meeting",
     statuses: ["Pending Departmental Meeting"],
+  },
+  {
+    label: "Scope Approval",
+    statuses: ["Pending Scope Approval", "Scope Approval Completed"],
   },
   {
     label: "Departmental Engagement",
@@ -4868,12 +4868,12 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
     switch (status) {
       case "Order Created":
         return 5;
-      case "Pending Scope Approval":
-        return 15;
-      case "Scope Approval Completed":
-        return 22;
       case "Pending Departmental Meeting":
-        return 25;
+        return 10;
+      case "Pending Scope Approval":
+        return 18;
+      case "Scope Approval Completed":
+        return 24;
       case "Pending Departmental Engagement":
         return 27;
       case "Departmental Engagement Completed":

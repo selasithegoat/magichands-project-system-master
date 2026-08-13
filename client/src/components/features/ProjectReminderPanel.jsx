@@ -56,9 +56,9 @@ const REMINDER_REPEAT_OPTIONS = [
 
 const STANDARD_STATUS_OPTIONS = [
   "Order Created",
+  "Pending Departmental Meeting",
   "Pending Scope Approval",
   "Scope Approval Completed",
-  "Pending Departmental Meeting",
   "Pending Departmental Engagement",
   "Departmental Engagement Completed",
   "Pending Mockup",

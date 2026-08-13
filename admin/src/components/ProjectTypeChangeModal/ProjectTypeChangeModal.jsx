@@ -47,13 +47,24 @@ const QUOTE_STATUS_OPTIONS = [
   "Completed",
   "Finished",
 ];
+const MEETING_FIRST_PROJECT_STATUS_OPTIONS = [
+  "Order Created",
+  "Pending Departmental Meeting",
+  ...PROJECT_STATUS_OPTIONS.slice(1).filter(
+    (status) => status !== "Pending Departmental Meeting",
+  ),
+];
 const STATUS_OPTION_LABELS = {
   "Pending Cost Verification": "Pending Cost",
   "Cost Verification Completed": "Cost Completed",
 };
 
-const getStatusOptionsForType = (projectType) =>
-  projectType === "Quote" ? QUOTE_STATUS_OPTIONS : PROJECT_STATUS_OPTIONS;
+const getStatusOptionsForType = (projectType, isGroupedProject = false) => {
+  if (projectType === "Quote") return QUOTE_STATUS_OPTIONS;
+  return projectType === "Corporate Job" || isGroupedProject
+    ? MEETING_FIRST_PROJECT_STATUS_OPTIONS
+    : PROJECT_STATUS_OPTIONS;
+};
 
 const getDefaultStatusForType = (projectType) =>
   projectType === "Quote"
@@ -80,6 +91,7 @@ const ProjectTypeChangeModal = ({
   currentPriority = "Normal",
   currentSampleRequired = false,
   currentCorporateEmergency = false,
+  isGroupedProject = false,
 }) => {
   const [targetType, setTargetType] = useState("Standard");
   const [targetStatus, setTargetStatus] = useState("");
@@ -92,7 +104,10 @@ const ProjectTypeChangeModal = ({
     if (!isOpen) return;
 
     const normalizedType = normalizeProjectType(currentType);
-    const statusOptions = getStatusOptionsForType(normalizedType);
+    const statusOptions = getStatusOptionsForType(
+      normalizedType,
+      isGroupedProject,
+    );
     const normalizedStatus = statusOptions.includes(currentStatus)
       ? currentStatus
       : getDefaultStatusForType(normalizedType);
@@ -118,11 +133,12 @@ const ProjectTypeChangeModal = ({
     currentPriority,
     currentSampleRequired,
     currentCorporateEmergency,
+    isGroupedProject,
   ]);
 
   const statusOptions = useMemo(
-    () => getStatusOptionsForType(targetType),
-    [targetType],
+    () => getStatusOptionsForType(targetType, isGroupedProject),
+    [targetType, isGroupedProject],
   );
 
   useEffect(() => {

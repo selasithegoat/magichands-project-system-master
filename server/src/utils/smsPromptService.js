@@ -2,9 +2,9 @@ const toText = (value) => (typeof value === "string" ? value.trim() : "");
 
 const STANDARD_PROGRESS_MAP = {
   "Order Created": 5,
-  "Pending Scope Approval": 15,
-  "Scope Approval Completed": 22,
-  "Pending Departmental Meeting": 25,
+  "Pending Departmental Meeting": 10,
+  "Pending Scope Approval": 18,
+  "Scope Approval Completed": 24,
   "Pending Departmental Engagement": 27,
   "Departmental Engagement Completed": 32,
   "Pending Mockup": 38,

@@ -2436,7 +2436,7 @@ const advanceProjectsPastPendingMeeting = async (projects = []) => {
 
   await Project.updateMany(
     { _id: { $in: targetIds } },
-    { $set: { status: "Pending Departmental Engagement" } },
+    { $set: { status: "Pending Scope Approval" } },
   );
 };
 
@@ -4072,9 +4072,9 @@ const DEFAULT_STATUS_BY_PROJECT_TYPE = {
 };
 const STANDARD_STATUS_FLOW = [
   "Order Created",
+  "Pending Departmental Meeting",
   "Pending Scope Approval",
   "Scope Approval Completed",
-  "Pending Departmental Meeting",
   "Pending Departmental Engagement",
   "Departmental Engagement Completed",
   "Pending Mockup",
@@ -4177,7 +4177,7 @@ const isStatusAtOrAfterMeetingGate = (status = "", projectType = "") => {
   if (!normalizedStatus) return false;
   if (projectType === "Quote") return false;
   const flow = getStatusFlowForProjectType(projectType);
-  const gateIndex = flow.indexOf("Pending Departmental Engagement");
+  const gateIndex = flow.indexOf("Pending Scope Approval");
   const statusIndex = flow.indexOf(normalizedStatus);
   if (gateIndex === -1 || statusIndex === -1) return false;
   return statusIndex >= gateIndex;
@@ -11306,13 +11306,9 @@ const updateProjectStatus = async (req, res) => {
     const meetingSkipped = Boolean(meetingGate.meetingSkipped);
     const meetingCompleted = Boolean(meetingGate.meetingCompleted) || meetingSkipped;
     const meetingIncomplete = (meetingRequired || meetingScheduled) && !meetingCompleted;
-    const shouldForcePendingMeeting =
-      meetingIncomplete && newStatus === "Scope Approval Completed";
-
     if (
       meetingIncomplete &&
       newStatus !== "Pending Departmental Meeting" &&
-      !shouldForcePendingMeeting &&
       isStatusAtOrAfterMeetingGate(newStatus, project?.projectType)
     ) {
       return res.status(400).json({
@@ -11324,9 +11320,6 @@ const updateProjectStatus = async (req, res) => {
 
     // If the selected status has an auto-advancement, use it
     let finalStatus = getAutoProgressedStatus(newStatus, project);
-    if (shouldForcePendingMeeting) {
-      finalStatus = "Pending Departmental Meeting";
-    }
 
     if (isQuoteProject(project) && newStatus === "Mockup Completed") {
       project.quoteDetails = normalizeQuoteDetailsWorkflow({
@@ -18030,6 +18023,14 @@ const updateProject = async (req, res) => {
         status,
         normalizeProjectType(project.projectType, "Standard"),
       );
+      if (isLeadAcceptance && !isQuoteProject(project)) {
+        const meetingGate = await resolveMeetingGateState(project);
+        if (meetingGate.required && !meetingGate.meetingSkipped) {
+          project.status = meetingGate.meetingCompleted
+            ? "Pending Scope Approval"
+            : "Pending Departmental Meeting";
+        }
+      }
     }
     if (priority) project.priority = priority;
     if (project.projectType !== "Corporate Job") {

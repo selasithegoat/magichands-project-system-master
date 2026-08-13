@@ -85,6 +85,13 @@ const STANDARD_STATUS_OPTIONS = [
   "Completed",
   "Finished",
 ];
+const MEETING_FIRST_STANDARD_STATUS_OPTIONS = [
+  "Order Created",
+  "Pending Departmental Meeting",
+  ...STANDARD_STATUS_OPTIONS.slice(1).filter(
+    (status) => status !== "Pending Departmental Meeting",
+  ),
+];
 
 const QUOTE_STATUS_OPTIONS = [
   "Quote Created",
@@ -369,7 +376,7 @@ const getReminderStatusLabel = (status) => {
   return "Scheduled";
 };
 
-const ProjectRemindersCard = ({ project, user }) => {
+const ProjectRemindersCard = ({ project, user, isGroupedProject = false }) => {
   const projectId = toEntityId(project?._id);
   const userId = toEntityId(user?._id || user?.id);
   const userRole = String(user?.role || "").trim().toLowerCase();
@@ -413,8 +420,10 @@ const ProjectRemindersCard = ({ project, user }) => {
     () =>
       project?.projectType === "Quote"
         ? QUOTE_STATUS_OPTIONS
-        : STANDARD_STATUS_OPTIONS,
-    [project?.projectType],
+        : project?.projectType === "Corporate Job" || isGroupedProject
+          ? MEETING_FIRST_STANDARD_STATUS_OPTIONS
+          : STANDARD_STATUS_OPTIONS,
+    [project?.projectType, isGroupedProject],
   );
   const engagedGroupIds = useMemo(() => {
     const canonical = getCanonicalDepartmentSet(project?.departments);

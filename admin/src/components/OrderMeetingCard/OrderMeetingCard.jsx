@@ -303,7 +303,7 @@ const OrderMeetingCard = ({
     }
 
     const confirmMessage = nextSkipped
-      ? "Skip the departmental meeting requirement? Any project still waiting at the meeting stage will move to Pending Departmental Engagement."
+      ? "Skip the departmental meeting requirement? Any project still waiting at the meeting stage will move to Pending Scope Approval."
       : "Restore the departmental meeting requirement for this order?";
     if (!window.confirm(confirmMessage)) return;
 
@@ -326,7 +326,7 @@ const OrderMeetingCard = ({
       }
       toast.success(
         nextSkipped
-          ? "Meeting skipped. Pending meeting projects moved to Pending Departmental Engagement when applicable."
+          ? "Meeting skipped. Pending meeting projects moved to Pending Scope Approval when applicable."
           : "Meeting requirement restored.",
       );
     } catch (overrideError) {
