@@ -32,7 +32,9 @@ const ActivityLogSchema = new mongoose.Schema(
         "departments_update", // [NEW]
         "factor_add", // [NEW]
         "factor_update", // [NEW]
+        "factor_delete",
         "update_post", // [NEW]
+        "update_edit",
         "engagement_acknowledge", // [NEW]
         "engagement_unacknowledge", // [NEW]
         "mockup_upload", // [NEW]
@@ -42,6 +44,18 @@ const ActivityLogSchema = new mongoose.Schema(
         "mockup_rejection", // [NEW]
         "mockup_delete", // [NEW]
         "mockup_decision_reset", // [NEW]
+        "mockup_email_sent",
+        "comment_post",
+        "comment_update",
+        "comment_delete",
+        "feedback_add",
+        "feedback_delete",
+        "batch_created",
+        "batch_updated",
+        "batch_delivery_complete",
+        "batch_record_updated",
+        "batch_status_updated",
+        "batch_status_reconciled",
       ],
     },
     description: {

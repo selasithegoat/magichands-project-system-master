@@ -17,9 +17,10 @@ const logActivity = async (
   details = {},
 ) => {
   try {
+    const actorId = userId?._id || userId?.id || userId;
     await ActivityLog.create({
       project: projectId,
-      user: userId,
+      user: actorId,
       action,
       description,
       details,

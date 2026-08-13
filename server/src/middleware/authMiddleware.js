@@ -227,6 +227,7 @@ const authenticateRequest = async (req, res, { optional = false } = {}) => {
       typeof decoded?.sid === "string" ? decoded.sid.trim() : "";
     let sessionId = rawSessionId;
     const isLegacyUpgrade = !sessionId;
+    let shouldRefreshCookie = isLegacyUpgrade;
 
     if (isLegacyUpgrade) {
       const createdSession = await createUserSession({
@@ -255,14 +256,17 @@ const authenticateRequest = async (req, res, { optional = false } = {}) => {
         res.status(401).json({ message: "Not authorized" });
         return false;
       }
+      shouldRefreshCookie = Boolean(activeSession.wasTouched);
     }
 
     const nextCookieName = getAuthCookieNameForUser(user);
-    res.cookie(
-      nextCookieName,
-      generateToken(user._id, sessionId),
-      resolveCookieOptions(),
-    );
+    if (shouldRefreshCookie) {
+      res.cookie(
+        nextCookieName,
+        generateToken(user._id, sessionId),
+        resolveCookieOptions(),
+      );
+    }
 
     req.user = user;
     req.authSession = {

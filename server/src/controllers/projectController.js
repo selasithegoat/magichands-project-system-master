@@ -1496,20 +1496,14 @@ const DASHBOARD_WORKLOAD_EXCLUDED_STATUSES = [
 const DASHBOARD_CARD_PROJECT_SELECT = [
   "_id",
   "orderId",
-  "orderRef",
   "orderDate",
-  "receivedTime",
   "projectType",
   "priority",
   "status",
-  "statusChangedAt",
-  "statusHistory",
   "createdAt",
   "updatedAt",
-  "versionNumber",
   "projectLeadId",
   "assistantLeadId",
-  "referenceAccess",
   "departments",
   "details.projectName",
   "details.projectNameRaw",
@@ -1523,17 +1517,7 @@ const DASHBOARD_CARD_PROJECT_SELECT = [
   "details.attachments",
   "sampleImage",
   "attachments",
-  "mockup",
-  "sampleRequirement",
-  "corporateEmergency",
-  "sampleApproval",
   "quoteDetails.checklist",
-  "cancellation",
-  "hold",
-  "challenges",
-  "productionRisks",
-  "invoice",
-  "paymentVerifications",
 ].join(" ");
 const DASHBOARD_META_PROJECT_SELECT = [
   "_id",
@@ -1646,14 +1630,19 @@ const buildProjectViewCondition = (viewValue = "") => {
   }
 };
 
-const normalizeDashboardProject = (project) => normalizeProjectStatusFields(project);
+const normalizeDashboardProject = (project) => {
+  if (!project) return project;
+  const normalizedStatus = normalizeMasterApprovalStatus(project.status);
+  if (normalizedStatus && normalizedStatus !== project.status) {
+    project.status = normalizedStatus;
+  }
+  return project;
+};
 
 const populateDashboardProjectQuery = (query) =>
   query
-    .populate("createdBy", "firstName lastName")
     .populate("projectLeadId", "firstName lastName avatarUrl")
-    .populate("assistantLeadId", "firstName lastName employeeId email avatarUrl")
-    .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone");
+    .populate("assistantLeadId", "firstName lastName employeeId email avatarUrl");
 
 const fetchDashboardCardProjects = async (
   req,
@@ -1927,11 +1916,12 @@ const buildClientDashboardSummary = async (req) => {
   activeMetaProjects.forEach((project) => {
     (Array.isArray(project?.departments) ? project.departments : []).forEach(
       (departmentId) => {
-        if (!departmentId) return;
-        if (!recentActiveByDepartmentIds.has(departmentId)) {
-          recentActiveByDepartmentIds.set(departmentId, []);
+        const normalizedDepartmentId = toObjectIdString(departmentId);
+        if (!normalizedDepartmentId) return;
+        if (!recentActiveByDepartmentIds.has(normalizedDepartmentId)) {
+          recentActiveByDepartmentIds.set(normalizedDepartmentId, []);
         }
-        const bucket = recentActiveByDepartmentIds.get(departmentId);
+        const bucket = recentActiveByDepartmentIds.get(normalizedDepartmentId);
         if (bucket.length < 5) bucket.push(project._id);
       },
     );
@@ -1966,16 +1956,26 @@ const buildClientDashboardSummary = async (req) => {
     ),
   ]);
 
-  const cardsById = new Map(
-    dashboardCards.map((project) => [toObjectIdString(project?._id), project]),
-  );
-  const recentActive = recentActiveIds
-    .map((id) => cardsById.get(toObjectIdString(id)))
-    .filter(Boolean);
+  const projectCatalogById = new Map();
+  [
+    dashboardCards,
+    pendingPreview,
+    quotePreview,
+    deliveryPreview,
+    leadPendingAssignments,
+  ].forEach((projects) => {
+    projects.forEach((project) => {
+      const projectId = toObjectIdString(project?._id);
+      if (projectId && !projectCatalogById.has(projectId)) {
+        projectCatalogById.set(projectId, project);
+      }
+    });
+  });
+
   const recentActiveByDepartment = {};
   recentActiveByDepartmentIds.forEach((ids, departmentId) => {
     recentActiveByDepartment[departmentId] = ids
-      .map((id) => cardsById.get(toObjectIdString(id)))
+      .map(toObjectIdString)
       .filter(Boolean);
   });
 
@@ -2001,15 +2001,23 @@ const buildClientDashboardSummary = async (req) => {
       totalLive: clientLiveProjects.length,
     },
     projects: {
-      recentActive,
-      recentActiveByDepartment,
-      upcomingDeadlines: upcomingDeadlineIds
-        .map((id) => cardsById.get(toObjectIdString(id)))
+      schemaVersion: 2,
+      catalog: Array.from(projectCatalogById.values()),
+      recentActiveIds: recentActiveIds.map(toObjectIdString).filter(Boolean),
+      recentActiveByDepartmentIds: recentActiveByDepartment,
+      upcomingDeadlineIds: upcomingDeadlineIds.map(toObjectIdString).filter(Boolean),
+      pendingAcceptancePreviewIds: pendingPreview
+        .map((project) => toObjectIdString(project?._id))
         .filter(Boolean),
-      pendingAcceptancePreview: pendingPreview,
-      quotePreview,
-      pendingDeliveryPreview: deliveryPreview,
-      leadPendingAssignments,
+      quotePreviewIds: quotePreview
+        .map((project) => toObjectIdString(project?._id))
+        .filter(Boolean),
+      pendingDeliveryPreviewIds: deliveryPreview
+        .map((project) => toObjectIdString(project?._id))
+        .filter(Boolean),
+      leadPendingAssignmentIds: leadPendingAssignments
+        .map((project) => toObjectIdString(project?._id))
+        .filter(Boolean),
     },
     workload: {
       departments: departmentWorkload,

@@ -168,6 +168,7 @@ const EMPTY_DASHBOARD_SUMMARY = {
     totalLive: 0,
   },
   projects: {
+    catalog: [],
     recentActive: [],
     recentActiveByDepartment: {},
     upcomingDeadlines: [],
@@ -205,6 +206,70 @@ const toEntityId = (value) => {
     if (value.id) return String(value.id);
   }
   return "";
+};
+
+const normalizeDashboardProjects = (value) => {
+  const projects = value && typeof value === "object" ? value : {};
+  const catalog = Array.isArray(projects.catalog) ? projects.catalog : [];
+  const byId = new Map();
+  const addToCatalog = (project) => {
+    if (!project || typeof project !== "object") return;
+    const projectId = toEntityId(project._id || project.id);
+    if (projectId && !byId.has(projectId)) byId.set(projectId, project);
+  };
+
+  catalog.forEach(addToCatalog);
+  [
+    projects.recentActive,
+    projects.upcomingDeadlines,
+    projects.pendingAcceptancePreview,
+    projects.quotePreview,
+    projects.pendingDeliveryPreview,
+    projects.leadPendingAssignments,
+    ...Object.values(projects.recentActiveByDepartment || {}),
+  ].forEach((list) => {
+    if (Array.isArray(list)) list.forEach(addToCatalog);
+  });
+
+  const resolveList = (list) =>
+    (Array.isArray(list) ? list : [])
+      .map((entry) =>
+        entry && typeof entry === "object"
+          ? entry
+          : byId.get(toEntityId(entry)),
+      )
+      .filter(Boolean);
+  const departmentLists =
+    projects.recentActiveByDepartmentIds ||
+    projects.recentActiveByDepartment ||
+    {};
+  const recentActiveByDepartment = Object.fromEntries(
+    Object.entries(departmentLists).map(([departmentId, list]) => [
+      departmentId,
+      resolveList(list),
+    ]),
+  );
+
+  return {
+    ...EMPTY_DASHBOARD_SUMMARY.projects,
+    ...projects,
+    catalog: Array.from(byId.values()),
+    recentActive: resolveList(projects.recentActiveIds || projects.recentActive),
+    recentActiveByDepartment,
+    upcomingDeadlines: resolveList(
+      projects.upcomingDeadlineIds || projects.upcomingDeadlines,
+    ),
+    pendingAcceptancePreview: resolveList(
+      projects.pendingAcceptancePreviewIds || projects.pendingAcceptancePreview,
+    ),
+    quotePreview: resolveList(projects.quotePreviewIds || projects.quotePreview),
+    pendingDeliveryPreview: resolveList(
+      projects.pendingDeliveryPreviewIds || projects.pendingDeliveryPreview,
+    ),
+    leadPendingAssignments: resolveList(
+      projects.leadPendingAssignmentIds || projects.leadPendingAssignments,
+    ),
+  };
 };
 
 const parseDeliveryTimeParts = (value) => {
@@ -396,8 +461,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
             ...(payload?.stats || {}),
           },
           projects: {
-            ...EMPTY_DASHBOARD_SUMMARY.projects,
-            ...(payload?.projects || {}),
+            ...normalizeDashboardProjects(payload?.projects),
           },
           workload: {
             ...EMPTY_DASHBOARD_SUMMARY.workload,
@@ -470,6 +534,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
       if (projectId && !byId.has(projectId)) byId.set(projectId, project);
     };
     [
+      dashboardProjects.catalog,
       dashboardProjects.recentActive,
       dashboardProjects.upcomingDeadlines,
       dashboardProjects.pendingAcceptancePreview,

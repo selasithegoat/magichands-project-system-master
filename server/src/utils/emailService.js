@@ -4,6 +4,7 @@ const path = require("path");
 
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
 const EMAIL_LOGO_CID = "magichands-logo@mail";
+const DEFAULT_EMAIL_ATTACHMENT_MAX_TOTAL_BYTES = 16 * 1024 * 1024;
 const DEFAULT_EMAIL_LOGO_PATHS = [
   path.resolve(__dirname, "../../../client/public/icon.png"),
   path.resolve(__dirname, "../../../admin/public/icon.png"),
@@ -299,9 +300,64 @@ const resolveEmailOptions = (htmlOrOptions, extraOptions = {}) => {
   };
 };
 
+const resolveAttachmentLimitBytes = () => {
+  const configured = Number.parseInt(
+    process.env.EMAIL_ATTACHMENT_MAX_TOTAL_BYTES,
+    10,
+  );
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_EMAIL_ATTACHMENT_MAX_TOTAL_BYTES;
+};
+
+const getAttachmentSizeBytes = async (attachment = {}) => {
+  if (Buffer.isBuffer(attachment.content)) return attachment.content.length;
+  if (typeof attachment.content === "string") {
+    return Buffer.byteLength(
+      attachment.content,
+      attachment.encoding === "base64" ? "base64" : "utf8",
+    );
+  }
+  if (typeof attachment.raw === "string") {
+    return Buffer.byteLength(attachment.raw, "utf8");
+  }
+
+  const attachmentPath = toText(attachment.path);
+  if (!attachmentPath || /^[a-z]+:\/\//i.test(attachmentPath)) return 0;
+
+  try {
+    const stats = await fs.promises.stat(attachmentPath);
+    return stats.isFile() ? stats.size : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const limitAttachmentsByTotalSize = async (attachments = []) => {
+  const maxBytes = resolveAttachmentLimitBytes();
+  const selected = [];
+  let selectedBytes = 0;
+  let omittedBytes = 0;
+  let omittedCount = 0;
+
+  for (const attachment of attachments.filter(Boolean)) {
+    const sizeBytes = await getAttachmentSizeBytes(attachment);
+    if (sizeBytes > 0 && selectedBytes + sizeBytes > maxBytes) {
+      omittedBytes += sizeBytes;
+      omittedCount += 1;
+      continue;
+    }
+    selected.push(attachment);
+    selectedBytes += sizeBytes;
+  }
+
+  return { attachments: selected, maxBytes, omittedBytes, omittedCount };
+};
+
 const createTransporter = () =>
   nodemailer.createTransport({
     service: "gmail",
+    allowInternalNetworkInterfaces: true,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
@@ -330,6 +386,26 @@ const sendEmailDetailed = async (
     const hasCustomHtml = Boolean(toText(options.html));
     const logoPath = resolveEmailLogoPath();
     const includeLogo = !hasCustomHtml && Boolean(logoPath);
+    const attachmentSelection = await limitAttachmentsByTotalSize([
+      ...(includeLogo
+        ? [
+          {
+            filename: path.basename(logoPath),
+            path: logoPath,
+            cid: EMAIL_LOGO_CID,
+          },
+        ]
+        : []),
+      ...options.customAttachments,
+    ]);
+
+    if (attachmentSelection.omittedCount > 0) {
+      console.warn("Email attachments omitted because they exceeded the size limit:", {
+        omittedCount: attachmentSelection.omittedCount,
+        omittedBytes: attachmentSelection.omittedBytes,
+        maxBytes: attachmentSelection.maxBytes,
+      });
+    }
 
     const info = await transporter.sendMail({
       from: `"Magichands Co. Ltd." <${process.env.SMTP_USER}>`,
@@ -347,18 +423,7 @@ const sendEmailDetailed = async (
         options.headers && typeof options.headers === "object"
           ? options.headers
           : undefined,
-      attachments: [
-        ...(includeLogo
-          ? [
-            {
-              filename: path.basename(logoPath),
-              path: logoPath,
-              cid: EMAIL_LOGO_CID,
-            },
-          ]
-          : []),
-        ...options.customAttachments,
-      ],
+      attachments: attachmentSelection.attachments,
     });
 
     return {
@@ -367,6 +432,7 @@ const sendEmailDetailed = async (
       accepted: Array.isArray(info?.accepted) ? info.accepted : [],
       rejected: Array.isArray(info?.rejected) ? info.rejected : [],
       response: toText(info?.response),
+      omittedAttachments: attachmentSelection.omittedCount,
     };
   } catch (error) {
     console.error("Email send failed:", {
@@ -382,6 +448,7 @@ const sendEmailDetailed = async (
       accepted: [],
       rejected: [],
       response: "",
+      omittedAttachments: 0,
     };
   }
 };

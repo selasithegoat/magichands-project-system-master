@@ -13,8 +13,13 @@ const BILLING_MISSING_LABELS = {
 const toIdString = (value) => {
   if (!value) return "";
   if (typeof value === "string") return value;
-  if (typeof value === "object" && value._id) return toIdString(value._id);
-  if (typeof value.toString === "function") return value.toString();
+  if (typeof value === "object" && value._id && value._id !== value) {
+    return toIdString(value._id);
+  }
+  if (typeof value.toString === "function") {
+    const text = String(value.toString()).trim();
+    return text === "[object Object]" ? "" : text;
+  }
   return "";
 };
 

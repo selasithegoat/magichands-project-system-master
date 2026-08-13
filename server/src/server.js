@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+const compression = require("compression");
 const dotenv = require("dotenv");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = rateLimit;
@@ -317,7 +318,13 @@ const setPortalBuildHeaders = (res, filePath) => {
     return;
   }
 
-  res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+  const isVersionedAsset = /-[a-z0-9_-]{8,}\.[a-z0-9]+$/i.test(basename);
+  res.setHeader(
+    "Cache-Control",
+    isVersionedAsset
+      ? "public, max-age=31536000, immutable"
+      : "public, max-age=3600, must-revalidate",
+  );
 };
 
 const sendPortalIndex = (res, distPath) =>
@@ -336,6 +343,15 @@ const isStaticAssetRequest = (req) => {
 app.set("trust proxy", 1);
 
 // Middleware
+app.use(
+  compression({
+    threshold: 1024,
+    filter: (req, res) => {
+      if (String(req.path || "").startsWith("/api/realtime")) return false;
+      return compression.filter(req, res);
+    },
+  }),
+);
 app.use(
   cors((req, callback) => {
     const requestOrigin = req.headers.origin;
