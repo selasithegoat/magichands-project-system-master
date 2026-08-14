@@ -35,7 +35,7 @@ const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
 const isHistoryProject = (project) =>
   HISTORY_PROJECT_STATUSES.has(project?.status || "");
-const PROJECT_RENDER_BATCH_SIZE = 24;
+const PROJECT_RENDER_BATCH_SIZE = 12;
 
 const OngoingProjects = ({
   onBack,

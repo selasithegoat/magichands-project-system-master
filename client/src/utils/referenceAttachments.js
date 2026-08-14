@@ -54,6 +54,29 @@ const resolveNote = (value) => {
   return "";
 };
 
+const CARD_IMAGE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
+const THUMBNAIL_IMAGE_EXTENSIONS = /\.(avif|gif|jpe?g|png|webp)$/i;
+
+const appendCardThumbnailQuery = (fileUrl) => {
+  const rawUrl = String(fileUrl || "").trim();
+  if (!rawUrl) return "";
+
+  const hashIndex = rawUrl.indexOf("#");
+  const hash = hashIndex >= 0 ? rawUrl.slice(hashIndex) : "";
+  const urlWithoutHash = hashIndex >= 0 ? rawUrl.slice(0, hashIndex) : rawUrl;
+  const pathOnly = urlWithoutHash.split("?")[0];
+  const isManagedUpload =
+    /^\/?uploads\//i.test(pathOnly) ||
+    /^https?:\/\/[^/]+\/uploads\//i.test(pathOnly);
+
+  if (!isManagedUpload || !THUMBNAIL_IMAGE_EXTENSIONS.test(pathOnly)) {
+    return rawUrl;
+  }
+
+  const separator = urlWithoutHash.includes("?") ? "&" : "?";
+  return `${urlWithoutHash}${separator}thumbnail=card-v1${hash}`;
+};
+
 export const normalizeReferenceAttachment = (value) => {
   const fileUrl = resolveUrl(value);
   return {
@@ -82,3 +105,22 @@ export const getReferenceFileType = (value) =>
 
 export const getReferenceFileNote = (value) =>
   normalizeReferenceAttachment(value).note;
+
+export const getProjectCardImageUrl = (project) => {
+  const sampleImage = getReferenceFileUrl(
+    project?.sampleImage || project?.details?.sampleImage,
+  );
+  if (sampleImage) return appendCardThumbnailQuery(sampleImage);
+
+  const attachments = [
+    ...(Array.isArray(project?.attachments) ? project.attachments : []),
+    ...(Array.isArray(project?.details?.attachments)
+      ? project.details.attachments
+      : []),
+  ];
+  const firstImage = attachments
+    .map((attachment) => getReferenceFileUrl(attachment))
+    .find((fileUrl) => CARD_IMAGE_EXTENSIONS.test(fileUrl.split("?")[0]));
+
+  return appendCardThumbnailQuery(firstImage || "");
+};

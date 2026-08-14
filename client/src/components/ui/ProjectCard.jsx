@@ -5,7 +5,7 @@ import FolderIcon from "../icons/FolderIcon";
 import StatusSlaBadge from "../ui/StatusSlaBadge";
 import ProjectHealthBadge from "../ui/ProjectHealthBadge";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
-import { getReferenceFileUrl } from "../../utils/referenceAttachments";
+import { getProjectCardImageUrl } from "../../utils/referenceAttachments";
 import { renderProjectName } from "../../utils/projectName";
 import {
   getQuoteProgressPercent,
@@ -20,8 +20,6 @@ import {
   isMockupAwaitingGraphicsValidation,
   isMockupPendingClientApproval,
 } from "../../utils/mockupWorkflow";
-
-const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
 const resolveProjectTypeKey = (project) => {
   const typeValue = String(project?.projectType || "").trim().toLowerCase();
@@ -45,24 +43,6 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
     return "approved";
   }
   return "pending";
-};
-
-const getProjectReferenceImage = (project) => {
-  const sampleImage = getReferenceFileUrl(
-    project?.sampleImage || project?.details?.sampleImage,
-  );
-  if (sampleImage) return sampleImage;
-
-  const attachments = [
-    ...(Array.isArray(project?.attachments) ? project.attachments : []),
-    ...(Array.isArray(project?.details?.attachments) ? project.details.attachments : []),
-  ];
-
-  const firstImage = attachments
-    .map((attachment) => getReferenceFileUrl(attachment))
-    .find((path) => IMAGE_FILE_EXTENSIONS.test(path.split("?")[0].trim()));
-
-  return firstImage || "";
 };
 
 const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
@@ -287,7 +267,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   ]
     .filter(Boolean)
     .join(" | ");
-  const referenceImage = getProjectReferenceImage(project);
+  const referenceImage = getProjectCardImageUrl(project);
   return (
     <div
       className={`project-card-new project-type-${projectTypeKey} ${
@@ -307,6 +287,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               src={referenceImage}
               alt="Project"
               className="project-card-image"
+              loading="lazy"
+              decoding="async"
+              fetchPriority="low"
             />
           ) : (
             <div className="project-card-placeholder">

@@ -28,6 +28,7 @@ const connectDB = require("./config/db");
 const createCsrfProtection = require("./middleware/csrfProtection");
 const { protect } = require("./middleware/authMiddleware");
 const enforceUploadAccess = require("./middleware/uploadAccessMiddleware");
+const createUploadThumbnailMiddleware = require("./middleware/uploadThumbnailMiddleware");
 
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
@@ -422,10 +423,12 @@ app.use((req, res, next) => {
 // External uploads folder (outside source)
 const UPLOAD_DIR =
   process.env.UPLOAD_DIR || path.join(__dirname, "../../../magichands-uploads");
+const uploadThumbnailMiddleware = createUploadThumbnailMiddleware(UPLOAD_DIR);
 app.use(
   "/uploads",
   protect,
   enforceUploadAccess,
+  uploadThumbnailMiddleware,
   express.static(UPLOAD_DIR, {
     dotfiles: "deny",
     index: false,

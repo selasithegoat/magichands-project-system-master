@@ -41,6 +41,8 @@
     box-shadow 0.2s ease,
     border-color 0.2s ease;
   border: 1px solid var(--type-border);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px;
 }
 
 .special-requirement-watermark {

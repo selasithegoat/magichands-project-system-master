@@ -25,7 +25,7 @@ import usePersistedState from "../../hooks/usePersistedState";
 import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 import { playNotificationSound } from "../../utils/notificationSound";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
-import { getReferenceFileUrl } from "../../utils/referenceAttachments";
+import { getProjectCardImageUrl } from "../../utils/referenceAttachments";
 import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
 import {
   getQuoteProgressPercent,
@@ -153,7 +153,6 @@ const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const HOUR_IN_MS = 60 * 60 * 1000;
 const TIMELINE_LOOKAHEAD_DAYS = 3;
 const RECENT_PROJECT_LIMIT = 5;
-const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DRAWER_TRANSITION_MS = 280;
 const EMPTY_DASHBOARD_SUMMARY = {
   stats: {
@@ -410,27 +409,6 @@ const getTrendMeta = (percentage, averagePercentage) => {
 const getProjectDepartmentIds = (project) => {
   if (!Array.isArray(project?.departments)) return [];
   return project.departments.map((department) => toEntityId(department)).filter(Boolean);
-};
-
-const getProjectReferenceImage = (project) => {
-  const sampleImage = getReferenceFileUrl(
-    project?.sampleImage || project?.details?.sampleImage,
-  );
-  if (sampleImage) return sampleImage;
-
-  const attachments = [
-    ...(Array.isArray(project?.attachments) ? project.attachments : []),
-    ...(Array.isArray(project?.details?.attachments) ? project.details.attachments : []),
-  ];
-
-  const firstImage = attachments
-    .map((attachment) => getReferenceFileUrl(attachment))
-    .find((path) => {
-      const cleanPath = path.split("?")[0].trim();
-      return IMAGE_FILE_EXTENSIONS.test(cleanPath);
-    });
-
-  return firstImage || "";
 };
 
 const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
@@ -966,7 +944,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     const departments = getProjectDepartmentIds(project);
     const visibleDepartments = departments.slice(0, 2);
     const extraDepartmentCount = Math.max(0, departments.length - visibleDepartments.length);
-    const referenceImage = getProjectReferenceImage(project);
+    const referenceImage = getProjectCardImageUrl(project);
     const projectTitle = renderProjectName(project?.details, null, "Untitled Project");
     const projectTitleText = formatProjectDisplayName(
       project?.details,
@@ -996,6 +974,8 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                   src={referenceImage}
                   alt={`${projectTitleText} reference`}
                   loading="lazy"
+                  decoding="async"
+                  fetchPriority="low"
                 />
               ) : (
                 <div className="dashboard-project-reference-placeholder">
