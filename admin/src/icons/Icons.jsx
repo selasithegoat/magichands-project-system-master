@@ -188,6 +188,20 @@ export const DashboardIcon = ({ className }) => (
   </svg>
 );
 
+export const DeadlineIcon = ({ className }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    width="24"
+    height="24"
+  >
+    <path d="M6.75 2.25a.75.75 0 01.75.75v.75h9V3a.75.75 0 011.5 0v.75h.75a3 3 0 013 3v12a3 3 0 01-3 3H5.25a3 3 0 01-3-3v-12a3 3 0 013-3H6V3a.75.75 0 01.75-.75zM3.75 9v9.75c0 .828.672 1.5 1.5 1.5h13.5c.828 0 1.5-.672 1.5-1.5V9H3.75z" />
+    <path d="M12 11.25a.75.75 0 01.75.75v2.69l1.28.74a.75.75 0 11-.75 1.3l-1.655-.956A.75.75 0 0111.25 15v-3a.75.75 0 01.75-.75z" />
+  </svg>
+);
+
 export const ProjectsIcon = ({ className }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"

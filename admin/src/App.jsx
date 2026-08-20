@@ -9,6 +9,7 @@ import {
 // Lazy Load Components
 const Login = lazy(() => import("./pages/Login/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
+const Deadlines = lazy(() => import("./pages/Deadlines/Deadlines"));
 const Projects = lazy(() => import("./pages/Projects/Projects"));
 const CancelledOrders = lazy(
   () => import("./pages/CancelledOrders/CancelledOrders"),
@@ -247,6 +248,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Projects user={user} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/deadlines"
+            element={
+              <ProtectedRoute>
+                <Deadlines />
               </ProtectedRoute>
             }
           />

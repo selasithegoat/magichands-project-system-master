@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import "./Sidebar.css";
 import {
   DashboardIcon,
+  DeadlineIcon,
   ProjectsIcon,
   ClientsIcon,
   TeamsIcon,
@@ -74,6 +75,13 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
           >
             <ProjectsIcon className="nav-icon" />
             Projects
+          </NavLink>
+          <NavLink
+            to="/deadlines"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <DeadlineIcon className="nav-icon" />
+            Deadlines
           </NavLink>
           <NavLink
             to="/orders-management"

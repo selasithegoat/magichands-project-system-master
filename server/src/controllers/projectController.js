@@ -53,6 +53,15 @@ const {
   hasProductionDepartmentOverlap,
   resolveProductionSubDepartmentTokens,
 } = require("../utils/productionDepartmentAccess");
+const {
+  DEADLINE_CLOSED_STATUSES,
+  getBusinessDayBounds,
+  getProjectDeadlineFlags,
+  isActiveDeadlineProject,
+  isSameBusinessDay,
+  parseProjectDeliveryDeadline,
+  toBusinessDateKey,
+} = require("../utils/projectDeadline");
 
 const ENGAGED_PARENT_DEPARTMENTS = new Set([
   "Production",
@@ -1504,6 +1513,9 @@ const DASHBOARD_CARD_PROJECT_SELECT = [
   "updatedAt",
   "projectLeadId",
   "assistantLeadId",
+  "isLatestVersion",
+  "versionState",
+  "cancellation.isCancelled",
   "departments",
   "details.projectName",
   "details.projectNameRaw",
@@ -1530,6 +1542,9 @@ const DASHBOARD_META_PROJECT_SELECT = [
   "updatedAt",
   "projectLeadId",
   "assistantLeadId",
+  "isLatestVersion",
+  "versionState",
+  "cancellation.isCancelled",
   "departments",
   "details.lead",
   "details.assistantLead",
@@ -1804,6 +1819,71 @@ const buildLeadWorkloadRows = (projects = []) => {
       percentage: Math.round((count / total) * 100),
     }))
     .sort((left, right) => right.count - left.count);
+};
+
+const getDeadlineOrderKey = (project = {}) =>
+  String(project?.orderId || project?._id || "").trim();
+
+const buildDashboardDeadlineSummary = (projects = [], now = new Date()) => {
+  const activeDeadlines = projects
+    .filter(isActiveDeadlineProject)
+    .map((project) => ({
+      project,
+      flags: getProjectDeadlineFlags(project, now),
+    }))
+    .filter((entry) => entry.flags.dueAt);
+
+  const dueToday = activeDeadlines
+    .filter((entry) => entry.flags.isToday)
+    .sort((left, right) => {
+      if (left.flags.isOverdue !== right.flags.isOverdue) {
+        return left.flags.isOverdue ? -1 : 1;
+      }
+      return left.flags.dueAt.getTime() - right.flags.dueAt.getTime();
+    });
+  const overdue = activeDeadlines.filter((entry) => entry.flags.isOverdue);
+  const uniqueOrders = (entries) =>
+    new Set(entries.map(({ project }) => getDeadlineOrderKey(project)).filter(Boolean))
+      .size;
+
+  return {
+    todayProjects: dueToday.length,
+    todayOrders: uniqueOrders(dueToday),
+    overdueProjects: overdue.length,
+    overdueOrders: uniqueOrders(overdue),
+    urgentToday: dueToday.filter(
+      ({ project, flags }) =>
+        flags.isOverdue ||
+        project?.priority === "Urgent" ||
+        project?.projectType === "Emergency",
+    ).length,
+    unassignedToday: dueToday.filter(
+      ({ project }) => !toObjectIdString(project?.projectLeadId),
+    ).length,
+    quoteProjectsToday: dueToday.filter(
+      ({ project }) => project?.projectType === "Quote",
+    ).length,
+    preview: dueToday.slice(0, 6).map(({ project, flags }) => ({
+      projectId: toObjectIdString(project?._id),
+      orderId: project?.orderId || "",
+      projectName:
+        project?.details?.projectNameRaw ||
+        project?.details?.projectName ||
+        "Untitled Project",
+      client: project?.details?.client || "Unknown Client",
+      projectType: project?.projectType || "Standard",
+      priority: project?.priority || "Normal",
+      status: project?.status || "",
+      deliveryDate: project?.details?.deliveryDate || null,
+      deliveryTime: project?.details?.deliveryTime || "",
+      dueAt: flags.dueAt.toISOString(),
+      isOverdue: flags.isOverdue,
+      isUrgent: flags.isUrgent,
+      projectLeadId: toObjectIdString(project?.projectLeadId),
+      projectLeadName: getDashboardPersonName(project?.projectLeadId) || "Unassigned",
+      assistantLeadName: getDashboardPersonName(project?.assistantLeadId),
+    })),
+  };
 };
 
 const buildAdminStatusOverviewStats = (projects = []) => {
@@ -2094,6 +2174,7 @@ const buildAdminDashboardSummary = async (req) => {
       leads: buildLeadWorkloadRows(activeWorkloadProjects),
     },
     statusOverview: buildAdminStatusOverview(allMetaProjects),
+    deadlines: buildDashboardDeadlineSummary(allMetaProjects),
     billingAttention: buildBillingAttentionSummary(allMetaProjects),
   };
 };
@@ -12151,6 +12232,16 @@ const DELIVERY_CALENDAR_CLOSED_STATUSES = new Set([
   "Finished",
   "Declined",
 ]);
+const DEADLINE_INTELLIGENCE_DEFAULT_LIMIT = 25;
+const DEADLINE_INTELLIGENCE_MAX_LIMIT = 100;
+const DEADLINE_INTELLIGENCE_SORTS = new Set([
+  "deadline-asc",
+  "deadline-desc",
+  "lead-asc",
+  "lead-desc",
+  "urgency",
+  "updated-desc",
+]);
 const NEXT_ACTION_DEPARTMENT_CONFIG = {
   graphics: {
     label: "Graphics",
@@ -12219,43 +12310,6 @@ const getProjectActionRoute = (project, routeType = "detail") => {
   if (routeType === "engaged") return `/engaged-projects/actions/${projectId}`;
   if (routeType === "frontdesk") return `/new-orders/actions/${projectId}`;
   return `/detail/${projectId}`;
-};
-
-const parseProjectDeliveryDeadline = (project = {}) => {
-  const deliveryDate = project?.details?.deliveryDate;
-  if (!deliveryDate) return null;
-  const parsed = new Date(deliveryDate);
-  if (Number.isNaN(parsed.getTime())) return null;
-
-  const deliveryTime = toText(project?.details?.deliveryTime);
-  if (!deliveryTime) {
-    parsed.setHours(23, 59, 59, 999);
-    return parsed;
-  }
-
-  const match24h = deliveryTime.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-  const match12h = deliveryTime.match(
-    /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i,
-  );
-
-  if (match24h || match12h) {
-    const match = match24h || match12h;
-    let hours = Number.parseInt(match[1], 10);
-    const minutes = Number.parseInt(match[2], 10);
-    const seconds = Number.parseInt(match[3] || "0", 10);
-    if (match12h) {
-      const period = match[4].toUpperCase();
-      if (period === "PM" && hours < 12) hours += 12;
-      if (period === "AM" && hours === 12) hours = 0;
-    }
-    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-      parsed.setHours(hours, minutes, seconds, 0);
-      return parsed;
-    }
-  }
-
-  parsed.setHours(23, 59, 59, 999);
-  return parsed;
 };
 
 const parseDeliveryCalendarDateBoundary = (value, fallbackDate) => {
@@ -12351,11 +12405,6 @@ const normalizeDeliveryCalendarLimit = (value) => {
   return Math.min(parsed, DELIVERY_CALENDAR_MAX_LIMIT);
 };
 
-const isSameCalendarDay = (left, right) =>
-  left.getFullYear() === right.getFullYear() &&
-  left.getMonth() === right.getMonth() &&
-  left.getDate() === right.getDate();
-
 const buildDeliveryCalendarEvent = (project, now = new Date()) => {
   const dueAt = parseProjectDeliveryDeadline(project);
   if (!dueAt) return null;
@@ -12386,7 +12435,7 @@ const buildDeliveryCalendarEvent = (project, now = new Date()) => {
     isOverdue,
     isUrgent: isPriorityUrgent || isDeadlineWarning,
     isCorporate,
-    isToday: isSameCalendarDay(dueAt, now),
+    isToday: isSameBusinessDay(dueAt, now),
     hoursUntilDue: Number.isFinite(diffMs)
       ? Math.round((diffMs / (60 * 60 * 1000)) * 10) / 10
       : null,
@@ -12403,6 +12452,182 @@ const buildDeliveryCalendarEvent = (project, now = new Date()) => {
     updatedAt: project?.updatedAt || null,
     createdAt: project?.createdAt || null,
   };
+};
+
+const getDeadlineReadiness = ({ project, flags, openChallenges }) => {
+  if (project?.hold?.isOnHold) {
+    return {
+      key: "blocked",
+      label: "Blocked",
+      reason: project?.hold?.reason || "Project is on hold",
+    };
+  }
+  if (flags.isOverdue) {
+    return {
+      key: "overdue",
+      label: "Overdue",
+      reason: "Delivery deadline has passed",
+    };
+  }
+  if (openChallenges.some((challenge) => challenge?.status === "Escalated")) {
+    return {
+      key: "at-risk",
+      label: "At risk",
+      reason: "An escalated challenge needs attention",
+    };
+  }
+  if (!toObjectIdString(project?.projectLeadId)) {
+    return {
+      key: "unassigned",
+      label: "Unassigned",
+      reason: "No project lead is assigned",
+    };
+  }
+  if (project?.status === "Pending Delivery/Pickup") {
+    return {
+      key: "ready",
+      label: "Ready",
+      reason: "Awaiting delivery or pickup",
+    };
+  }
+  if (project?.projectType === "Quote") {
+    return {
+      key: "quote",
+      label: "Quote pipeline",
+      reason: project?.status || "Quote deadline",
+    };
+  }
+  return {
+    key: "in-progress",
+    label: "In progress",
+    reason: project?.status || "Active project",
+  };
+};
+
+const buildDeadlineIntelligenceRow = (project, now = new Date()) => {
+  const flags = getProjectDeadlineFlags(project, now);
+  if (!flags.dueAt) return null;
+
+  const openChallenges = (Array.isArray(project?.challenges)
+    ? project.challenges
+    : []
+  ).filter((challenge) => challenge?.status !== "Resolved");
+  const items = Array.isArray(project?.items) ? project.items : [];
+  const totalQuantity = items.reduce((total, item) => {
+    const quantity = Number(item?.qty);
+    return total + (Number.isFinite(quantity) ? quantity : 0);
+  }, 0);
+  const projectLeadId = toObjectIdString(project?.projectLeadId);
+  const assistantLeadId = toObjectIdString(project?.assistantLeadId);
+
+  return {
+    projectId: toObjectIdString(project?._id),
+    orderId: getProjectDisplayRef(project),
+    projectName: getProjectDisplayName(project),
+    client: toText(project?.details?.client) || "Unknown Client",
+    clientEmail: toText(project?.details?.clientEmail),
+    projectType: project?.projectType || "Standard",
+    priority: project?.priority || "Normal",
+    status: project?.status || "",
+    deliveryDate: project?.details?.deliveryDate || null,
+    deliveryTime: toText(project?.details?.deliveryTime),
+    deliveryLocation: toText(project?.details?.deliveryLocation),
+    dueAt: flags.dueAt.toISOString(),
+    isOverdue: flags.isOverdue,
+    isToday: flags.isToday,
+    isUrgent: flags.isUrgent,
+    hoursUntilDue: flags.hoursUntilDue,
+    projectLead: {
+      id: projectLeadId,
+      name: projectLeadId
+        ? getUserDisplayName(project.projectLeadId)
+        : "Unassigned",
+      avatarUrl: project?.projectLeadId?.avatarUrl || "",
+    },
+    assistantLead: assistantLeadId
+      ? {
+          id: assistantLeadId,
+          name: getUserDisplayName(project.assistantLeadId),
+          avatarUrl: project?.assistantLeadId?.avatarUrl || "",
+        }
+      : null,
+    departments: Array.isArray(project?.departments) ? project.departments : [],
+    itemCount: items.length,
+    totalQuantity,
+    openChallengeCount: openChallenges.length,
+    openChallenges: openChallenges.slice(0, 3).map((challenge) => ({
+      id: toObjectIdString(challenge?._id),
+      title: challenge?.title || challenge?.description || "Project challenge",
+      status: challenge?.status || "Open",
+    })),
+    hold: {
+      isOnHold: Boolean(project?.hold?.isOnHold),
+      reason: project?.hold?.reason || "",
+    },
+    readiness: getDeadlineReadiness({ project, flags, openChallenges }),
+    createdAt: project?.createdAt || null,
+    updatedAt: project?.updatedAt || null,
+  };
+};
+
+const buildDeadlineIntelligenceSummary = (rows = [], now = new Date()) => {
+  const todayBounds = getBusinessDayBounds(now);
+  const nextSevenCutoff = new Date(
+    (todayBounds?.start?.getTime() || now.getTime()) + 7 * DAY_IN_MS - 1,
+  );
+  const todayRows = rows.filter((row) => row.isToday);
+  const overdueRows = rows.filter((row) => row.isOverdue);
+  const nextSevenRows = rows.filter((row) => {
+    const dueAt = new Date(row.dueAt);
+    return dueAt >= now && dueAt <= nextSevenCutoff;
+  });
+  const uniqueOrders = (list) =>
+    new Set(list.map((row) => row.orderId || row.projectId).filter(Boolean)).size;
+
+  return {
+    totalProjects: rows.length,
+    totalOrders: uniqueOrders(rows),
+    todayProjects: todayRows.length,
+    todayOrders: uniqueOrders(todayRows),
+    overdueProjects: overdueRows.length,
+    overdueOrders: uniqueOrders(overdueRows),
+    nextSevenDaysProjects: nextSevenRows.length,
+    nextSevenDaysOrders: uniqueOrders(nextSevenRows),
+    unassignedProjects: rows.filter((row) => !row.projectLead?.id).length,
+    quoteProjects: rows.filter((row) => row.projectType === "Quote").length,
+  };
+};
+
+const getDeadlineSortComparator = (sortValue) => {
+  const byDeadline = (left, right) =>
+    new Date(left.dueAt).getTime() - new Date(right.dueAt).getTime();
+  const byLead = (left, right) =>
+    String(left.projectLead?.name || "Unassigned").localeCompare(
+      String(right.projectLead?.name || "Unassigned"),
+      undefined,
+      { sensitivity: "base" },
+    );
+
+  switch (sortValue) {
+    case "deadline-desc":
+      return (left, right) => byDeadline(right, left);
+    case "lead-asc":
+      return (left, right) => byLead(left, right) || byDeadline(left, right);
+    case "lead-desc":
+      return (left, right) => byLead(right, left) || byDeadline(left, right);
+    case "updated-desc":
+      return (left, right) =>
+        new Date(right.updatedAt || 0).getTime() -
+          new Date(left.updatedAt || 0).getTime() || byDeadline(left, right);
+    case "urgency":
+      return (left, right) => {
+        const rank = (row) => (row.isOverdue ? 0 : row.isUrgent ? 1 : 2);
+        return rank(left) - rank(right) || byDeadline(left, right);
+      };
+    case "deadline-asc":
+    default:
+      return byDeadline;
+  }
 };
 
 const resolveNextActionPriority = (project = {}, basePriority = "normal") => {
@@ -13086,6 +13311,202 @@ const getDeliveryCalendar = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching delivery calendar:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Get the admin deadline intelligence portfolio
+// @route   GET /api/projects/deadlines
+// @access  Private (Admin portal)
+const getDeadlines = async (req, res) => {
+  try {
+    if (!isAdminPortalRequest(req) || !hasAdminPortalAccess(req.user)) {
+      return res.status(403).json({
+        message: "Access denied: deadline intelligence is restricted.",
+      });
+    }
+
+    const now = new Date();
+    const { query: accessQuery } = buildProjectAccessQuery(req);
+    const activeDeadlineQuery = mergeQueryWithCondition(accessQuery, {
+      "details.deliveryDate": { $exists: true, $ne: null },
+      status: { $nin: DEADLINE_CLOSED_STATUSES },
+      $and: [
+        {
+          $or: [
+            { isLatestVersion: true },
+            { isLatestVersion: { $exists: false } },
+          ],
+        },
+        {
+          $or: [
+            { versionState: "active" },
+            { versionState: { $exists: false } },
+            { versionState: "" },
+          ],
+        },
+      ],
+    });
+
+    const projects = await Project.find(activeDeadlineQuery)
+      .select(
+        [
+          "_id",
+          "orderId",
+          "orderDate",
+          "projectType",
+          "priority",
+          "status",
+          "details.projectName",
+          "details.projectNameRaw",
+          "details.projectIndicator",
+          "details.client",
+          "details.clientEmail",
+          "details.deliveryDate",
+          "details.deliveryTime",
+          "details.deliveryLocation",
+          "departments",
+          "items.description",
+          "items.qty",
+          "hold",
+          "challenges",
+          "projectLeadId",
+          "assistantLeadId",
+          "isLatestVersion",
+          "versionState",
+          "cancellation.isCancelled",
+          "createdAt",
+          "updatedAt",
+        ].join(" "),
+      )
+      .populate("projectLeadId", "firstName lastName name employeeId avatarUrl")
+      .populate("assistantLeadId", "firstName lastName name employeeId avatarUrl")
+      .sort({ "details.deliveryDate": 1, updatedAt: -1 })
+      .lean();
+
+    const portfolioRows = projects
+      .filter(isActiveDeadlineProject)
+      .map((project) => buildDeadlineIntelligenceRow(project, now))
+      .filter(Boolean);
+    const summary = buildDeadlineIntelligenceSummary(portfolioRows, now);
+
+    const scope = String(req.query.scope || "today").trim().toLowerCase();
+    const fromBounds = req.query.from
+      ? getBusinessDayBounds(req.query.from)
+      : null;
+    const toBounds = req.query.to ? getBusinessDayBounds(req.query.to) : null;
+    const leadFilter = String(req.query.lead || "").trim();
+    const statusFilter = String(req.query.status || "").trim();
+    const typeFilter = String(req.query.projectType || "").trim();
+    const priorityFilter = String(req.query.priority || "").trim();
+    const searchValue = String(req.query.search || "").trim().toLowerCase();
+    const sortValue = DEADLINE_INTELLIGENCE_SORTS.has(req.query.sort)
+      ? req.query.sort
+      : "deadline-asc";
+
+    let filteredRows = portfolioRows.filter((row) => {
+      const dueAt = new Date(row.dueAt);
+      if (scope === "overdue" && !row.isOverdue) return false;
+      if (scope === "today" && !row.isToday) return false;
+      if (scope !== "overdue" && scope !== "today" && scope !== "all") {
+        if (fromBounds && dueAt < fromBounds.start) return false;
+        if (toBounds && dueAt > toBounds.end) return false;
+      }
+
+      if (leadFilter === "unassigned" && row.projectLead?.id) return false;
+      if (
+        leadFilter &&
+        leadFilter !== "unassigned" &&
+        row.projectLead?.id !== leadFilter
+      ) {
+        return false;
+      }
+      if (statusFilter && row.status !== statusFilter) return false;
+      if (typeFilter && row.projectType !== typeFilter) return false;
+      if (priorityFilter && row.priority !== priorityFilter) return false;
+
+      if (searchValue) {
+        const haystack = [
+          row.orderId,
+          row.projectName,
+          row.client,
+          row.projectLead?.name,
+          row.assistantLead?.name,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(searchValue)) return false;
+      }
+
+      return true;
+    });
+
+    filteredRows = filteredRows.slice().sort(getDeadlineSortComparator(sortValue));
+    const page = parsePositiveInteger(req.query.page, 1, 100000);
+    const limit = parsePositiveInteger(
+      req.query.limit,
+      DEADLINE_INTELLIGENCE_DEFAULT_LIMIT,
+      DEADLINE_INTELLIGENCE_MAX_LIMIT,
+    );
+    const total = filteredRows.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+    const startIndex = (safePage - 1) * limit;
+    const pageRows = filteredRows.slice(startIndex, startIndex + limit);
+
+    const leadMap = new Map();
+    portfolioRows.forEach((row) => {
+      if (!row.projectLead?.id) return;
+      if (!leadMap.has(row.projectLead.id)) {
+        leadMap.set(row.projectLead.id, row.projectLead);
+      }
+    });
+
+    return res.json({
+      asOf: now.toISOString(),
+      businessDate: toBusinessDateKey(now),
+      summary,
+      filterOptions: {
+        leads: Array.from(leadMap.values()).sort((left, right) =>
+          left.name.localeCompare(right.name, undefined, { sensitivity: "base" }),
+        ),
+        statuses: Array.from(new Set(portfolioRows.map((row) => row.status)))
+          .filter(Boolean)
+          .sort(),
+        projectTypes: Array.from(
+          new Set(portfolioRows.map((row) => row.projectType)),
+        )
+          .filter(Boolean)
+          .sort(),
+        priorities: Array.from(new Set(portfolioRows.map((row) => row.priority)))
+          .filter(Boolean)
+          .sort(),
+      },
+      applied: {
+        scope,
+        from: fromBounds?.start?.toISOString() || null,
+        to: toBounds?.end?.toISOString() || null,
+        lead: leadFilter,
+        status: statusFilter,
+        projectType: typeFilter,
+        priority: priorityFilter,
+        search: searchValue,
+        sort: sortValue,
+      },
+      pagination: {
+        page: safePage,
+        limit,
+        total,
+        totalOrders: new Set(
+          filteredRows.map((row) => row.orderId || row.projectId),
+        ).size,
+        totalPages,
+      },
+      rows: pageRows,
+    });
+  } catch (error) {
+    console.error("Error fetching deadline intelligence:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };
@@ -20911,6 +21332,7 @@ module.exports = {
   getDashboardCounts,
   getNextActions,
   getDeliveryCalendar,
+  getDeadlines,
   searchReferenceProjects,
   getStageBottlenecks,
   getOrderGroups,

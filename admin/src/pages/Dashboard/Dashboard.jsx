@@ -4,6 +4,7 @@ import "./Dashboard.css";
 import {
   ProjectsIcon,
   CheckCircleIcon,
+  DeadlineIcon,
   RocketIcon,
   ReportsIcon,
 } from "../../icons/Icons";
@@ -106,6 +107,16 @@ const EMPTY_ADMIN_DASHBOARD_SUMMARY = {
   workload: {
     leads: [],
   },
+  deadlines: {
+    todayProjects: 0,
+    todayOrders: 0,
+    overdueProjects: 0,
+    overdueOrders: 0,
+    urgentToday: 0,
+    unassignedToday: 0,
+    quoteProjectsToday: 0,
+    preview: [],
+  },
   statusOverview: {
     periods: [
       {
@@ -180,6 +191,11 @@ const getProjectTypeClass = (project) => {
   if (isCorporateProject(project)) return "corporate";
   if (isQuoteProject(project)) return "quote";
   return "standard";
+};
+
+const formatDashboardDeadlineTime = (deadline) => {
+  if (deadline?.deliveryTime) return deadline.deliveryTime;
+  return "End of day";
 };
 
 // SVG Donut Chart Component
@@ -497,10 +513,18 @@ const Dashboard = ({ user }) => {
   const leadWorkload = Array.isArray(dashboardSummary.workload?.leads)
     ? dashboardSummary.workload.leads
     : [];
+  const deadlineSummary = {
+    ...EMPTY_ADMIN_DASHBOARD_SUMMARY.deadlines,
+    ...(dashboardSummary.deadlines || {}),
+  };
+  const todayDeadlines = Array.isArray(deadlineSummary.preview)
+    ? deadlineSummary.preview
+    : [];
 
   const todayLabel = useMemo(
     () =>
       new Date().toLocaleDateString("en-US", {
+        timeZone: "Africa/Accra",
         month: "long",
         day: "numeric",
         year: "numeric",
@@ -635,6 +659,84 @@ const Dashboard = ({ user }) => {
           </div>
         </div>
       </div>
+
+      <section className="dashboard-deadlines-card">
+        <div className="dashboard-deadlines-heading">
+          <div className="dashboard-deadlines-title-wrap">
+            <span className="dashboard-deadlines-icon"><DeadlineIcon /></span>
+            <div>
+              <div className="today-projects-eyebrow">Today&apos;s deadlines</div>
+              <h3 className="section-title">Delivery &amp; Quote Commitments</h3>
+              <p>{todayLabel} · Africa/Accra time</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="dashboard-deadlines-open"
+            onClick={() => navigate("/deadlines?scope=today")}
+          >
+            View deadline intelligence <ChevronRightIcon />
+          </button>
+        </div>
+
+        <div className="dashboard-deadlines-summary">
+          <button type="button" onClick={() => navigate("/deadlines?scope=today")}>
+            <strong>{deadlineSummary.todayOrders}</strong>
+            <span>Orders due today</span>
+            <small>{deadlineSummary.todayProjects} projects</small>
+          </button>
+          <button type="button" className="danger" onClick={() => navigate("/deadlines?scope=overdue")}>
+            <strong>{deadlineSummary.overdueOrders}</strong>
+            <span>Overdue orders</span>
+            <small>{deadlineSummary.overdueProjects} projects</small>
+          </button>
+          <button type="button" className="warning" onClick={() => navigate("/deadlines?scope=today&sort=urgency")}>
+            <strong>{deadlineSummary.urgentToday}</strong>
+            <span>Urgent today</span>
+            <small>Urgent priority or already late</small>
+          </button>
+          <button type="button" className="quote" onClick={() => navigate("/deadlines?scope=today&projectType=Quote")}>
+            <strong>{deadlineSummary.quoteProjectsToday}</strong>
+            <span>Quote deadlines</span>
+            <small>Included in today&apos;s plan</small>
+          </button>
+        </div>
+
+        <div className="dashboard-deadlines-list">
+          {todayDeadlines.length > 0 ? (
+            todayDeadlines.map((deadline) => (
+              <button
+                type="button"
+                key={deadline.projectId}
+                className={`dashboard-deadline-row ${deadline.isOverdue ? "overdue" : deadline.isUrgent ? "urgent" : ""}`}
+                onClick={() => navigate(`/projects/${deadline.projectId}`)}
+              >
+                <span className="dashboard-deadline-time">
+                  <strong>{formatDashboardDeadlineTime(deadline)}</strong>
+                  <small>{deadline.isOverdue ? "Past due" : deadline.isUrgent ? "Urgent" : "Today"}</small>
+                </span>
+                <span className="dashboard-deadline-project">
+                  <strong>{deadline.orderId} · {deadline.projectName}</strong>
+                  <small>{deadline.client}</small>
+                </span>
+                <span className="dashboard-deadline-lead">
+                  <strong>{deadline.projectLeadName || "Unassigned"}</strong>
+                  <small>{deadline.assistantLeadName ? `with ${deadline.assistantLeadName}` : "Project lead"}</small>
+                </span>
+                <span className={`dashboard-deadline-type ${deadline.projectType === "Quote" ? "quote" : ""}`}>
+                  {deadline.projectType}
+                </span>
+                <span className="dashboard-deadline-chevron"><ChevronRightIcon /></span>
+              </button>
+            ))
+          ) : (
+            <div className="dashboard-deadlines-empty">
+              <DeadlineIcon />
+              <div><strong>No active deadlines today</strong><span>Delivery and quote commitments will appear here.</span></div>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Projects Created Today */}
       <section className="today-projects-card">

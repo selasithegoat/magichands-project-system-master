@@ -8,6 +8,7 @@ const {
   getHealthPerformance,
   getNextActions,
   getDeliveryCalendar,
+  getDeadlines,
   searchReferenceProjects,
   getStageBottlenecks,
   getOrderGroups,
@@ -250,6 +251,7 @@ router.get("/health-performance", protect, getHealthPerformance);
 router.get("/client-intelligence", protect, getClientIntelligence);
 router.get("/next-actions", protect, getNextActions);
 router.get("/delivery-calendar", protect, getDeliveryCalendar);
+router.get("/deadlines", protect, getDeadlines);
 router.get("/reference-search", protect, searchReferenceProjects);
 router.get("/bottlenecks/stage", protect, getStageBottlenecks);
 router.get("/sms-prompts/pending", protect, getPendingSmsPrompts);
