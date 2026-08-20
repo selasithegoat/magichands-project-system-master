@@ -279,21 +279,6 @@ const Deadlines = () => {
           active={scope === "range" && from === toDateKey()}
           onClick={() => choosePreset("week")}
         />
-        <SummaryCard
-          tone="slate"
-          label="Unassigned"
-          value={summary.unassignedProjects}
-          detail="Projects needing a lead"
-          active={lead === "unassigned"}
-          onClick={() =>
-            updateParams({
-              lead: lead === "unassigned" ? "" : "unassigned",
-              scope: lead === "unassigned" ? scope : "all",
-              from: lead === "unassigned" ? from : "",
-              to: lead === "unassigned" ? to : "",
-            })
-          }
-        />
       </section>
 
       <section className="deadline-workspace">
@@ -520,8 +505,10 @@ const Deadlines = () => {
                                     </div>
                                   </div>
                                   <div className="deadline-detail-actions">
-                                    <button type="button" onClick={(event) => openOrder(event, row.orderId)}>Open order</button>
-                                    <button type="button" className="primary" onClick={(event) => openProject(event, row.projectId)}>Open project</button>
+                                    {row.isGroupOrder && (
+                                      <button type="button" onClick={(event) => openOrder(event, row.orderId)}>Open Group</button>
+                                    )}
+                                    <button type="button" className="primary" onClick={(event) => openProject(event, row.projectId)}>Open Project</button>
                                   </div>
                                 </td>
                               </tr>

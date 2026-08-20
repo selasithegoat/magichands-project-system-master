@@ -13348,45 +13348,83 @@ const getDeadlines = async (req, res) => {
       ],
     });
 
-    const projects = await Project.find(activeDeadlineQuery)
-      .select(
-        [
-          "_id",
-          "orderId",
-          "orderDate",
-          "projectType",
-          "priority",
-          "status",
-          "details.projectName",
-          "details.projectNameRaw",
-          "details.projectIndicator",
-          "details.client",
-          "details.clientEmail",
-          "details.deliveryDate",
-          "details.deliveryTime",
-          "details.deliveryLocation",
-          "departments",
-          "items.description",
-          "items.qty",
-          "hold",
-          "challenges",
-          "projectLeadId",
-          "assistantLeadId",
-          "isLatestVersion",
-          "versionState",
-          "cancellation.isCancelled",
-          "createdAt",
-          "updatedAt",
-        ].join(" "),
-      )
-      .populate("projectLeadId", "firstName lastName name employeeId avatarUrl")
-      .populate("assistantLeadId", "firstName lastName name employeeId avatarUrl")
-      .sort({ "details.deliveryDate": 1, updatedAt: -1 })
-      .lean();
+    const latestProjectQuery = mergeQueryWithCondition(accessQuery, {
+      orderId: { $exists: true, $ne: "" },
+      $and: [
+        {
+          $or: [
+            { isLatestVersion: true },
+            { isLatestVersion: { $exists: false } },
+          ],
+        },
+        {
+          $or: [
+            { versionState: "active" },
+            { versionState: { $exists: false } },
+            { versionState: "" },
+          ],
+        },
+      ],
+    });
+
+    const [projects, orderGroupCounts] = await Promise.all([
+      Project.find(activeDeadlineQuery)
+        .select(
+          [
+            "_id",
+            "orderId",
+            "orderDate",
+            "projectType",
+            "priority",
+            "status",
+            "details.projectName",
+            "details.projectNameRaw",
+            "details.projectIndicator",
+            "details.client",
+            "details.clientEmail",
+            "details.deliveryDate",
+            "details.deliveryTime",
+            "details.deliveryLocation",
+            "departments",
+            "items.description",
+            "items.qty",
+            "hold",
+            "challenges",
+            "projectLeadId",
+            "assistantLeadId",
+            "isLatestVersion",
+            "versionState",
+            "cancellation.isCancelled",
+            "createdAt",
+            "updatedAt",
+          ].join(" "),
+        )
+        .populate("projectLeadId", "firstName lastName name employeeId avatarUrl")
+        .populate("assistantLeadId", "firstName lastName name employeeId avatarUrl")
+        .sort({ "details.deliveryDate": 1, updatedAt: -1 })
+        .lean(),
+      Project.aggregate([
+        { $match: latestProjectQuery },
+        { $group: { _id: "$orderId", projectCount: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const orderProjectCounts = new Map(
+      orderGroupCounts.map((entry) => [String(entry?._id || ""), entry.projectCount]),
+    );
 
     const portfolioRows = projects
       .filter(isActiveDeadlineProject)
-      .map((project) => buildDeadlineIntelligenceRow(project, now))
+      .map((project) => {
+        const row = buildDeadlineIntelligenceRow(project, now);
+        if (!row) return null;
+        const orderProjectCount = orderProjectCounts.get(row.orderId) || 1;
+        return {
+          ...row,
+          orderProjectCount,
+          isGroupOrder: orderProjectCount > 1,
+        };
+      })
       .filter(Boolean);
     const summary = buildDeadlineIntelligenceSummary(portfolioRows, now);
 
