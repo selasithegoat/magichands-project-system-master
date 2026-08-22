@@ -22,6 +22,34 @@ const formatDuration = (hours) => {
   return `${days}d ${rem.toFixed(1)}h`;
 };
 
+const getTableStatusTone = (status) => {
+  const normalized = String(status || "").toLowerCase();
+  if (
+    normalized.includes("completed") ||
+    normalized.includes("finished") ||
+    normalized.includes("delivered")
+  )
+    return "is-success";
+  if (
+    normalized.includes("hold") ||
+    normalized.includes("declined") ||
+    normalized.includes("blocked") ||
+    normalized.includes("overdue")
+  )
+    return "is-danger";
+  if (normalized.includes("quote") || normalized.includes("engagement"))
+    return "is-violet";
+  if (normalized.includes("pending") || normalized.includes("awaiting"))
+    return "is-warning";
+  if (
+    normalized.includes("progress") ||
+    normalized.includes("feedback") ||
+    normalized.includes("created")
+  )
+    return "is-info";
+  return "is-neutral";
+};
+
 const formatDateTime = (value) => {
   if (!value) return "";
   const date = new Date(value);
@@ -665,8 +693,8 @@ const PerformanceAnalytics = () => {
               <div className="empty-state">No project durations found.</div>
             ) : (
               <>
-                <div className="table-controls">
-                  <div className="table-search">
+                <div className="table-controls admin-table-toolbar">
+                  <div className="table-search admin-table-search">
                     <input
                       type="text"
                       placeholder="Search by project, order ID, status..."
@@ -678,7 +706,7 @@ const PerformanceAnalytics = () => {
                     />
                   </div>
                   <div className="table-filters">
-                    <label>
+                    <label className="admin-table-filter">
                       Status
                       <select
                         value={statusFilter}
@@ -695,7 +723,7 @@ const PerformanceAnalytics = () => {
                       </select>
                     </label>
                   </div>
-                  <div className="table-count">
+                  <div className="table-count admin-table-count">
                     Showing {paginatedProjects.length} of {filteredProjects.length}
                   </div>
                 </div>
@@ -703,8 +731,11 @@ const PerformanceAnalytics = () => {
                   <div className="empty-state">No projects match your filters.</div>
                 ) : (
                   <>
-                    <div className="table-scroll">
-                      <table>
+                    <div className="table-scroll admin-data-table-scroll admin-data-table-scroll--embedded admin-data-table-scroll--cards">
+                      <table
+                        className="admin-data-table admin-data-table--cards admin-data-table--interactive"
+                        style={{ "--admin-table-min-width": "760px" }}
+                      >
                         <thead>
                           <tr>
                             <th>Project</th>
@@ -730,12 +761,12 @@ const PerformanceAnalytics = () => {
                                 }
                               }}
                             >
-                              <td>
-                                <div className="project-cell">
-                                  <span className="project-id">
-                                    {row.orderId || row.projectId.slice(-6).toUpperCase()}
+                              <td data-label="Project" data-table-primary="true">
+                                <div className="project-cell admin-table-identity">
+                                  <span className="project-id admin-table-code">
+                                    #{row.orderId || row.projectId.slice(-6).toUpperCase()}
                                   </span>
-                                  <span className="project-name">
+                                  <span className="project-name admin-table-title">
                                     {renderProjectName(
                                       row.projectName,
                                       row.projectIndicator,
@@ -744,11 +775,23 @@ const PerformanceAnalytics = () => {
                                   </span>
                                 </div>
                               </td>
-                              <td>{row.status}</td>
-                              <td>{formatDuration(row.endToEnd?.hours)}</td>
-                              <td>{formatDuration(row.stages.mockup?.hours)}</td>
-                              <td>{formatDuration(row.stages.production?.hours)}</td>
-                              <td>{formatDuration(row.stages.packaging?.hours)}</td>
+                              <td data-label="Status">
+                                <span className={`admin-table-status ${getTableStatusTone(row.status)}`}>
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td data-label="End-to-End">
+                                <span className="admin-table-metric-value">{formatDuration(row.endToEnd?.hours)}</span>
+                              </td>
+                              <td data-label="Mockup">
+                                <span className="admin-table-metric-value">{formatDuration(row.stages.mockup?.hours)}</span>
+                              </td>
+                              <td data-label="Production">
+                                <span className="admin-table-metric-value">{formatDuration(row.stages.production?.hours)}</span>
+                              </td>
+                              <td data-label="Packaging">
+                                <span className="admin-table-metric-value">{formatDuration(row.stages.packaging?.hours)}</span>
+                              </td>
                             </tr>
                           ))}
                         </tbody>

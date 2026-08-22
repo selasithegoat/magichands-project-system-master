@@ -492,8 +492,11 @@ const ProjectAnalytics = () => {
             {stages.length === 0 ? (
               <div className="empty-state">No stage data available yet.</div>
             ) : (
-              <div className="table-scroll">
-                <table className="analytics-table">
+              <div className="table-scroll admin-data-table-scroll admin-data-table-scroll--embedded admin-data-table-scroll--cards">
+                <table
+                  className="analytics-table admin-data-table admin-data-table--cards"
+                  style={{ "--admin-table-min-width": "760px" }}
+                >
                   <thead>
                     <tr>
                       <th>Stage</th>
@@ -517,25 +520,32 @@ const ProjectAnalytics = () => {
                           : null;
                       return (
                         <tr key={stage.key}>
-                          <td>
-                            <div className="stage-cell">
-                              <span className="stage-label">{stage.label}</span>
-                              <span className="stage-range">
+                          <td data-label="Stage" data-table-primary="true">
+                            <div className="stage-cell admin-table-identity">
+                              <span className="stage-label admin-table-title">{stage.label}</span>
+                              <span className="stage-range admin-table-subtitle">
                                 {stage.startStatus} to {stage.endStatus}
                               </span>
                             </div>
                           </td>
-                          <td>{formatDateTime(stage.start)}</td>
-                          <td>{formatDateTime(stage.end)}</td>
-                          <td>{formatDuration(stage.hours)}</td>
-                          <td>
-                            {stage.percentOfTotal !== null &&
-                            stage.percentOfTotal !== undefined
-                              ? `${stage.percentOfTotal.toFixed(1)}%`
-                              : "-"}
+                          <td data-label="Start">{formatDateTime(stage.start)}</td>
+                          <td data-label="End">{formatDateTime(stage.end)}</td>
+                          <td data-label="Duration">
+                            <span className="admin-table-metric-value">{formatDuration(stage.hours)}</span>
                           </td>
-                          <td>{formatDuration(benchmark?.avgHours)}</td>
+                          <td data-label="% of Total">
+                            <span className="admin-table-metric-value">
+                              {stage.percentOfTotal !== null &&
+                              stage.percentOfTotal !== undefined
+                                ? `${stage.percentOfTotal.toFixed(1)}%`
+                                : "-"}
+                            </span>
+                          </td>
+                          <td data-label="Benchmark Avg">
+                            <span className="admin-table-metric-value">{formatDuration(benchmark?.avgHours)}</span>
+                          </td>
                           <td
+                            data-label="Delta"
                             className={
                               delta === null
                                 ? ""
@@ -544,7 +554,17 @@ const ProjectAnalytics = () => {
                                   : "delta-down"
                             }
                           >
-                            {formatDelta(delta)}
+                            <span
+                              className={`admin-table-status ${
+                                delta === null
+                                  ? "is-neutral"
+                                  : delta > 0
+                                    ? "is-danger"
+                                    : "is-success"
+                              }`}
+                            >
+                              {formatDelta(delta)}
+                            </span>
                           </td>
                         </tr>
                       );

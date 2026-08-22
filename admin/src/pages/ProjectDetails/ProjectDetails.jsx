@@ -4615,48 +4615,66 @@ const ProjectDetails = ({ user }) => {
             </h3>
             <div className="card-scroll-area">
               {project.items && project.items.length > 0 ? (
-                <table className="items-table">
-                  <thead>
-                    <tr>
-                      <th>Description</th>
-                      <th>Detailed Specs</th>
-                      <th>Production Type &amp; Scope</th>
-                      <th>Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {project.items.map((item, i) => (
-                      <tr key={i}>
-                        <td>{item.description}</td>
-                        <td>{item.breakdown || "-"}</td>
-                        <td>
-                          {(item.productionAssignments || []).length > 0 ? (
-                            <div className="admin-item-production-list">
-                              {item.productionAssignments.map((assignment) => (
-                                <div
-                                  className="admin-item-production-assignment"
-                                  key={assignment.department}
-                                >
-                                  <strong>
-                                    {getDepartmentLabel(assignment.department)}
-                                  </strong>
-                                  <span>
-                                    {assignment.scope || "No scope specified"}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="admin-item-production-unassigned">
-                              Not assigned
-                            </span>
-                          )}
-                        </td>
-                        <td>{item.qty}</td>
+                <div className="admin-data-table-scroll admin-data-table-scroll--embedded admin-data-table-scroll--cards">
+                  <table
+                    className="items-table admin-data-table admin-data-table--cards"
+                    style={{ "--admin-table-min-width": "760px" }}
+                  >
+                    <thead>
+                      <tr>
+                        <th>Description</th>
+                        <th>Detailed Specs</th>
+                        <th>Production Type &amp; Scope</th>
+                        <th>Qty</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {project.items.map((item, i) => (
+                        <tr key={i}>
+                          <td data-label="Description" data-table-primary="true">
+                            <span className="admin-table-title">
+                              {item.description}
+                            </span>
+                          </td>
+                          <td data-label="Detailed Specs">
+                            {item.breakdown || "-"}
+                          </td>
+                          <td
+                            data-label="Production Type & Scope"
+                            data-table-wide="true"
+                          >
+                            {(item.productionAssignments || []).length > 0 ? (
+                              <div className="admin-item-production-list">
+                                {item.productionAssignments.map((assignment) => (
+                                  <div
+                                    className="admin-item-production-assignment"
+                                    key={assignment.department}
+                                  >
+                                    <strong>
+                                      {getDepartmentLabel(assignment.department)}
+                                    </strong>
+                                    <span>
+                                      {assignment.scope || "No scope specified"}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="admin-item-production-unassigned admin-table-chip">
+                                Not assigned
+                              </span>
+                            )}
+                          </td>
+                          <td data-label="Quantity">
+                            <span className="admin-table-metric-value">
+                              {item.qty}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <p style={{ color: "var(--text-secondary)" }}>
                   No items listed.

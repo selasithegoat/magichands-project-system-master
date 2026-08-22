@@ -450,14 +450,24 @@ const Projects = ({ user }) => {
   const getStatusClass = (status) => {
     if (!status) return "draft";
     const lower = status.toLowerCase();
-    if (lower.includes("hold")) return "on-hold";
-    if (lower.includes("feedback")) return "in-progress";
-    if (lower.includes("pending")) return "pending";
-    if (lower.includes("finished")) return "completed";
-    if (lower.includes("completed")) return "completed";
-    if (lower.includes("delivered")) return "in-progress";
+    if (
+      lower.includes("hold") ||
+      lower.includes("declined") ||
+      lower.includes("blocked") ||
+      lower.includes("overdue")
+    )
+      return "on-hold";
+    if (lower.includes("finished") || lower.includes("completed"))
+      return "completed";
+    if (lower.includes("feedback") || lower.includes("delivered"))
+      return "feedback";
+    if (lower.includes("engagement") || lower.includes("meeting"))
+      return "engagement";
+    if (lower.includes("pending") || lower.includes("awaiting"))
+      return "pending";
     if (lower.includes("progress") || lower.includes("sent"))
       return "in-progress";
+    if (lower.includes("created") || lower.includes("new")) return "created";
     return "draft";
   };
 
@@ -652,6 +662,20 @@ const Projects = ({ user }) => {
     indexOfLastItem,
   );
   const totalPages = Math.ceil(filteredOrderGroups.length / itemsPerPage);
+  const hasActiveFilters = Boolean(
+    searchQuery ||
+      filterStatus !== "All" ||
+      clientFilter !== "All" ||
+      leadFilter !== "All",
+  );
+
+  const clearProjectFilters = () => {
+    setSearchQuery("");
+    setFilterStatus(getDefaultFilterStatus(viewMode));
+    setClientFilter("All");
+    setLeadFilter("All");
+    setCurrentPage(1);
+  };
 
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
@@ -705,51 +729,102 @@ const Projects = ({ user }) => {
     }));
   };
 
-  const renderTypeBadge = (projectType) => {
+  const renderTypeBadge = (projectType, displayLabel) => {
     const typeLabel = projectType || "Standard";
-    const isEmergency = typeLabel === "Emergency";
-    const isCorporate = typeLabel === "Corporate Job";
-    const isQuote = typeLabel === "Quote";
-
-    const backgroundColor = isEmergency
-      ? "#fef2f2"
-      : isCorporate
-        ? "#f0fdf4"
-        : isQuote
-          ? "#fffbeb"
-          : "#eff6ff";
-    const textColor = isEmergency
-      ? "#e74c3c"
-      : isCorporate
-        ? "#42a165"
-        : isQuote
-          ? "#f39c12"
-          : "#3498db";
-    const borderColor = isEmergency
-      ? "#e74c3c40"
-      : isCorporate
-        ? "#42a16540"
-        : isQuote
-          ? "#f39c1240"
-          : "#3498db40";
+    const normalizedType = typeLabel.toLowerCase();
+    const typeClass = normalizedType.includes("emergency")
+      ? "emergency"
+      : normalizedType.includes("corporate")
+        ? "corporate"
+        : normalizedType.includes("quote")
+          ? "quote"
+          : normalizedType.includes("mixed")
+            ? "mixed"
+            : "standard";
 
     return (
-      <span
-        style={{
-          display: "inline-block",
-          padding: "2px 8px",
-          borderRadius: "4px",
-          fontSize: "11px",
-          fontWeight: "700",
-          backgroundColor,
-          color: textColor,
-          border: `1px solid ${borderColor}`,
-        }}
-      >
-        {typeLabel}
+      <span className={`project-type-badge ${typeClass}`}>
+        {displayLabel || typeLabel}
       </span>
     );
   };
+
+  const getInitials = (value) => {
+    const normalized = String(value || "").trim();
+    if (!normalized || normalized === "-") return "--";
+    return normalized
+      .split(/\s+|\//)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase();
+  };
+
+  const renderPeopleCell = (lead, client) => (
+    <div className="project-people-cell">
+      <span className="project-person-avatar" aria-hidden="true">
+        {getInitials(lead)}
+      </span>
+      <span className="project-person-copy">
+        <strong>{lead || "Unassigned"}</strong>
+        <small>
+          <span>Client</span>
+          {client || "-"}
+        </small>
+      </span>
+    </div>
+  );
+
+  const renderTimelineCell = (date, time, { grouped = false } = {}) => (
+    <div className="project-timeline-cell">
+      <strong>{formatDate(date)}</strong>
+      <small>
+        <span>{grouped ? "Order received" : "Received"}</span>
+        {grouped ? "Multiple times" : formatTime(time)}
+      </small>
+    </div>
+  );
+
+  const renderStatusBadge = (status, className = getStatusClass(status)) => (
+    <span className={`status-badge ${className}`} title={status || "Draft"}>
+      <span className="status-badge-dot" aria-hidden="true" />
+      <span>{status || "Draft"}</span>
+    </span>
+  );
+
+  const canDeleteProject = (project) =>
+    !(
+      user &&
+      (project?.projectLeadId?._id === user._id ||
+        project?.projectLeadId === user._id)
+    );
+
+  const renderProjectActions = (project) => (
+    <div className="project-row-actions">
+      <button
+        type="button"
+        className="project-open-btn"
+        onClick={() => openProjectDetails(project)}
+      >
+        <span>Open</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M7.25 4.75 12.5 10l-5.25 5.25" />
+        </svg>
+      </button>
+      {canDeleteProject(project) && (
+        <button
+          type="button"
+          className="project-more-btn project-delete-action"
+          onClick={(event) => handleDeleteClick(event, project._id)}
+          aria-label="Delete project"
+          title="Delete project"
+        >
+          <TrashIcon width="15" height="15" />
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="projects-page">
@@ -784,13 +859,12 @@ const Projects = ({ user }) => {
 
       <div className="projects-table-container">
         <div className="table-controls">
-          {/* Filter Bar */}
           <div className="filter-bar">
-            {/* Search Order # */}
             <div className="search-pill-wrapper">
               <input
                 type="text"
-                placeholder="Search Order #..."
+                placeholder="Search by order number"
+                aria-label="Search projects by order number"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -814,8 +888,8 @@ const Projects = ({ user }) => {
               </div>
             </div>
 
-            {/* Status Filter */}
             <select
+              aria-label="Filter projects by status"
               value={filterStatus}
               onChange={(e) => {
                 setFilterStatus(e.target.value);
@@ -830,8 +904,8 @@ const Projects = ({ user }) => {
               ))}
             </select>
 
-            {/* Client Filter */}
             <select
+              aria-label="Filter projects by client"
               value={clientFilter}
               onChange={(e) => {
                 setClientFilter(e.target.value);
@@ -847,8 +921,8 @@ const Projects = ({ user }) => {
               ))}
             </select>
 
-            {/* Lead Filter */}
             <select
+              aria-label="Filter projects by lead"
               value={leadFilter}
               onChange={(e) => {
                 setLeadFilter(e.target.value);
@@ -864,9 +938,21 @@ const Projects = ({ user }) => {
               ))}
             </select>
           </div>
-          <div className="result-count">
-            Showing {paginatedOrderGroups.length} of {filteredOrderGroups.length}{" "}
-            results
+          <div className="table-toolbar-meta">
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="clear-filters-btn"
+                onClick={clearProjectFilters}
+              >
+                Clear filters
+              </button>
+            )}
+            <div className="result-count" aria-live="polite">
+              <strong>{paginatedOrderGroups.length}</strong> shown
+              <span aria-hidden="true">/</span>
+              {filteredOrderGroups.length} total
+            </div>
           </div>
         </div>
 
@@ -879,15 +965,12 @@ const Projects = ({ user }) => {
             <table className="projects-table">
               <thead>
                 <tr>
-                  <th>Order ID</th>
-                  <th>Project Name</th>
+                  <th>Project</th>
                   <th>Type</th>
-                  <th>Lead</th>
-                  <th>Client</th>
-                  <th>Assigned Date</th>
-                  <th>Received Time</th>
+                  <th>People</th>
+                  <th>Timeline</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  <th aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -914,56 +997,55 @@ const Projects = ({ user }) => {
 
                   if (!isGrouped) {
                     const project = primaryProject;
+                    const projectStatus = getProjectStatusDisplay(project);
+                    const orderNumber =
+                      project.orderId || group?.orderNumber || "N/A";
                     return (
-                      <tr key={project._id}>
-                        <td>
-                          <span style={{ fontWeight: 600 }}>
-                            {project.orderId || group?.orderNumber || "N/A"}
-                          </span>
+                      <tr
+                        key={project._id}
+                        className={`project-operation-row ${
+                          isEmergencyProject(project) ? "is-emergency" : ""
+                        }`}
+                      >
+                        <td className="operations-project-cell">
+                          <div className="project-identity">
+                            <div className="project-identity-meta">
+                              <span className="project-order-code">
+                                #{orderNumber}
+                              </span>
+                              <span className="project-record-label">
+                                Project
+                              </span>
+                            </div>
+                            <strong className="project-title">
+                              {renderProjectName(
+                                project.details,
+                                null,
+                                "Untitled",
+                              )}
+                            </strong>
+                          </div>
                         </td>
-                        <td>
-                          {renderProjectName(project.details, null, "Untitled")}
+                        <td className="operations-type-cell">
+                          {renderTypeBadge(project.projectType)}
                         </td>
-                        <td>{renderTypeBadge(project.projectType)}</td>
-                        <td>{getLeadDisplay(project, "Unassigned")}</td>
-                        <td>{groupClient}</td>
-                        <td>{formatDate(project.orderDate || project.createdAt)}</td>
-                        <td>{formatTime(project.receivedTime)}</td>
-                        <td>
-                          <span
-                            className={`status-badge ${getStatusClass(
-                              getProjectStatusDisplay(project),
-                            )}`}
-                          >
-                            {getProjectStatusDisplay(project)}
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            className="action-btn"
-                            onClick={() => openProjectDetails(project)}
-                          >
-                            View
-                          </button>
-                          {!(
-                            user &&
-                            (project.projectLeadId?._id === user._id ||
-                              project.projectLeadId === user._id)
-                          ) && (
-                            <button
-                              className="action-btn delete-btn"
-                              onClick={(e) => handleDeleteClick(e, project._id)}
-                              style={{
-                                marginLeft: "0.5rem",
-                                background: "rgba(239, 68, 68, 0.1)",
-                                color: "#ef4444",
-                                border: "1px solid rgba(239, 68, 68, 0.2)",
-                              }}
-                              title="Delete Project"
-                            >
-                              <TrashIcon width="16" height="16" />
-                            </button>
+                        <td className="operations-people-column">
+                          {renderPeopleCell(
+                            getLeadDisplay(project, "Unassigned"),
+                            groupClient,
                           )}
+                        </td>
+                        <td className="operations-timeline-column">
+                          {renderTimelineCell(
+                            project.orderDate || project.createdAt,
+                            project.receivedTime,
+                          )}
+                        </td>
+                        <td className="operations-status-cell">
+                          {renderStatusBadge(projectStatus)}
+                        </td>
+                        <td className="operations-actions-cell">
+                          {renderProjectActions(project)}
                         </td>
                       </tr>
                     );
@@ -972,146 +1054,147 @@ const Projects = ({ user }) => {
                   return (
                     <React.Fragment key={groupKey}>
                       <tr className="project-group-header-row">
-                        <td>
-                          <div className="project-group-order-cell">
+                        <td className="operations-project-cell">
+                          <div className="project-group-identity">
                             <button
                               type="button"
-                              className="project-group-toggle-btn"
+                              className={`project-group-toggle-btn ${
+                                expanded ? "is-expanded" : ""
+                              }`}
                               onClick={() => toggleOrderGroup(groupKey)}
                               aria-expanded={expanded}
+                              aria-label={`${expanded ? "Collapse" : "Expand"} order ${
+                                group?.orderNumber || "N/A"
+                              }`}
                             >
-                              {expanded ? (
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  version="1.1"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  aria-hidden="true"
-                                  focusable="false"
-                                >
-                                  <polygon points="8 5 8 19 16 12" />
-                                </svg>
-                              ) : (
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  version="1.1"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  aria-hidden="true"
-                                  focusable="false"
-                                >
-                                  <polygon points="5 8 12 16 19 8" />
-                                </svg>
-                              )}
+                              <svg viewBox="0 0 20 20" aria-hidden="true">
+                                <path d="m7 4.75 5.25 5.25L7 15.25" />
+                              </svg>
                             </button>
-                            <div className="project-group-order-text">
-                              <span className="project-group-order-id">
-                                {group?.orderNumber || "N/A"}
-                              </span>
-                              <span className="project-group-order-count">
-                                {projectsInGroup.length} projects
-                              </span>
+                            <div className="project-identity">
+                              <div className="project-identity-meta">
+                                <span className="project-order-code">
+                                  #{group?.orderNumber || "N/A"}
+                                </span>
+                                <span className="project-group-count">
+                                  {projectsInGroup.length} projects
+                                </span>
+                              </div>
+                              <strong className="project-title">
+                                Grouped order
+                              </strong>
+                              <small className="project-group-subtitle">
+                                {expanded
+                                  ? "Showing every project in this order"
+                                  : "Expand to review the individual projects"}
+                              </small>
                             </div>
                           </div>
                         </td>
-                        <td>
-                          <div className="project-group-project-cell">
-                            <span className="project-group-title">Grouped Order</span>
-                            <span className="project-group-subtitle">
-                              Expand to view all projects under this order
-                            </span>
-                          </div>
-                        </td>
-                        <td>
+                        <td className="operations-type-cell">
                           {groupTypes.length === 1
                             ? renderTypeBadge(groupTypes[0])
-                            : `Mixed (${groupTypes.length})`}
+                            : renderTypeBadge(
+                                "Mixed",
+                                `Mixed (${groupTypes.length})`,
+                              )}
                         </td>
-                        <td>Multiple Leads</td>
-                        <td>{groupClient}</td>
-                        <td>{formatDate(group?.orderDate || primaryProject?.orderDate || primaryProject?.createdAt)}</td>
-                        <td>-</td>
-                        <td>
-                          <span className={`status-badge ${groupStatus.className}`}>
-                            {groupStatus.label}
-                          </span>
+                        <td className="operations-people-column">
+                          {renderPeopleCell("Multiple leads", groupClient)}
                         </td>
-                        <td>
+                        <td className="operations-timeline-column">
+                          {renderTimelineCell(
+                            group?.orderDate ||
+                              primaryProject?.orderDate ||
+                              primaryProject?.createdAt,
+                            null,
+                            { grouped: true },
+                          )}
+                        </td>
+                        <td className="operations-status-cell">
+                          {renderStatusBadge(
+                            groupStatus.label,
+                            groupStatus.className,
+                          )}
+                        </td>
+                        <td className="operations-actions-cell">
                           <button
-                            className="action-btn"
+                            type="button"
+                            className="project-open-btn project-group-open-btn"
                             onClick={() => openOrderGroup(group?.orderNumber)}
                           >
-                            View Group
+                            <span>View group</span>
+                            <svg viewBox="0 0 20 20" aria-hidden="true">
+                              <path d="M7.25 4.75 12.5 10l-5.25 5.25" />
+                            </svg>
                           </button>
                         </td>
                       </tr>
 
                       {showGroupChildren &&
-                        projectsInGroup.map((project) => (
-                          <tr
-                            key={project._id}
-                            className={`project-group-child-row ${
-                              isCollapsing
-                                ? "project-group-child-row-collapsing"
-                                : "project-group-child-row-expanding"
-                            }`}
-                          >
-                            <td>
-                              <span
-                                style={{ fontWeight: 600 }}
-                                className="project-group-child-order-id"
-                              >
-                                -
-                              </span>
-                            </td>
-                            <td>
-                              {renderProjectName(
-                                project.details,
-                                null,
-                                "Untitled",
-                              )}
-                            </td>
-                            <td>{renderTypeBadge(project.projectType)}</td>
-                            <td>{getLeadDisplay(project, "Unassigned")}</td>
-                            <td>{project.details?.client || groupClient}</td>
-                            <td>{formatDate(project.orderDate || project.createdAt)}</td>
-                            <td>{formatTime(project.receivedTime)}</td>
-                            <td>
-                              <span
-                                className={`status-badge ${getStatusClass(
-                                  getProjectStatusDisplay(project),
-                                )}`}
-                              >
-                                {getProjectStatusDisplay(project)}
-                              </span>
-                            </td>
-                            <td>
-                              <button
-                                className="action-btn"
-                                onClick={() => openProjectDetails(project)}
-                              >
-                                View
-                              </button>
-                              {!(
-                                user &&
-                                (project.projectLeadId?._id === user._id ||
-                                  project.projectLeadId === user._id)
-                              ) && (
-                                <button
-                                  className="action-btn delete-btn"
-                                  onClick={(e) => handleDeleteClick(e, project._id)}
-                                  style={{
-                                    marginLeft: "0.5rem",
-                                    background: "rgba(239, 68, 68, 0.1)",
-                                    color: "#ef4444",
-                                    border: "1px solid rgba(239, 68, 68, 0.2)",
-                                  }}
-                                  title="Delete Project"
-                                >
-                                  <TrashIcon width="16" height="16" />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
+                        projectsInGroup.map((project, projectIndex) => {
+                          const projectStatus =
+                            getProjectStatusDisplay(project);
+                          return (
+                            <tr
+                              key={project._id}
+                              className={`project-group-child-row ${
+                                isCollapsing
+                                  ? "project-group-child-row-collapsing"
+                                  : "project-group-child-row-expanding"
+                              } ${
+                                isEmergencyProject(project)
+                                  ? "is-emergency"
+                                  : ""
+                              }`}
+                            >
+                              <td className="operations-project-cell">
+                                <div className="project-child-identity">
+                                  <span
+                                    className="project-child-connector"
+                                    aria-hidden="true"
+                                  />
+                                  <div className="project-identity">
+                                    <div className="project-identity-meta">
+                                      <span className="project-record-label">
+                                        Project {projectIndex + 1} of{" "}
+                                        {projectsInGroup.length}
+                                      </span>
+                                    </div>
+                                    <strong className="project-title">
+                                      {renderProjectName(
+                                        project.details,
+                                        null,
+                                        "Untitled",
+                                      )}
+                                    </strong>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="operations-type-cell">
+                                {renderTypeBadge(project.projectType)}
+                              </td>
+                              <td className="operations-people-column">
+                                {renderPeopleCell(
+                                  getLeadDisplay(project, "Unassigned"),
+                                  project.details?.client || groupClient,
+                                )}
+                              </td>
+                              <td className="operations-timeline-column">
+                                {renderTimelineCell(
+                                  project.orderDate || project.createdAt,
+                                  project.receivedTime,
+                                )}
+                              </td>
+                              <td className="operations-status-cell">
+                                {renderStatusBadge(projectStatus)}
+                              </td>
+                              <td className="operations-actions-cell">
+                                {renderProjectActions(project)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </React.Fragment>
                   );
                 })}

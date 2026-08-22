@@ -421,8 +421,11 @@ const Deadlines = () => {
                     {groupBy === "order" && group.rows[0]?.client && <small>{group.rows[0].client}</small>}
                   </header>
                 )}
-                <div className="deadline-table-wrap">
-                  <table className="deadline-table">
+                <div className="deadline-table-wrap admin-data-table-scroll admin-data-table-scroll--flush admin-data-table-scroll--cards">
+                  <table
+                    className="deadline-table admin-data-table admin-data-table--cards admin-data-table--interactive"
+                    style={{ "--admin-table-min-width": "980px" }}
+                  >
                     <thead>
                       <tr>
                         <th>Deadline</th>
@@ -453,12 +456,12 @@ const Deadlines = () => {
                                   </div>
                                 </div>
                               </td>
-                              <td data-label="Project">
-                                <div className="deadline-project-cell">
-                                  <strong>{row.projectName}</strong>
-                                  <span>
+                              <td data-label="Project" data-table-primary="true">
+                                <div className="deadline-project-cell admin-table-identity">
+                                  <strong className="admin-table-title">{row.projectName}</strong>
+                                  <span className="admin-table-subtitle">
                                     {row.orderId}
-                                    <b className={`deadline-type-badge ${row.projectType === "Quote" ? "quote" : ""}`}>{row.projectType}</b>
+                                    <b className={`deadline-type-badge admin-table-chip ${row.projectType === "Quote" ? "quote" : ""}`}>{row.projectType}</b>
                                   </span>
                                 </div>
                               </td>
@@ -469,18 +472,18 @@ const Deadlines = () => {
                                   {row.assistantLead?.name && <span>with {row.assistantLead.name}</span>}
                                 </div>
                               </td>
-                              <td data-label="Stage"><span className="deadline-status-pill">{row.status}</span></td>
+                              <td data-label="Stage"><span className="deadline-status-pill admin-table-status is-neutral">{row.status}</span></td>
                               <td data-label="Readiness">
-                                <span className={`deadline-readiness ${row.readiness?.key || "in-progress"}`}>{row.readiness?.label || "In progress"}</span>
+                                <span className={`deadline-readiness admin-table-status ${row.readiness?.key || "in-progress"}`}>{row.readiness?.label || "In progress"}</span>
                               </td>
                               <td className="deadline-row-action">
-                                <button type="button" aria-label={expanded ? "Collapse deadline details" : "Expand deadline details"} onClick={(event) => { event.stopPropagation(); toggleExpanded(row.projectId); }}>
+                                <button type="button" className="admin-table-action" aria-label={expanded ? "Collapse deadline details" : "Expand deadline details"} onClick={(event) => { event.stopPropagation(); toggleExpanded(row.projectId); }}>
                                   {expanded ? "−" : "+"}
                                 </button>
                               </td>
                             </tr>
                             {expanded && (
-                              <tr className="deadline-detail-row">
+                              <tr className="deadline-detail-row admin-table-detail-row">
                                 <td colSpan="7">
                                   <div className="deadline-detail-grid">
                                     <div>
