@@ -477,6 +477,46 @@
   }
 }
 
+.quote-revision-reason-field {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1rem 0;
+  padding: 0.9rem;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.quote-revision-reason-field > span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.quote-revision-reason-field textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  outline: none;
+  background: var(--bg-input, rgba(15, 23, 42, 0.72));
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.quote-revision-reason-field textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.13);
+}
+
+.quote-revision-reason-field small {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  text-align: right;
+}
+
 /* --- Quote Create Redesign --- */
 .minimal-quote-container {
   --quote-font-display: inherit;

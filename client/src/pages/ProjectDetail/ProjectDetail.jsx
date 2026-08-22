@@ -30,6 +30,7 @@ import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import ProjectUpdates from "./ProjectUpdates";
 import ProjectChallenges from "./ProjectChallenges";
 import ProjectActivity from "./ProjectActivity";
+import ProjectRevisionHistory from "../../components/features/ProjectRevisionHistory";
 import ProgressDonutIcon from "../../components/icons/ProgressDonutIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
@@ -1048,7 +1049,14 @@ const ProjectDetail = ({ user }) => {
   useEffect(() => {
     if (
       tabParam &&
-      ["Overview", "Updates", "Comments", "Challenges", "Activities"].includes(
+      [
+        "Overview",
+        "Updates",
+        "Comments",
+        "Challenges",
+        "Revisions",
+        "Activities",
+      ].includes(
         tabParam,
       )
     ) {
@@ -1427,7 +1435,14 @@ const ProjectDetail = ({ user }) => {
         </div>
         <ProjectHealthBadge health={project.health} expanded />
         <nav className="header-nav">
-          {["Overview", "Updates", "Comments", "Challenges", "Activities"].map((tab) => (
+          {[
+            "Overview",
+            "Updates",
+            "Comments",
+            "Challenges",
+            "Revisions",
+            "Activities",
+          ].map((tab) => (
             <Link
               key={tab}
               to="#"
@@ -1565,6 +1580,9 @@ const ProjectDetail = ({ user }) => {
         )}
         {activeTab === "Challenges" && (
           <ProjectChallenges project={project} onUpdate={fetchProject} />
+        )}
+        {activeTab === "Revisions" && (
+          <ProjectRevisionHistory project={project} source={requestSource} />
         )}
         {activeTab === "Activities" && <ProjectActivity project={project} />}
       </main>

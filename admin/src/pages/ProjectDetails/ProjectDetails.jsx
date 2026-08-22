@@ -23,6 +23,9 @@ import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard
 import Modal from "../../components/Modal/Modal";
 import DeliveryCountdownBadge from "@client/components/features/DeliveryCountdownBadge";
 import ProjectComments from "@client/components/features/ProjectComments";
+import ProjectRevisionHistory, {
+  ProjectRevisionStamp,
+} from "@client/components/features/ProjectRevisionHistory";
 import { buildFileKey } from "@client/utils/referenceAttachments";
 import { getDepartmentLabel } from "@client/constants/departments";
 import {
@@ -146,6 +149,7 @@ const normalizeContentTabKey = (value) => {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "comments") return "comments";
   if (normalized === "updates") return "updates";
+  if (normalized === "revisions") return "revisions";
   if (normalized === "order" || normalized === "order & files") return "order";
   if (normalized === "overview") return "overview";
   return "";
@@ -1697,6 +1701,7 @@ const ProjectDetails = ({ user }) => {
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [revisionReason, setRevisionReason] = useState("");
   const [selectedClientMockups, setSelectedClientMockups] = useState([]);
   const [selectedClientMockupNotes, setSelectedClientMockupNotes] = useState({});
   const [selectedApprovedMockups, setSelectedApprovedMockups] = useState([]);
@@ -2112,6 +2117,7 @@ const ProjectDetails = ({ user }) => {
     if (!project) return;
     if (!isEditing && !ensureProjectIsEditable()) return;
     clearMockupUploadDrafts();
+    setRevisionReason("");
     // Reset form to current project state when opening edit
     if (!isEditing) {
       setEditForm({
@@ -2168,6 +2174,7 @@ const ProjectDetails = ({ user }) => {
         contactType: editForm.contactType,
         supplySource: editForm.supplySource,
         packagingType: editForm.packagingType,
+        revisionReason,
       };
 
       const hasMockupUploads =
@@ -2223,6 +2230,7 @@ const ProjectDetails = ({ user }) => {
         const updatedProject = await res.json();
         applyProjectToState(updatedProject);
         clearMockupUploadDrafts();
+        setRevisionReason("");
         setIsEditing(false);
       } else {
         console.error("Failed to update project");
@@ -2490,40 +2498,6 @@ const ProjectDetails = ({ user }) => {
       day: "numeric",
       year: "numeric",
     });
-  };
-
-  const formatDateTime = (dateString) => {
-    if (!dateString) return "N/A";
-    const parsed = new Date(dateString);
-    if (Number.isNaN(parsed.getTime())) return "N/A";
-    return parsed.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
-
-  const getRevisionMeta = (projectValue) => {
-    const meta = projectValue?.orderRevisionMeta || {};
-    const updatedAt = meta.updatedAt;
-    if (!updatedAt) return null;
-    const explicitName = String(meta.updatedByName || "").trim();
-    const updatedBy = meta.updatedBy || {};
-    const fallbackName = [updatedBy.firstName, updatedBy.lastName]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-    const updatedByName =
-      explicitName || fallbackName || updatedBy.name || "Unknown";
-    return { updatedAt, updatedByName };
-  };
-
-  const getRevisionCount = (projectValue) => {
-    const rawCount = Number(projectValue?.orderRevisionCount);
-    if (Number.isFinite(rawCount) && rawCount > 0) return rawCount;
-    return projectValue?.orderRevisionMeta?.updatedAt ? 1 : 0;
   };
 
   const formatTime = (timeStr) => {
@@ -2975,6 +2949,12 @@ const ProjectDetails = ({ user }) => {
     { key: "order", label: "Order & Files" },
     { key: "updates", label: "Updates" },
     { key: "comments", label: "Comments" },
+    {
+      key: "revisions",
+      label: project?.revisionTracking?.currentRevision
+        ? `Revisions (R${project.revisionTracking.currentRevision})`
+        : "Revisions",
+    },
   ];
   const hasHeaderAlerts = Boolean(
     (isCorporateProject && corporateEmergencyEnabled) ||
@@ -3092,9 +3072,6 @@ const ProjectDetails = ({ user }) => {
       if (normalized) addReferenceItem(normalized);
     },
   );
-  const revisionMeta = getRevisionMeta(project);
-  const revisionCount = getRevisionCount(project);
-
   return (
     <div
       className={`project-details-page ${
@@ -3442,6 +3419,16 @@ const ProjectDetails = ({ user }) => {
                     {formatLastUpdated(project.sectionUpdates.details)})
                   </span>
                 )}
+                <ProjectRevisionStamp
+                  project={project}
+                  section="overview"
+                  onOpen={() => setActiveContentTab("revisions")}
+                />
+                <ProjectRevisionStamp
+                  project={project}
+                  section="project_details"
+                  onOpen={() => setActiveContentTab("revisions")}
+                />
               </span>
               {!isEditing ? (
                 !isLeadRestricted && !isProjectOnHold && !isCancelledProject && (
@@ -3659,11 +3646,31 @@ const ProjectDetails = ({ user }) => {
                 </>
               )}
             </div>
+            {isEditing && (
+              <label className="revision-note-field">
+                <span>Revision note (optional)</span>
+                <textarea
+                  rows={2}
+                  maxLength={500}
+                  value={revisionReason}
+                  onChange={(event) => setRevisionReason(event.target.value)}
+                  placeholder="Why is this project information being revised?"
+                />
+                <small>{revisionReason.length}/500</small>
+              </label>
+            )}
           </div>
 
           {/* Brief Overview Section (Moved from General Info) */}
           <div className="detail-card">
-              <h3 className="card-title">Brief Overview</h3>
+              <h3 className="card-title">
+                Brief Overview
+                <ProjectRevisionStamp
+                  project={project}
+                  section="overview"
+                  onOpen={() => setActiveContentTab("revisions")}
+                />
+              </h3>
               <div style={{ marginTop: "1rem" }}>
                 {isEditing ? (
                   <textarea
@@ -4321,13 +4328,14 @@ const ProjectDetails = ({ user }) => {
           {referenceItems.length > 0 && (
             <div className="detail-card">
               <div className="detail-card-header">
-                <h3 className="card-title">Reference Material</h3>
-                {revisionMeta && revisionCount > 0 && (
-                  <span className="revision-badge">
-                    Revision v{revisionCount} by {revisionMeta.updatedByName} -{" "}
-                    {formatDateTime(revisionMeta.updatedAt)}
-                  </span>
-                )}
+                <h3 className="card-title">
+                  Reference Material
+                  <ProjectRevisionStamp
+                    project={project}
+                    section="files"
+                    onOpen={() => setActiveContentTab("revisions")}
+                  />
+                </h3>
               </div>
               <div
                 style={{
@@ -4598,6 +4606,11 @@ const ProjectDetails = ({ user }) => {
                     {formatLastUpdated(project.sectionUpdates.items)})
                   </span>
                 )}
+                <ProjectRevisionStamp
+                  project={project}
+                  section="items"
+                  onOpen={() => setActiveContentTab("revisions")}
+                />
               </span>
             </h3>
             <div className="card-scroll-area">
@@ -5231,6 +5244,10 @@ const ProjectDetails = ({ user }) => {
               title="Admin Project Comments"
             />
           )}
+
+          {activeContentTab === "revisions" && (
+            <ProjectRevisionHistory project={project} source="admin" />
+          )}
         </div>
 
         {/* Right Column */}
@@ -5257,7 +5274,14 @@ const ProjectDetails = ({ user }) => {
               className="card-title"
               style={{ justifyContent: "space-between" }}
             >
-              <span>People & Departments</span>
+              <span>
+                People & Departments
+                <ProjectRevisionStamp
+                  project={project}
+                  section="people_departments"
+                  onOpen={() => setActiveContentTab("revisions")}
+                />
+              </span>
               {!isEditingLead ? (
                 (user?.role === "admin" || !isLeadRestricted) &&
                 !isProjectOnHold && (
@@ -5466,7 +5490,14 @@ const ProjectDetails = ({ user }) => {
           {(project.uncontrollableFactors?.length > 0 ||
             project.productionRisks?.length > 0) && (
             <div className="detail-card">
-              <h3 className="card-title">Risks & Factors</h3>
+              <h3 className="card-title">
+                Risks & Factors
+                <ProjectRevisionStamp
+                  project={project}
+                  section="risks_challenges"
+                  onOpen={() => setActiveContentTab("revisions")}
+                />
+              </h3>
               {project.uncontrollableFactors?.length > 0 && (
                 <div style={{ marginBottom: "1rem" }}>
                   <label

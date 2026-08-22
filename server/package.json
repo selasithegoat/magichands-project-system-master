@@ -12,7 +12,7 @@
     "extract:inventory:souvenir-price-list": "python scripts/extract-souvenir-price-list.py",
     "import:inventory:souvenir-price-list": "node scripts/import-souvenir-price-list.js",
     "retract:inventory:souvenir-import": "node scripts/retract-souvenir-inventory-import.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/projectRevisionService.test.js"
   },
   "keywords": [],
   "author": "",

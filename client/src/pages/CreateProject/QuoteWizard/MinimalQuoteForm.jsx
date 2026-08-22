@@ -252,6 +252,7 @@ const MinimalQuoteForm = ({ user = null }) => {
   const [editingProjectStatus, setEditingProjectStatus] = useState("");
   const [editingProjectIsCancelled, setEditingProjectIsCancelled] =
     useState(false);
+  const [revisionReason, setRevisionReason] = useState("");
   const [leads, setLeads] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedClientMockups, setSelectedClientMockups] = useState([]);
@@ -856,6 +857,9 @@ const MinimalQuoteForm = ({ user = null }) => {
         formPayload.append("assistantLeadId", formData.assistantLeadId);
       }
       formPayload.append("items", JSON.stringify(formData.items));
+      if (editingId) {
+        formPayload.append("revisionReason", revisionReason.trim());
+      }
       formPayload.append(
         "quoteDetails",
         JSON.stringify({
@@ -1785,6 +1789,21 @@ const MinimalQuoteForm = ({ user = null }) => {
               </div>
             )}
           </div>
+
+          {editingId && (
+            <label className="quote-revision-reason-field">
+              <span>Revision reason (optional)</span>
+              <textarea
+                rows="3"
+                maxLength="500"
+                value={revisionReason}
+                onChange={(event) => setRevisionReason(event.target.value)}
+                placeholder="Explain why this quote is being revised..."
+                disabled={Boolean(revisionBlockMessage)}
+              />
+              <small>{revisionReason.length}/500</small>
+            </label>
+          )}
 
           {editingId && revisionBlockMessage && (
             <div className="revision-blocked-notice" role="alert">

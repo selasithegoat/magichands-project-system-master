@@ -3,11 +3,16 @@ const fs = require("fs");
 const Project = require("../models/Project");
 const Order = require("../models/Order");
 const ActivityLog = require("../models/ActivityLog");
+const ProjectRevision = require("../models/ProjectRevision");
 const ProjectUpdate = require("../models/ProjectUpdate");
 const SmsPrompt = require("../models/SmsPrompt");
 const OrderMeeting = require("../models/OrderMeeting");
 const Reminder = require("../models/Reminder");
 const { logActivity } = require("../utils/activityLogger");
+const {
+  captureProjectRevisionState,
+  recordProjectRevisionSafely,
+} = require("../services/projectRevisionService");
 const { createNotification } = require("../utils/notificationService");
 const User = require("../models/User"); // Need User model for department notifications
 const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
@@ -2705,6 +2710,7 @@ const updateProjectDeliverySchedule = async (req, res) => {
     if (!ensureProjectMutationAccess(req, res, project, "delivery_schedule")) {
       return;
     }
+    const beforeRevisionState = captureProjectRevisionState(project);
 
     const deliveryDate = req.body?.deliveryDate;
     const deliveryTime = toText(req.body?.deliveryTime);
@@ -2754,6 +2760,15 @@ const updateProjectDeliverySchedule = async (req, res) => {
     project.sectionUpdates.details = new Date();
 
     await project.save();
+
+    await recordProjectRevisionSafely({
+      projectId: project._id,
+      before: beforeRevisionState,
+      after: project,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "delivery_schedule_update",
+    });
 
     await logActivity(
       project._id,
@@ -10280,6 +10295,7 @@ const addItemToProject = async (req, res) => {
         message: "Only Front Desk and Admin can add order items.",
       });
     }
+    const beforeRevisionState = captureProjectRevisionState(project);
     const previousItemTotals = getOrderItemTotalsSummary(project?.items);
 
     const newItem = {
@@ -10311,6 +10327,15 @@ const addItemToProject = async (req, res) => {
     };
     project.orderRevisionCount = Number(project.orderRevisionCount || 0) + 1;
     await project.save();
+
+    await recordProjectRevisionSafely({
+      projectId: project._id,
+      before: beforeRevisionState,
+      after: project,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "order_item_add",
+    });
 
     await logActivity(
       project._id,
@@ -10370,10 +10395,9 @@ const updateItemInProject = async (req, res) => {
     const { description, breakdown, qty, productionAssignments } = req.body;
     const { id, itemId } = req.params;
 
-    const projectForAccess = await Project.findById(id).select(
-      `${PROJECT_MUTATION_ACCESS_FIELDS} items projectType`,
-    );
+    const projectForAccess = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "manage")) return;
+    const beforeRevisionState = captureProjectRevisionState(projectForAccess);
     const existingItem = Array.isArray(projectForAccess?.items)
       ? projectForAccess.items.find(
           (item) => item?._id?.toString?.() === String(itemId),
@@ -10447,6 +10471,15 @@ const updateItemInProject = async (req, res) => {
     );
     await project.save();
 
+    await recordProjectRevisionSafely({
+      projectId: project._id,
+      before: beforeRevisionState,
+      after: project,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "order_item_update",
+    });
+
     await logActivity(
       id,
       req.user.id,
@@ -10511,6 +10544,7 @@ const deleteItemFromProject = async (req, res) => {
         message: "Only Front Desk and Admin can remove order items.",
       });
     }
+    const beforeRevisionState = captureProjectRevisionState(project);
     const removedItem = Array.isArray(project?.items)
       ? project.items.find((item) => item?._id?.toString?.() === String(itemId))
       : null;
@@ -10533,6 +10567,15 @@ const deleteItemFromProject = async (req, res) => {
     };
     project.orderRevisionCount = Number(project.orderRevisionCount || 0) + 1;
     await project.save();
+
+    await recordProjectRevisionSafely({
+      projectId: project._id,
+      before: beforeRevisionState,
+      after: project,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "order_item_delete",
+    });
 
     await logActivity(id, req.user.id, "item_delete", `Deleted order item`, {
       itemId,
@@ -10590,6 +10633,7 @@ const updateProjectDepartments = async (req, res) => {
 
     const project = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+    const beforeRevisionState = captureProjectRevisionState(project);
 
     const oldDepartments = normalizeProjectDepartmentSelections(project.departments);
     const directlyManagedDepartments = normalizeProjectDepartmentSelections(
@@ -10618,6 +10662,15 @@ const updateProjectDepartments = async (req, res) => {
     project.sectionUpdates.departments = new Date();
 
     await project.save();
+
+    await recordProjectRevisionSafely({
+      projectId: project._id,
+      before: beforeRevisionState,
+      after: project,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "departments_update",
+    });
 
     await logActivity(
       id,
@@ -14957,6 +15010,7 @@ const updateSampleRequirement = async (req, res) => {
 
     const project = await Project.findById(req.params.id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+    const beforeRevisionState = captureProjectRevisionState(project);
 
     if (isQuoteProject(project)) {
       return res.status(400).json({
@@ -15006,6 +15060,15 @@ const updateSampleRequirement = async (req, res) => {
     }
 
     await project.save();
+
+    await recordProjectRevisionSafely({
+      projectId: project._id,
+      before: beforeRevisionState,
+      after: project,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "sample_requirement_update",
+    });
 
     const nextGuard = getSampleApprovalGuard(project);
     const requirementActionLabel = nextRequired ? "enabled" : "disabled";
@@ -15232,6 +15295,7 @@ const updateCorporateEmergency = async (req, res) => {
 
     const project = await Project.findById(req.params.id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+    const beforeRevisionState = captureProjectRevisionState(project);
 
     if (project.projectType !== "Corporate Job") {
       return res.status(400).json({
@@ -15258,6 +15322,15 @@ const updateCorporateEmergency = async (req, res) => {
     };
 
     await project.save();
+
+    await recordProjectRevisionSafely({
+      projectId: project._id,
+      before: beforeRevisionState,
+      after: project,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "corporate_emergency_update",
+    });
 
     await logActivity(
       project._id,
@@ -15295,6 +15368,7 @@ const updateProjectType = async (req, res) => {
 
     const project = await Project.findById(req.params.id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+    const beforeRevisionState = captureProjectRevisionState(project);
 
     if (project?.cancellation?.isCancelled) {
       return res.status(400).json({
@@ -15509,6 +15583,15 @@ const updateProjectType = async (req, res) => {
 
     const savedProject = await project.save();
 
+    await recordProjectRevisionSafely({
+      projectId: savedProject._id,
+      before: beforeRevisionState,
+      after: savedProject,
+      actor: req.user,
+      reason: req.body?.revisionReason || reason,
+      source: "project_type_update",
+    });
+
     await logActivity(
       savedProject._id,
       req.user._id,
@@ -15665,6 +15748,7 @@ const uploadProjectMockup = async (req, res) => {
     }
 
     ensureProjectMockupVersions(project);
+    const beforeRevisionState = captureProjectRevisionState(project);
     const existingVersions = Array.isArray(project?.mockup?.versions)
       ? [...project.mockup.versions]
       : [];
@@ -15857,6 +15941,15 @@ const uploadProjectMockup = async (req, res) => {
 
     await project.save();
 
+    await recordProjectRevisionSafely({
+      projectId: project._id,
+      before: beforeRevisionState,
+      after: project,
+      actor: req.user,
+      reason: req.body?.revisionReason || trimmedNote,
+      source: "mockup_upload",
+    });
+
     for (const entry of newEntries) {
       await createProjectSystemUpdateAndSnapshot({
         project,
@@ -15989,6 +16082,7 @@ const deleteProjectMockupVersion = async (req, res) => {
     }
 
     ensureProjectMockupVersions(project);
+    const beforeRevisionState = captureProjectRevisionState(project);
 
     if (project.mockup.versions.length === 0) {
       return res.status(400).json({
@@ -16071,6 +16165,15 @@ const deleteProjectMockupVersion = async (req, res) => {
     }
 
     await project.save();
+
+    await recordProjectRevisionSafely({
+      projectId: project._id,
+      before: beforeRevisionState,
+      after: project,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "mockup_delete",
+    });
 
     const versionLabel = buildMockupVersionLabel(targetVersionNumber);
     await createProjectSystemUpdateAndSnapshot({
@@ -17223,11 +17326,10 @@ const addChallengeToProject = async (req, res) => {
       resolvedDate: status === "Resolved" ? new Date().toLocaleString() : "--",
     };
 
-    const projectForAccess = await Project.findById(req.params.id).select(
-      PROJECT_MUTATION_ACCESS_FIELDS,
-    );
+    const projectForAccess = await Project.findById(req.params.id);
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
       return;
+    const beforeRevisionState = captureProjectRevisionState(projectForAccess);
 
     const updatedProject = await Project.findByIdAndUpdate(
       req.params.id,
@@ -17241,6 +17343,15 @@ const addChallengeToProject = async (req, res) => {
     if (!updatedProject) {
       return res.status(404).json({ message: "Project not found" });
     }
+
+    await recordProjectRevisionSafely({
+      projectId: updatedProject._id,
+      before: beforeRevisionState,
+      after: updatedProject,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "challenge_add",
+    });
 
     await logActivity(
       req.params.id,
@@ -17274,11 +17385,10 @@ const updateChallengeStatus = async (req, res) => {
     const { status } = req.body;
     const { id, challengeId } = req.params;
 
-    const projectForAccess = await Project.findById(id).select(
-      PROJECT_MUTATION_ACCESS_FIELDS,
-    );
+    const projectForAccess = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
       return;
+    const beforeRevisionState = captureProjectRevisionState(projectForAccess);
 
     let updateFields = {
       "challenges.$.status": status,
@@ -17303,6 +17413,15 @@ const updateChallengeStatus = async (req, res) => {
         .json({ message: "Project or Challenge not found" });
     }
 
+    await recordProjectRevisionSafely({
+      projectId: updatedProject._id,
+      before: beforeRevisionState,
+      after: updatedProject,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "challenge_update",
+    });
+
     await logActivity(
       id,
       req.user.id,
@@ -17325,11 +17444,10 @@ const deleteChallenge = async (req, res) => {
   try {
     const { id, challengeId } = req.params;
 
-    const projectForAccess = await Project.findById(id).select(
-      PROJECT_MUTATION_ACCESS_FIELDS,
-    );
+    const projectForAccess = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
       return;
+    const beforeRevisionState = captureProjectRevisionState(projectForAccess);
 
     const updatedProject = await Project.findOneAndUpdate(
       { _id: id },
@@ -17343,6 +17461,15 @@ const deleteChallenge = async (req, res) => {
     if (!updatedProject) {
       return res.status(404).json({ message: "Project not found" });
     }
+
+    await recordProjectRevisionSafely({
+      projectId: updatedProject._id,
+      before: beforeRevisionState,
+      after: updatedProject,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "challenge_delete",
+    });
 
     await logActivity(
       id,
@@ -17372,6 +17499,73 @@ const getProjectActivity = async (req, res) => {
   } catch (error) {
     console.error("Error fetching activity:", error);
     res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Get structured project content revision history
+// @route   GET /api/projects/:id/revisions
+// @access  Private
+const getProjectRevisions = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id)
+      .select(
+        "_id createdBy projectLeadId assistantLeadId departments revisionTracking versionNumber orderRevisionCount",
+      )
+      .lean();
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+    if (!canMutateProject(req.user, project, "department")) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to view this project's revisions" });
+    }
+
+    const requestedSection = String(req.query.section || "").trim();
+    const allowedSections = new Set(ProjectRevision.PROJECT_REVISION_SECTIONS);
+    const query = { project: project._id };
+    if (requestedSection && allowedSections.has(requestedSection)) {
+      query.sections = requestedSection;
+    }
+
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(
+      Math.max(Number.parseInt(req.query.limit, 10) || 50, 1),
+      100,
+    );
+    const [revisions, total] = await Promise.all([
+      ProjectRevision.find(query)
+        .populate("actor", "firstName lastName name employeeId avatarUrl")
+        .sort({ revisionNumber: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      ProjectRevision.countDocuments(query),
+    ]);
+
+    return res.json({
+      revisions,
+      summary: {
+        currentRevision:
+          Number(project.revisionTracking?.currentRevision) || 0,
+        lastRevisedAt: project.revisionTracking?.lastRevisedAt || null,
+        lastRevisedByName:
+          project.revisionTracking?.lastRevisedByName || "",
+        sections: project.revisionTracking?.sections || {},
+        projectVersionNumber: Math.max(Number(project.versionNumber) || 1, 1),
+        legacyRevisionCount: Number(project.orderRevisionCount) || 0,
+      },
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.max(Math.ceil(total / limit), 1),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching project revisions:", error);
+    return res.status(500).json({ message: "Server Error" });
   }
 };
 
@@ -17557,11 +17751,10 @@ const addProductionRisk = async (req, res) => {
     const { description, preventive } = req.body;
     const { id } = req.params;
 
-    const projectForAccess = await Project.findById(id).select(
-      PROJECT_MUTATION_ACCESS_FIELDS,
-    );
+    const projectForAccess = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
       return;
+    const beforeRevisionState = captureProjectRevisionState(projectForAccess);
 
     const newRisk = {
       description,
@@ -17580,6 +17773,15 @@ const addProductionRisk = async (req, res) => {
     if (!updatedProject) {
       return res.status(404).json({ message: "Project not found" });
     }
+
+    await recordProjectRevisionSafely({
+      projectId: updatedProject._id,
+      before: beforeRevisionState,
+      after: updatedProject,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "production_risk_add",
+    });
 
     await logActivity(
       id,
@@ -17613,11 +17815,10 @@ const updateProductionRisk = async (req, res) => {
     const { description, preventive } = req.body;
     const { id, riskId } = req.params;
 
-    const projectForAccess = await Project.findById(id).select(
-      PROJECT_MUTATION_ACCESS_FIELDS,
-    );
+    const projectForAccess = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
       return;
+    const beforeRevisionState = captureProjectRevisionState(projectForAccess);
 
     const updatedProject = await Project.findOneAndUpdate(
       { _id: id, "productionRisks._id": riskId },
@@ -17634,6 +17835,15 @@ const updateProductionRisk = async (req, res) => {
     if (!updatedProject) {
       return res.status(404).json({ message: "Project or Risk not found" });
     }
+
+    await recordProjectRevisionSafely({
+      projectId: updatedProject._id,
+      before: beforeRevisionState,
+      after: updatedProject,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "production_risk_update",
+    });
 
     await logActivity(
       id,
@@ -17666,11 +17876,10 @@ const deleteProductionRisk = async (req, res) => {
   try {
     const { id, riskId } = req.params;
 
-    const projectForAccess = await Project.findById(id).select(
-      PROJECT_MUTATION_ACCESS_FIELDS,
-    );
+    const projectForAccess = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
       return;
+    const beforeRevisionState = captureProjectRevisionState(projectForAccess);
 
     const updatedProject = await Project.findByIdAndUpdate(
       id,
@@ -17684,6 +17893,15 @@ const deleteProductionRisk = async (req, res) => {
     if (!updatedProject) {
       return res.status(404).json({ message: "Project not found" });
     }
+
+    await recordProjectRevisionSafely({
+      projectId: updatedProject._id,
+      before: beforeRevisionState,
+      after: updatedProject,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "production_risk_delete",
+    });
 
     await logActivity(
       id,
@@ -17717,11 +17935,10 @@ const addUncontrollableFactor = async (req, res) => {
     const { description, responsible, status } = req.body;
     const { id } = req.params;
 
-    const projectForAccess = await Project.findById(id).select(
-      PROJECT_MUTATION_ACCESS_FIELDS,
-    );
+    const projectForAccess = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
       return;
+    const beforeRevisionState = captureProjectRevisionState(projectForAccess);
 
     const newFactor = {
       description,
@@ -17741,6 +17958,15 @@ const addUncontrollableFactor = async (req, res) => {
     if (!updatedProject) {
       return res.status(404).json({ message: "Project not found" });
     }
+
+    await recordProjectRevisionSafely({
+      projectId: updatedProject._id,
+      before: beforeRevisionState,
+      after: updatedProject,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "uncontrollable_factor_add",
+    });
 
     await logActivity(
       id,
@@ -17774,11 +18000,10 @@ const updateUncontrollableFactor = async (req, res) => {
     const { description, responsible, status } = req.body;
     const { id, factorId } = req.params;
 
-    const projectForAccess = await Project.findById(id).select(
-      PROJECT_MUTATION_ACCESS_FIELDS,
-    );
+    const projectForAccess = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
       return;
+    const beforeRevisionState = captureProjectRevisionState(projectForAccess);
 
     const updatedProject = await Project.findOneAndUpdate(
       { _id: id, "uncontrollableFactors._id": factorId },
@@ -17796,6 +18021,15 @@ const updateUncontrollableFactor = async (req, res) => {
     if (!updatedProject) {
       return res.status(404).json({ message: "Project or Factor not found" });
     }
+
+    await recordProjectRevisionSafely({
+      projectId: updatedProject._id,
+      before: beforeRevisionState,
+      after: updatedProject,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "uncontrollable_factor_update",
+    });
 
     await logActivity(
       id,
@@ -17828,11 +18062,10 @@ const deleteUncontrollableFactor = async (req, res) => {
   try {
     const { id, factorId } = req.params;
 
-    const projectForAccess = await Project.findById(id).select(
-      PROJECT_MUTATION_ACCESS_FIELDS,
-    );
+    const projectForAccess = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
       return;
+    const beforeRevisionState = captureProjectRevisionState(projectForAccess);
 
     const updatedProject = await Project.findByIdAndUpdate(
       id,
@@ -17846,6 +18079,15 @@ const deleteUncontrollableFactor = async (req, res) => {
     if (!updatedProject) {
       return res.status(404).json({ message: "Project not found" });
     }
+
+    await recordProjectRevisionSafely({
+      projectId: updatedProject._id,
+      before: beforeRevisionState,
+      after: updatedProject,
+      actor: req.user,
+      reason: req.body?.revisionReason,
+      source: "uncontrollable_factor_delete",
+    });
 
     await logActivity(
       id,
@@ -17974,6 +18216,7 @@ const updateProject = async (req, res) => {
       workstreamCode,
       referenceProjects,
       referenceProjectIds,
+      revisionReason,
     } = req.body;
 
     // Parse JSON fields if they are strings (Multipart/form-data behavior)
@@ -18008,6 +18251,7 @@ const updateProject = async (req, res) => {
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
+    const beforeRevisionState = captureProjectRevisionState(project);
 
     const leadOnlyKeys = new Set(["projectLeadId", "assistantLeadId", "lead"]);
     const bodyKeys = Object.keys(req.body || {});
@@ -18658,6 +18902,18 @@ const updateProject = async (req, res) => {
     }
 
     const updatedProject = await project.save();
+
+    await recordProjectRevisionSafely({
+      projectId: updatedProject._id,
+      before: beforeRevisionState,
+      after: updatedProject,
+      actor: req.user,
+      reason: revisionReason,
+      source:
+        String(req.query.source || "").toLowerCase() === "admin"
+          ? "admin_project_details"
+          : "front_desk_order_revision",
+    });
 
     // --- Activity Logging (Diff) ---
     const changes = [];
@@ -19757,6 +20013,13 @@ const reopenProject = async (req, res) => {
       sectionUpdates: {
         details: now,
       },
+      revisionTracking: {
+        currentRevision: 0,
+        lastRevisedAt: null,
+        lastRevisedBy: null,
+        lastRevisedByName: "",
+        sections: {},
+      },
       lineageId,
       parentProjectId: sourceProject._id,
       versionNumber: nextVersion,
@@ -19932,7 +20195,10 @@ const deleteProject = async (req, res) => {
 
     await Project.deleteOne({ _id: req.params.id });
     // Cleanup activities
-    await ActivityLog.deleteMany({ project: req.params.id });
+    await Promise.all([
+      ActivityLog.deleteMany({ project: req.params.id }),
+      ProjectRevision.deleteMany({ project: req.params.id }),
+    ]);
 
     // If the deleted record was latest (or flags drifted), promote the highest
     // remaining revision in the lineage to be latest so reopen remains available.
@@ -21425,6 +21691,7 @@ module.exports = {
   updateChallengeStatus,
   deleteChallenge,
   getProjectActivity,
+  getProjectRevisions,
   suggestProductionRisks,
   addProductionRisk,
   updateProductionRisk,

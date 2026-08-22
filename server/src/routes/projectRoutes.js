@@ -44,6 +44,7 @@ const {
   updateChallengeStatus,
   deleteChallenge,
   getProjectActivity,
+  getProjectRevisions,
   suggestProductionRisks,
   addProductionRisk,
   updateProductionRisk,
@@ -262,6 +263,7 @@ router.post(
 );
 router.get("/comments/feed", protect, getProjectCommentFeed);
 router.get("/:id/activity", protect, getProjectActivity);
+router.get("/:id/revisions", protect, getProjectRevisions);
 router.get("/:id/comments/mentionable-users", protect, getProjectCommentMentionUsers);
 router.get("/:id/comments", protect, getProjectComments);
 router.post("/:id/comments", protect, createProjectComment);

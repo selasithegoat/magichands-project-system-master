@@ -1,5 +1,25 @@
 const mongoose = require("mongoose");
 
+const ProjectRevisionSectionMetaSchema = new mongoose.Schema(
+  {
+    revisionNumber: {
+      type: Number,
+      min: 1,
+    },
+    updatedAt: Date,
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    updatedByName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+  },
+  { _id: false },
+);
+
 const QUOTE_REQUIREMENT_STATUSES = [
   "not_required",
   "assigned",
@@ -878,6 +898,28 @@ const ProjectSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    revisionTracking: {
+      currentRevision: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      lastRevisedAt: Date,
+      lastRevisedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      lastRevisedByName: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      sections: {
+        type: Map,
+        of: ProjectRevisionSectionMetaSchema,
+        default: () => ({}),
+      },
     },
     emailNotifications: {
       orderCreated: {

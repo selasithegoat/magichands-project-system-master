@@ -401,6 +401,7 @@ const NewOrders = ({ user = null }) => {
   const [editingProjectStatus, setEditingProjectStatus] = useState("");
   const [editingProjectIsCancelled, setEditingProjectIsCancelled] =
     useState(false);
+  const [revisionReason, setRevisionReason] = useState("");
   const [currentUser, setCurrentUser] = useState(user);
   const [hasResolvedCurrentUser, setHasResolvedCurrentUser] = useState(
     Boolean(user),
@@ -1582,6 +1583,8 @@ const NewOrders = ({ user = null }) => {
     );
     if (!editingId) {
       formPayload.append("sampleRequired", String(Boolean(formData.sampleRequired)));
+    } else {
+      formPayload.append("revisionReason", revisionReason.trim());
     }
 
     // Handle Existing Files
@@ -2929,6 +2932,21 @@ const NewOrders = ({ user = null }) => {
                 </div>
               )}
             </div>
+
+            {editingId && (
+              <label className="order-revision-reason-field">
+                <span>Revision reason (optional)</span>
+                <textarea
+                  rows="3"
+                  maxLength="500"
+                  value={revisionReason}
+                  onChange={(event) => setRevisionReason(event.target.value)}
+                  placeholder="Explain why this order is being revised..."
+                  disabled={Boolean(revisionBlockMessage)}
+                />
+                <small>{revisionReason.length}/500</small>
+              </label>
+            )}
 
             {editingId && revisionBlockMessage && (
               <div className="revision-blocked-notice" role="alert">
