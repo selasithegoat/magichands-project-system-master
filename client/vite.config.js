@@ -1,9 +1,29 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "fs";
 import { resolve } from "path";
 import { fileURLToPath } from "url";
 
 const clientRoot = fileURLToPath(new URL(".", import.meta.url));
+const repoRoot = resolve(clientRoot, "..");
+
+const loadReleaseInfo = () => {
+  try {
+    const version = readFileSync(resolve(repoRoot, "VERSION"), "utf8").trim();
+    const nicknames = JSON.parse(
+      readFileSync(resolve(repoRoot, "VERSION_NICKNAMES.json"), "utf8"),
+    );
+    const [major, minor, patch] = version.split(".");
+    const nickname =
+      nicknames[`${major}.${minor}.${patch}`] ||
+      nicknames[`${major}.${minor}`] ||
+      nicknames[major] ||
+      "";
+    return { version, nickname };
+  } catch {
+    return { version: "", nickname: "" };
+  }
+};
 
 const toPositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);
@@ -20,11 +40,13 @@ const isNodeModule = (id, packageName) => {
 export default defineConfig(({ mode }) => {
   const sharedEnv = loadEnv(mode, resolve(clientRoot, "../server"), "");
   const uploadMaxMb = toPositiveInt(sharedEnv.UPLOAD_MAX_MB, 200);
+  const releaseInfo = loadReleaseInfo();
 
   return {
     plugins: [react()],
     define: {
       __UPLOAD_MAX_MB__: JSON.stringify(uploadMaxMb),
+      __APP_RELEASE_INFO__: JSON.stringify(releaseInfo),
     },
     server: {
       host: "0.0.0.0",
