@@ -16,6 +16,7 @@ const SECTION_LABELS = Object.fromEntries(
 );
 
 const SOURCE_LABELS = {
+  legacy_revision_import: "Legacy Revision Summary",
   admin_project_details: "Admin Project Details",
   front_desk_order_revision: "Front Desk Revision",
   order_item_add: "Order Item Added",
@@ -98,17 +99,31 @@ const RevisionValue = ({ value, emptyLabel = "Not set" }) => {
   if (typeof value === "boolean") return <span>{value ? "Yes" : "No"}</span>;
   if (Array.isArray(value)) {
     return (
-      <ul className="revision-value-list">
-        {value.map((entry, index) => (
-          <li key={entry?._id || `${describeObject(entry)}-${index}`}>
-            {describeObject(entry)}
-          </li>
-        ))}
-      </ul>
+      <details className="revision-value-disclosure">
+        <summary>
+          View {value.length} {value.length === 1 ? "entry" : "entries"}
+        </summary>
+        <ul className="revision-value-list">
+          {value.map((entry, index) => (
+            <li key={entry?._id || `${describeObject(entry)}-${index}`}>
+              {describeObject(entry)}
+            </li>
+          ))}
+        </ul>
+      </details>
     );
   }
   if (typeof value === "object") {
-    return <pre className="revision-value-json">{describeObject(value)}</pre>;
+    const description = describeObject(value);
+    if (!description.trim().startsWith("{")) {
+      return <span className="revision-text-value">{description}</span>;
+    }
+    return (
+      <details className="revision-value-disclosure">
+        <summary>View details</summary>
+        <pre className="revision-value-json">{description}</pre>
+      </details>
+    );
   }
   return <span className="revision-text-value">{String(value)}</span>;
 };
@@ -129,6 +144,69 @@ export const ProjectRevisionStamp = ({ project, section, onOpen }) => {
     </button>
   );
 };
+
+const RevisionChangeRow = ({ change }) => {
+  const isAdded = change.changeType === "added";
+  const isRemoved = change.changeType === "removed";
+  const showSingleValue = isAdded || isRemoved;
+  const singleValue = isRemoved ? change.before : change.after;
+  const singleValueLabel = isRemoved ? "Removed value" : "Added value";
+
+  return (
+    <div className={`revision-change-row ${change.changeType}`}>
+      <div className="revision-change-title">
+        <span className="revision-change-type">
+          {change.changeType}
+        </span>
+        <strong>{change.label}</strong>
+      </div>
+      {showSingleValue ? (
+        <div className="revision-single-value">
+          <label>{singleValueLabel}</label>
+          <RevisionValue value={singleValue} />
+        </div>
+      ) : (
+        <div className="revision-diff-grid">
+          <div>
+            <label>Previous</label>
+            <RevisionValue value={change.before} />
+          </div>
+          <div className="revision-after-value">
+            <label>Updated</label>
+            <RevisionValue value={change.after} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const RevisionSectionGroup = ({
+  section,
+  changes,
+  forceOpen,
+}) => (
+  <details className="revision-section-group" open={forceOpen || undefined}>
+    <summary>
+      <span className="revision-section-initial" aria-hidden="true">
+        {(SECTION_LABELS[section] || section || "?").charAt(0)}
+      </span>
+      <strong>{SECTION_LABELS[section] || section}</strong>
+      <small>
+        {changes.length} {changes.length === 1 ? "change" : "changes"}
+      </small>
+      <span className="revision-section-chevron" aria-hidden="true" />
+    </summary>
+    <div className="revision-section-change-list">
+      {changes.map((change, index) => (
+        <RevisionChangeRow
+          key={`${change.field}-${index}`}
+          change={change}
+        />
+      ))}
+    </div>
+  </details>
+);
 
 const ProjectRevisionHistory = ({ project, source = "" }) => {
   const [sectionFilter, setSectionFilter] = useState("all");
@@ -168,34 +246,82 @@ const ProjectRevisionHistory = ({ project, source = "" }) => {
     () => (Array.isArray(revisionItems) ? revisionItems : []),
     [revisionItems],
   );
+  const sectionCounts = useMemo(() => {
+    const counts = Object.fromEntries(
+      REVISION_SECTIONS.map((section) => [section.key, 0]),
+    );
+    revisions.forEach((revision) => {
+      (revision.changes || []).forEach((change) => {
+        if (Object.prototype.hasOwnProperty.call(counts, change.section)) {
+          counts[change.section] += 1;
+        }
+      });
+    });
+    return counts;
+  }, [revisions]);
   const filteredRevisions = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-    return revisions.filter((revision) => {
-      if (
-        sectionFilter !== "all" &&
-        !revision.sections?.includes(sectionFilter)
-      ) {
-        return false;
-      }
-      if (!normalizedSearch) return true;
-      const searchable = [
+    return revisions
+      .map((revision) => {
+        const sectionChanges = (revision.changes || []).filter(
+          (change) => sectionFilter === "all" || change.section === sectionFilter,
+        );
+        const revisionSearchText = [
         `R${revision.revisionNumber}`,
         getActorName(revision),
         revision.reason,
         SOURCE_LABELS[revision.source] || revision.source,
         ...(revision.sections || []).map((section) => SECTION_LABELS[section]),
-        ...(revision.changes || []).flatMap((change) => [
-          change.label,
-          valueSearchText(change.before),
-          valueSearchText(change.after),
-        ]),
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return searchable.includes(normalizedSearch);
-    });
+        const revisionMatchesSearch =
+          normalizedSearch && revisionSearchText.includes(normalizedSearch);
+        const visibleChanges = !normalizedSearch || revisionMatchesSearch
+          ? sectionChanges
+          : sectionChanges.filter((change) =>
+              [
+                change.label,
+                SECTION_LABELS[change.section] || change.section,
+                change.changeType,
+                valueSearchText(change.before),
+                valueSearchText(change.after),
+              ]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase()
+                .includes(normalizedSearch),
+            );
+        const showMetadataOnlyRevision =
+          (revision.changes || []).length === 0 &&
+          sectionFilter === "all" &&
+          (!normalizedSearch || revisionMatchesSearch);
+
+        return {
+          ...revision,
+          visibleChanges,
+          showMetadataOnlyRevision,
+          visibleSections: Array.from(
+            new Set(visibleChanges.map((change) => change.section)),
+          ),
+        };
+      })
+      .filter(
+        (revision) =>
+          revision.visibleChanges.length > 0 || revision.showMetadataOnlyRevision,
+      );
   }, [revisions, searchTerm, sectionFilter]);
+
+  const totalChangeCount = revisions.reduce(
+    (total, revision) => total + (revision.changes?.length || 0),
+    0,
+  );
+  const visibleChangeCount = filteredRevisions.reduce(
+    (total, revision) => total + revision.visibleChanges.length,
+    0,
+  );
+  const hasActiveFilters = sectionFilter !== "all" || Boolean(searchTerm.trim());
 
   const currentRevision = Number(
     data?.summary?.currentRevision ?? project?.revisionTracking?.currentRevision,
@@ -224,28 +350,66 @@ const ProjectRevisionHistory = ({ project, source = "" }) => {
 
       <div className="revision-history-controls">
         <label className="revision-search-field">
-          <span>Search</span>
+          <span>Find a change</span>
           <input
             type="search"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="User, field, reason, or value..."
+            placeholder="Search field, person, reason, or value"
           />
         </label>
-        <label className="revision-filter-field">
-          <span>Section</span>
-          <select
-            value={sectionFilter}
-            onChange={(event) => setSectionFilter(event.target.value)}
+        <div className="revision-filter-summary">
+          <span>
+            {revisions.length} {revisions.length === 1 ? "entry" : "entries"}
+          </span>
+          <strong>{totalChangeCount} tracked changes</strong>
+        </div>
+      </div>
+
+      <div className="revision-section-filters" aria-label="Filter by project section">
+        <button
+          type="button"
+          className={sectionFilter === "all" ? "active" : ""}
+          aria-pressed={sectionFilter === "all"}
+          onClick={() => setSectionFilter("all")}
+        >
+          <span>All</span>
+          <small>{revisions.length}</small>
+        </button>
+        {REVISION_SECTIONS.map((section) => (
+          <button
+            type="button"
+            key={section.key}
+            className={sectionFilter === section.key ? "active" : ""}
+            aria-pressed={sectionFilter === section.key}
+            onClick={() => setSectionFilter(section.key)}
+            disabled={sectionCounts[section.key] === 0}
           >
-            <option value="all">All sections</option>
-            {REVISION_SECTIONS.map((section) => (
-              <option value={section.key} key={section.key}>
-                {section.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            <span>{section.label}</span>
+            <small>{sectionCounts[section.key]}</small>
+          </button>
+        ))}
+      </div>
+
+      <div className="revision-results-summary" aria-live="polite">
+        <span>
+          Showing <strong>{filteredRevisions.length}</strong>{" "}
+          {filteredRevisions.length === 1 ? "history entry" : "history entries"}
+          {" and "}
+          <strong>{visibleChangeCount}</strong>{" "}
+          {visibleChangeCount === 1 ? "change" : "changes"}
+        </span>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              setSectionFilter("all");
+              setSearchTerm("");
+            }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {isPending && <div className="revision-history-state">Loading revisions...</div>}
@@ -263,75 +427,97 @@ const ProjectRevisionHistory = ({ project, source = "" }) => {
       )}
 
       <div className="revision-timeline">
-        {filteredRevisions.map((revision) => (
-          <article className="revision-card" key={revision._id}>
-            <div className="revision-card-marker" aria-hidden="true">
-              R{revision.revisionNumber}
-            </div>
-            <div className="revision-card-content">
-              <div className="revision-card-header">
-                <div>
-                  <h3>
-                    Revision R{revision.revisionNumber}
-                    <span>Project v{revision.projectVersionNumber || 1}</span>
-                  </h3>
-                  <p>
-                    {getActorName(revision)} · {formatDateTime(revision.createdAt)}
-                  </p>
-                </div>
-                <span className="revision-source">
-                  {SOURCE_LABELS[revision.source] || "Project Edit"}
-                </span>
+        {filteredRevisions.map((revision) => {
+          const isLegacyRevision = revision.source === "legacy_revision_import";
+          const sectionGroups = revision.visibleSections.map((section) => ({
+            section,
+            changes: revision.visibleChanges.filter(
+              (change) => change.section === section,
+            ),
+          }));
+          const forceSectionsOpen = hasActiveFilters || sectionGroups.length === 1;
+
+          return (
+            <article className="revision-card" key={revision._id}>
+              <div className="revision-card-marker" aria-hidden="true">
+                R{revision.revisionNumber}
               </div>
-
-              <div className="revision-section-chips">
-                {(revision.sections || []).map((section) => (
-                  <span key={section}>{SECTION_LABELS[section] || section}</span>
-                ))}
-              </div>
-
-              {revision.reason && (
-                <div className="revision-reason">
-                  <strong>Reason</strong>
-                  <span>{revision.reason}</span>
-                </div>
-              )}
-
-              <details className="revision-change-disclosure">
-                <summary>
-                  View {revision.changes?.length || 0}{" "}
-                  {revision.changes?.length === 1 ? "change" : "changes"}
-                </summary>
-                <div className="revision-change-list">
-                  {(revision.changes || []).map((change, index) => (
-                    <div
-                      className={`revision-change-row ${change.changeType}`}
-                      key={`${change.field}-${index}`}
-                    >
-                      <div className="revision-change-title">
-                        <span className="revision-change-type">
-                          {change.changeType}
-                        </span>
-                        <strong>{change.label}</strong>
-                        <span>{SECTION_LABELS[change.section] || change.section}</span>
-                      </div>
-                      <div className="revision-diff-grid">
-                        <div>
-                          <label>Before</label>
-                          <RevisionValue value={change.before} />
-                        </div>
-                        <div>
-                          <label>After</label>
-                          <RevisionValue value={change.after} />
-                        </div>
-                      </div>
+              <div className="revision-card-content">
+                <div className="revision-card-header">
+                  <div>
+                    <div className="revision-card-title-row">
+                      <h3>
+                        {isLegacyRevision
+                          ? `Legacy revisions through R${revision.revisionNumber}`
+                          : `Revision R${revision.revisionNumber}`}
+                      </h3>
+                      <span className="revision-project-version">
+                        Project v{revision.projectVersionNumber || 1}
+                      </span>
                     </div>
+                    <p>
+                      {getActorName(revision)} · {formatDateTime(revision.createdAt)}
+                    </p>
+                  </div>
+                  <div className="revision-card-summary-count">
+                    {isLegacyRevision ? (
+                      <span>Legacy summary</span>
+                    ) : (
+                      <>
+                        <strong>{revision.visibleChanges.length}</strong>
+                        <span>
+                          {revision.visibleChanges.length === 1
+                            ? "change"
+                            : "changes"}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="revision-card-context">
+                  <span className="revision-source">
+                    {SOURCE_LABELS[revision.source] || "Project Edit"}
+                  </span>
+                  {sectionGroups.length > 0 && (
+                    <span>
+                      {sectionGroups.length} project{" "}
+                      {sectionGroups.length === 1 ? "section" : "sections"}
+                    </span>
+                  )}
+                </div>
+
+                {isLegacyRevision ? (
+                  <div className="revision-legacy-note">
+                    <strong>Earlier revision activity</strong>
+                    <span>
+                      {revision.reason ||
+                        "Revision activity was recorded before detailed field tracking began. Field-level differences are unavailable."}
+                    </span>
+                  </div>
+                ) : (
+                  revision.reason && (
+                    <div className="revision-reason">
+                      <strong>Reason</strong>
+                      <span>{revision.reason}</span>
+                    </div>
+                  )
+                )}
+
+                <div className="revision-section-groups">
+                  {sectionGroups.map(({ section, changes }) => (
+                    <RevisionSectionGroup
+                      key={section}
+                      section={section}
+                      changes={changes}
+                      forceOpen={forceSectionsOpen}
+                    />
                   ))}
                 </div>
-              </details>
-            </div>
-          </article>
-        ))}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
   );

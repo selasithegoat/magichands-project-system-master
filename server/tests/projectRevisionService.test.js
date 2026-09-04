@@ -1,8 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const Project = require("../src/models/Project");
+const ProjectRevision = require("../src/models/ProjectRevision");
 const {
   buildProjectRevisionChanges,
   captureProjectRevisionState,
+  recordProjectRevision,
 } = require("../src/services/projectRevisionService");
 
 const buildProject = (overrides = {}) => ({
@@ -50,6 +53,58 @@ test("does not create changes when tracked content is unchanged", () => {
   const project = buildProject();
   const changes = buildProjectRevisionChanges(project, project);
   assert.deepEqual(changes, []);
+});
+
+test("does not record project creation as revision one", async () => {
+  const revision = await recordProjectRevision({
+    before: null,
+    after: buildProject(),
+    actor: "507f1f77bcf86cd799439099",
+    source: "project_creation",
+  });
+
+  assert.equal(revision, null);
+});
+
+test("records the first post-creation change as revision one", async () => {
+  const originalFindByIdAndUpdate = Project.findByIdAndUpdate;
+  const originalCreate = ProjectRevision.create;
+  let updateOptions;
+
+  try {
+    Project.findByIdAndUpdate = (_projectId, _pipeline, options) => {
+      updateOptions = options;
+      return {
+        select: async () => ({
+          revisionTracking: { currentRevision: 1 },
+          versionNumber: 1,
+        }),
+      };
+    };
+    ProjectRevision.create = async (revision) => revision;
+
+    const before = buildProject();
+    const after = buildProject({
+      details: { ...before.details, projectName: "Revised Launch Shirts" },
+    });
+    const revision = await recordProjectRevision({
+      projectId: before._id,
+      before,
+      after,
+      actor: {
+        _id: "507f1f77bcf86cd799439099",
+        firstName: "Test",
+        lastName: "Editor",
+      },
+    });
+
+    assert.equal(revision.revisionNumber, 1);
+    assert.equal(revision.changes.length, 1);
+    assert.equal(updateOptions.updatePipeline, true);
+  } finally {
+    Project.findByIdAndUpdate = originalFindByIdAndUpdate;
+    ProjectRevision.create = originalCreate;
+  }
 });
 
 test("groups scalar changes into their correct sections", () => {

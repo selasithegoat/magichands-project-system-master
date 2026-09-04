@@ -267,6 +267,9 @@ const recordProjectRevision = async ({
 }) => {
   const beforeState = ensureRevisionState(before);
   const afterState = ensureRevisionState(after);
+  // Creation is the baseline state, not a revision. A revision must compare
+  // against a project that already existed before the change.
+  if (!beforeState.projectId) return null;
   const changes = buildProjectRevisionChanges(beforeState, afterState);
   if (changes.length === 0) return null;
 
@@ -305,7 +308,7 @@ const recordProjectRevision = async ({
   const trackingProject = await Project.findByIdAndUpdate(
     resolvedProjectId,
     [{ $set: firstStageSet }, { $set: secondStageSet }],
-    { new: true },
+    { new: true, updatePipeline: true },
   ).select("revisionTracking versionNumber");
 
   if (!trackingProject) throw new Error("Project not found while recording revision.");
