@@ -5,6 +5,20 @@ All notable changes to this system should be documented here.
 This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-09-04
+
+- Redesigned the Client Project Details experience with a modern information hierarchy and workflow ribbon.
+- Added structured, section-aware project revision history with searchable before-and-after changes.
+- Corrected revision numbering so project creation remains the baseline and the first subsequent edit is R1.
+- Migrated genuine legacy revision activity without fabricating field-level changes for older projects.
+- Modernized data tables throughout the Admin portal with a consistent professional interface.
+- Added Admin deadline intelligence, project health scoring, performance rankings, post-project reviews, and client retention insights.
+- Expanded item-level production routing and department assignment controls across project views.
+- Redesigned the Operations command center and improved its wallboard experience.
+- Refined chat usability across desktop and mobile layouts.
+- Improved dashboard, image, upload, and realtime performance across the system.
+
 ## [4.0.0] - 2026-07-23
 
 - Added a complete material-request workflow across the Client and Inventory portals, including user submission, review, editing, and deletion.
