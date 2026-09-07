@@ -1037,11 +1037,6 @@ const EngagedProjects = ({ user }) => {
   }, [historyPage, historyTotalPages, setHistoryPage]);
 
   const handleCompleteStatus = async (project, action) => {
-    if (project.projectType !== "Quote" && action.complete === "Production Completed") {
-      setShowCompleteModal(false);
-      window.dispatchEvent(new CustomEvent("mh:open-production-follow-up", { detail: { projectId: project._id } }));
-      return false;
-    }
     try {
       const res = await fetch(`/api/projects/${project._id}/status`, {
         method: "PATCH",
@@ -1171,10 +1166,6 @@ const EngagedProjects = ({ user }) => {
   };
 
   const openCompleteModal = (project, action) => {
-    if (project.projectType !== "Quote" && action.complete === "Production Completed") {
-      window.dispatchEvent(new CustomEvent("mh:open-production-follow-up", { detail: { projectId: project._id } }));
-      return;
-    }
     setCompleteTarget({ project, action });
     setCompleteInput("");
     setShowCompleteModal(true);

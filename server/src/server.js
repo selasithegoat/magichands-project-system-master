@@ -55,7 +55,6 @@ const { buildRealtimeChangePayload } = require("./utils/realtimeChange");
 const { startChatArchiveScheduler } = require("./utils/chatArchiveScheduler");
 const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
 const { startReminderScheduler } = require("./utils/reminderScheduler");
-const { startProductionFollowUpScheduler } = require("./services/productionFollowUpService");
 const {
   startEndOfDayReportScheduler,
 } = require("./utils/endOfDayReportScheduler");
@@ -452,7 +451,6 @@ app.use("/api/updates", updateRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/reminders", reminderRoutes);
-app.use("/api/production-follow-up", require("./routes/productionFollowUpRoutes"));
 app.use("/api/meetings", meetingRoutes);
 app.use("/api/realtime", realtimeRoutes);
 app.use("/api/chat", chatRoutes);
@@ -627,7 +625,6 @@ app.listen(PORT, HOST, () => {
   startChatArchiveScheduler();
   startWeeklyDigestScheduler();
   startReminderScheduler();
-  startProductionFollowUpScheduler();
   startEndOfDayReportScheduler();
 });
 // Trigger restart to rebuild indexes

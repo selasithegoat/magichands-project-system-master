@@ -753,10 +753,6 @@ const ProjectSchema = new mongoose.Schema(
       ],
       default: "Order Created",
     },
-    productionFollowUp: {
-      type: mongoose.Schema.Types.Mixed,
-      select: false,
-    },
     statusChangedAt: {
       type: Date,
     },
@@ -1413,44 +1409,6 @@ ProjectSchema.pre("save", async function trackStatusAge() {
 ProjectSchema.pre("findOneAndUpdate", applyStatusSlaUpdateMetadata);
 ProjectSchema.pre("updateOne", applyStatusSlaUpdateMetadata);
 ProjectSchema.pre("updateMany", applyStatusSlaUpdateMetadata);
-
-// Existing editors and stage shortcuts must use the same workflow requirements.
-ProjectSchema.pre("save", async function enforceProductionFollowUp() {
-  if (this.isNew || (!this.isModified("details.deliveryDate") && !this.isModified("details.deliveryTime") && !this.isModified("status"))) return;
-  const W = require("../utils/productionFollowUp");
-  const previous = await this.constructor.findById(this._id).select("+productionFollowUp").lean();
-  if (!previous) return;
-  const deliveryError = this.isModified("details.deliveryDate") || this.isModified("details.deliveryTime")
-    ? W.deadlineEditGuard(previous,
-        this.isModified("details.deliveryDate") ? this.details?.deliveryDate : previous.details?.deliveryDate,
-        this.isModified("details.deliveryTime") ? this.details?.deliveryTime : previous.details?.deliveryTime)
-    : null;
-  const stageError = this.isModified("status") ? W.completionGuard(previous, this.toObject()) : null;
-  if (deliveryError || stageError) W.fail(deliveryError || stageError, 409);
-});
-
-async function enforceFollowUpQuery() {
-  const update = this.getUpdate();
-  if (!update || Array.isArray(update)) return;
-  const values = { ...update, ...update.$set };
-  const changesDelivery = ["details", "details.deliveryDate", "details.deliveryTime"].some((key) => Object.hasOwn(values, key) || Object.hasOwn(update.$unset || {}, key));
-  const changesStatus = Object.hasOwn(values, "status");
-  if (!changesDelivery && !changesStatus) return;
-  const W = require("../utils/productionFollowUp");
-  for await (const previous of this.model.find(this.getQuery()).select("+productionFollowUp").lean().cursor()) {
-    const next = { ...previous, ...values, details: { ...(values.details || previous.details) } };
-    for (const key of ["deliveryDate", "deliveryTime"]) {
-      if (Object.hasOwn(values, `details.${key}`)) next.details[key] = values[`details.${key}`];
-      if (Object.hasOwn(update.$unset || {}, `details.${key}`) || Object.hasOwn(update.$unset || {}, "details")) next.details[key] = null;
-    }
-    const deliveryError = !this[W.AUTHORIZED_DEADLINE_REVISION] && changesDelivery ? W.deadlineEditGuard(previous, next.details?.deliveryDate, next.details?.deliveryTime) : null;
-    const stageError = changesStatus ? W.completionGuard(previous, next) : null;
-    if (deliveryError || stageError) W.fail(deliveryError || stageError, 409);
-  }
-}
-ProjectSchema.pre("findOneAndUpdate", enforceFollowUpQuery);
-ProjectSchema.pre("updateOne", enforceFollowUpQuery);
-ProjectSchema.pre("updateMany", enforceFollowUpQuery);
 
 // Indexes for performance optimization
 // Combined index for Dashboard/Filtering: Most common filter combo

@@ -7,7 +7,6 @@ import DeliveryCalendarFab from "@client/components/features/DeliveryCalendarFab
 import BillingDocumentsFab from "@client/components/features/BillingDocumentsFab";
 import MaterialRequestsReviewBanner from "@client/components/features/MaterialRequestsReviewBanner";
 import ProjectCommentsFab from "@client/components/features/ProjectCommentsFab";
-import ProductionFollowUp from "@client/components/features/ProductionFollowUp";
 import { useNavigate } from "react-router-dom";
 
 const DashboardLayout = ({ children, user, onLogout }) => {
@@ -34,7 +33,6 @@ const DashboardLayout = ({ children, user, onLogout }) => {
 
       <div className="dashboard-main">
         <Header onMenuClick={toggleSidebar} user={user} />
-        <ProductionFollowUp user={user} requestSource="admin" />
         <StageBottleneckAlert />
         {isAdminUser && <MaterialRequestsReviewBanner requestSource="admin" />}
         <main className="dashboard-page-content">{children}</main>

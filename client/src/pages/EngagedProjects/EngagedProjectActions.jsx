@@ -2391,10 +2391,6 @@ const EngagedProjectActions = ({ user }) => {
   ]);
 
   const openCompleteModal = (targetProject, action) => {
-    if (targetProject.projectType !== "Quote" && action.complete === "Production Completed") {
-      window.dispatchEvent(new CustomEvent("mh:open-production-follow-up", { detail: { projectId: targetProject._id } }));
-      return;
-    }
     if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",

@@ -431,11 +431,6 @@ const DeliveryCalendarFab = ({
   };
 
   const openScheduleModal = (event) => {
-    if (event.projectType !== "Quote") {
-      setIsOpen(false);
-      window.dispatchEvent(new CustomEvent("mh:open-production-follow-up", { detail: { projectId: event.projectId } }));
-      return;
-    }
     setActionModal({ type: "schedule", event });
     setScheduleForm({
       deliveryDate: formatDateInputValue(event?.deliveryDate),
@@ -539,11 +534,6 @@ const DeliveryCalendarFab = ({
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         const message = payload?.message || "Failed to update delivery schedule.";
-        if (payload?.code === "DELIVERY_REVISION_REQUIRED") {
-          resetActionModalState();
-          window.dispatchEvent(new CustomEvent("mh:open-production-follow-up", { detail: { projectId: targetEvent.projectId } }));
-          return;
-        }
         setActionError(message);
         showToast(message, "error");
         return;
