@@ -112,20 +112,20 @@ function RevisionPanel({ project, onAction, busy }) {
     {needsRequest && <div className="pf-action-panel"><ActionForm action="request" project={project} onAction={onAction} busy={busy} title="Send request to Front Desk and Admin" onSuccess={() => setRequestOpen(false)}>
       {request?.reviewNote && <div className="pf-message neutral"><strong>Reviewer feedback</strong><span>{request.reviewNote}</span></div>}
       <label>Reason for delay<textarea name="reason" minLength="3" maxLength="2000" defaultValue={request?.reason || ""} required /></label>
-      <div className="pf-grid"><label>Estimated remaining production hours<input name="remainingHours" type="number" min="0" max="10000" step="0.5" defaultValue={request?.remainingHours ?? ""} required /></label><label>Suggested delivery date and time (Accra)<input name="proposedAt" type="datetime-local" defaultValue={inputDate(request?.proposedAt)} required /></label></div>
-      <small>This proposal does not change the current delivery deadline.</small>
+      <label>Estimated remaining production hours<input name="remainingHours" type="number" min="0" max="10000" step="0.5" defaultValue={request?.remainingHours ?? ""} required /></label>
+      <small>Front Desk or Admin will review the remaining work, agree a proposed delivery date with the client, and record that communication.</small>
     </ActionForm></div>}
-    {request && request.status !== "required" && <div className="pf-request-summary"><div><span>Reason for delay</span><strong>{request.reason}</strong></div><div><span>Remaining production</span><strong>{request.remainingHours} hours</strong></div><div><span>Proposed delivery</span><strong>{formatDate(request.proposedAt)}</strong></div><div><span>Reviewer</span><strong>{request.reviewer ? request.reviewerName : "Awaiting Front Desk / Admin"}</strong></div></div>}
+    {request && request.status !== "required" && <div className="pf-request-summary"><div><span>Reason for delay</span><strong>{request.reason}</strong></div><div><span>Remaining production</span><strong>{request.remainingHours} hours</strong></div><div><span>Proposed delivery</span><strong>{request.proposedAt ? formatDate(request.proposedAt) : "To be set by Front Desk / Admin"}</strong></div><div><span>Reviewer</span><strong>{request.reviewer ? request.reviewerName : "Awaiting Front Desk / Admin"}</strong></div></div>}
     {canReview && <div className="pf-review-workflow">
       {!project.ownsReview && <button className="pf-primary" disabled={busy} type="button" onClick={() => onAction(project, "claim", {})}>Take responsibility for review</button>}
       {project.ownsReview && <>
-        <details className="pf-inner-disclosure"><summary>Revise the proposed date</summary><ActionForm action="proposal" project={project} onAction={onAction} busy={busy} title="Update proposal"><label>Proposed delivery (Accra)<input name="proposedAt" type="datetime-local" defaultValue={inputDate(request.proposedAt)} required /></label><small>Changing this date clears the existing client communication confirmation.</small></ActionForm></details>
-        <details className="pf-inner-disclosure" open={request.status === "reviewing"}><summary>Record client communication</summary><ActionForm action="contact" project={project} onAction={onAction} busy={busy} title="Record client communication">
+        <details className="pf-inner-disclosure" open={!request.proposedAt}><summary>{request.proposedAt ? "Revise the proposed date" : "Set the proposed delivery date"}</summary><ActionForm action="proposal" project={project} onAction={onAction} busy={busy} title={request.proposedAt ? "Update proposal" : "Set proposed delivery date"}><label>Proposed delivery (Accra)<input name="proposedAt" type="datetime-local" defaultValue={inputDate(request.proposedAt)} required /></label><small>{request.proposedAt ? "Changing this date clears the existing client communication confirmation." : "Front Desk or Admin owns this proposal and must communicate it to the client before applying it."}</small></ActionForm></details>
+        <details className="pf-inner-disclosure" open={request.status === "reviewing" && Boolean(request.proposedAt)}><summary>Record client communication</summary>{request.proposedAt ? <ActionForm action="contact" project={project} onAction={onAction} busy={busy} title="Record client communication">
           <p>Confirm communication about <strong>{formatDate(request.proposedAt)}</strong>.</p><label>Client contact name<input name="contactName" minLength="3" maxLength="200" required /></label>
           <div className="pf-grid"><label>Contact method<select name="channel" required><option value="phone">Phone</option><option value="email">Email</option><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option><option value="in_person">In person</option></select></label><label>Contact time (Accra)<input name="contactedAt" type="datetime-local" defaultValue={inputDate(new Date())} required /></label></div>
           <label>Outcome<select name="outcome" required><option value="">Select the outcome</option><option value="informed">Client informed of this deadline</option><option value="accepted">Client accepted this deadline</option></select></label>
           <label>Conversation summary and client response<textarea name="summary" minLength="3" maxLength="2000" required /></label><label className="pf-check"><input type="checkbox" name="confirmed" required />I confirm the client was reached and this exact proposed delivery deadline was communicated.</label>
-        </ActionForm></details>
+        </ActionForm> : <p className="pf-inner-guidance">Set the proposed delivery date before recording client communication.</p>}</details>
         {request.communication && <div className="pf-message success"><strong>Client communication recorded</strong><span>{request.communication.contactName} · {formatDate(request.communication.contactedAt)} · {titleCase(request.communication.channel)}</span><span>{request.communication.summary}</span><span>Communicated deadline: {formatDate(request.communication.deadlineAt)}</span></div>}
         <div className="pf-task-actions"><button className="pf-primary" type="button" disabled={busy || request.status !== "communicated"} onClick={() => onAction(project, "apply", {})}>Apply communicated delivery deadline</button></div>
         <details className="pf-inner-disclosure"><summary>Return request to Lead</summary><ActionForm action="return" project={project} onAction={onAction} busy={busy} title="Return for correction"><label>Reason<textarea name="reason" minLength="3" maxLength="2000" required /></label></ActionForm></details>
@@ -207,7 +207,11 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
     window.addEventListener("mh:open-production-follow-up", show); window.addEventListener("mh:data-changed", refresh);
     return () => { window.removeEventListener("mh:open-production-follow-up", show); window.removeEventListener("mh:data-changed", refresh); window.clearTimeout(refreshTimer); };
   }, [load]);
-  useEffect(() => { const due = projects.find((project) => project.promptDue); if (due && !open) { setSelectedId(due.id); setOpen(true); } }, [projects, open]);
+  useEffect(() => {
+    if (requestSource !== "client") return;
+    const due = projects.find((project) => project.promptDue);
+    if (due && !open) { setSelectedId(due.id); setOpen(true); }
+  }, [projects, open, requestSource]);
   useEffect(() => { const dialog = dialogRef.current; if (open && dialog && !dialog.open) dialog.showModal(); if (!open && dialog?.open) dialog.close(); }, [open]);
   const categoryCounts = useMemo(() => Object.fromEntries(CATEGORY_ORDER.map((key) => [key, projects.filter((project) => projectCategories(project).includes(key)).length])), [projects]);
   const availableCategories = useMemo(() => requestSource === "admin" ? CATEGORY_ORDER : CATEGORY_ORDER.filter((key) => categoryCounts[key] > 0), [categoryCounts, requestSource]);
@@ -227,7 +231,13 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
       await load(); await queryClient.invalidateQueries({ queryKey: ["projects"] }); return true;
     } catch (actionFailure) { setError(actionFailure.message); await load(); return false; } finally { setBusy(false); }
   };
-  const close = async () => { if (busy) return; const due = projects.find((project) => project.promptDue); if (due && !(await action(due, "snooze", {}))) return; setOpen(false); };
+  const close = async () => {
+    if (busy) return;
+    if (requestSource === "admin") { setOpen(false); return; }
+    const due = projects.find((project) => project.promptDue);
+    if (due && !(await action(due, "snooze", {}))) return;
+    setOpen(false);
+  };
   const selectProject = (projectId) => { setSelectedId(projectId); setError(""); setNotice(""); };
   const selectCategory = (nextCategory) => { setCategory(nextCategory); setSelectedId(""); setSearch(""); setFilter("all"); setError(""); setNotice(""); };
   const attention = projects.filter(needsAttention).length;
@@ -235,7 +245,7 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
   return <>
     <div className="pf-banner"><button type="button" onClick={() => { setOpen(true); void load(); }}><span className="pf-banner-icon" aria-hidden="true">✓</span><span>Production follow-up</span>{attention > 0 && <b>{attention} need attention</b>}</button>{loadError && <span role="status">{loadError}</span>}</div>
     <dialog ref={dialogRef} className="pf-dialog" aria-labelledby="pf-title" onCancel={(event) => { event.preventDefault(); void close(); }}>
-      <header className="pf-header"><div className="pf-header-title"><span className="pf-header-icon" aria-hidden="true">✓</span><div><h2 id="pf-title">Production follow-up</h2><p>Production accountability, delivery commitments and client communication · Accra time</p></div></div><button className="pf-close" disabled={busy} type="button" onClick={close}>{projects.some((project) => project.promptDue) ? "Remind me in 30 working minutes" : "Close"}</button></header>
+      <header className="pf-header"><div className="pf-header-title"><span className="pf-header-icon" aria-hidden="true">✓</span><div><h2 id="pf-title">Production follow-up</h2><p>Production accountability, delivery commitments and client communication · Accra time</p></div></div><button className="pf-close" disabled={busy} type="button" onClick={close}>{requestSource === "client" && projects.some((project) => project.promptDue) ? "Remind me in 30 working minutes" : "Close"}</button></header>
       <div className={`pf-feedback${error || loadError || notice ? " visible" : ""}`}>
         {(error || loadError) && <div className="pf-global-message error" role="alert">{error || loadError}</div>}
         {notice && <div className="pf-global-message notice" role="status">{notice}</div>}

@@ -323,6 +323,7 @@
 .pf-inner-disclosure { margin-top: 12px; border: 1px solid var(--pf-border); border-radius: 9px; background: var(--pf-surface); }
 .pf-inner-disclosure > summary { padding: 12px 14px; cursor: pointer; color: var(--text-primary, #172033); font-size: 12px; font-weight: 750; }
 .pf-inner-disclosure > .pf-form, .pf-inner-disclosure > .pf-history-entry { margin: 0; padding: 0 14px 15px; }
+.pf-inner-guidance { margin: 0; padding: 0 14px 15px; color: var(--text-secondary, #64748b); font-size: 12px; line-height: 1.55; }
 .pf-history-entry + .pf-history-entry { padding-top: 15px; border-top: 1px solid var(--pf-border); }
 .pf-history-entry p { margin: 5px 0; font-size: 12px; line-height: 1.5; }
 .pf-history-entry small { color: var(--text-secondary, #64748b); line-height: 1.45; }

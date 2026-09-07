@@ -216,7 +216,7 @@ async function act(projectId, user, action, input = {}, { source = "client" } = 
   } else if (action === "request") {
     if (!manager) W.fail("Only project management can request a revised delivery deadline.", 403);
     if (request && request.status !== "required") W.fail("A deadline revision request is already open.", 409);
-    state.request = { ...(request || { number: state.history.length + 1, createdAt: now.toISOString(), deadlineAt: require("../utils/projectDeadline").parseProjectDeliveryDeadline(project)?.toISOString() || null }), status: "submitted", reason: W.requireText(input.reason, "Delay reason"), remainingHours: Number(input.remainingHours), proposedAt: W.futureDate(input.proposedAt, now), proposalChangedAt: now.toISOString(), requestedBy: W.id(user), submittedAt: now.toISOString() };
+    state.request = { ...(request || { number: state.history.length + 1, createdAt: now.toISOString(), deadlineAt: require("../utils/projectDeadline").parseProjectDeliveryDeadline(project)?.toISOString() || null }), status: "submitted", reason: W.requireText(input.reason, "Delay reason"), remainingHours: Number(input.remainingHours), proposedAt: null, proposalChangedAt: null, requestedBy: W.id(user), submittedAt: now.toISOString() };
     if (!Number.isFinite(state.request.remainingHours) || state.request.remainingHours < 0 || state.request.remainingHours > 10000) W.fail("Enter a valid estimate of remaining production hours.");
     recipients = reviewerUsers; message = "Delivery revision requested. Review the remaining work and contact the client before setting a new deadline.";
   } else if (["claim", "proposal", "contact", "apply", "return"].includes(action)) {
@@ -229,9 +229,11 @@ async function act(projectId, user, action, input = {}, { source = "client" } = 
     } else {
       if (W.id(request.reviewer) !== W.id(user)) W.fail("Take responsibility for this request before changing it.", 403);
       if (action === "proposal") {
+        const changingProposal = Boolean(request.proposedAt);
         request.proposedAt = W.futureDate(input.proposedAt, now); request.proposalChangedAt = now.toISOString(); request.communication = null; request.status = "reviewing";
-        message = "Delivery proposal changed; the revised date must be communicated to the client.";
+        message = changingProposal ? "Delivery proposal changed; the revised date must be communicated to the client." : "Delivery proposal set; this date must be communicated to the client before it can be applied.";
       } else if (action === "contact") {
+        if (!request.proposedAt) W.fail("Set a proposed delivery date before recording client communication.");
         W.futureDate(request.proposedAt, now);
         request.communication = { ...W.validateCommunication(input, request, now), recordedBy: W.id(user) };
         request.status = "communicated"; message = "Client communication recorded for the proposed delivery deadline.";

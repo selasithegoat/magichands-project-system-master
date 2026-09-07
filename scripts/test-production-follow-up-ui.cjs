@@ -24,7 +24,7 @@ async function main() {
   const entry = `import React from 'react'; import {createRoot} from 'react-dom/client'; import {QueryClient, QueryClientProvider} from '@tanstack/react-query'; import ProductionFollowUp from './src/components/features/ProductionFollowUp.jsx';
     const role = new URLSearchParams(location.search).get('role') || 'lead';
     const project = ${JSON.stringify(project)};
-    if(role === 'reviewer') { project.lead=false; project.reviewer=true; project.ownsReview=true; project.promptDue=false; project.request={number:1,status:'reviewing',reviewer:'reviewer',reviewerName:'Front Desk',reason:'Production delayed',remainingHours:4,proposedAt:'2026-09-12T17:00:00Z'}; }
+    if(role === 'reviewer') { project.lead=false; project.reviewer=true; project.ownsReview=true; project.promptDue=true; project.request={number:1,status:'reviewing',reviewer:'reviewer',reviewerName:'Front Desk',reason:'Production delayed',remainingHours:4,proposedAt:'2026-09-12T17:00:00Z'}; }
     if(role === 'owner') { project.manager=false; project.lead=false; project.promptDue=false; project.request=null; project.tasks[0].canAct=true; }
     const visibleProjects = () => Array.from({length:role==='lead'?58:1}, (_,index) => ({...structuredClone(project), id:String(index+1).padStart(24,'0'), orderId:'MH-'+String(1042+index), name:index?('Production queue project '+(index+1)):project.name, promptDue:index===0?project.promptDue:false}));
     window.uiBackendUnavailable = role === 'unavailable';
@@ -59,6 +59,7 @@ async function main() {
     await send("Emulation.setDeviceMetricsOverride", {width:1366,height:900,deviceScaleFactor:1,mobile:false});
     await navigate("lead"); await waitFor("document.querySelector('dialog').open");
     assert.equal(await evaluate("document.querySelector('dialog').textContent.includes('Delivery deadline missed')"), true);
+    assert.equal(await evaluate("document.querySelector('dialog').textContent.includes('Suggested delivery date')"), false);
     assert.equal(await evaluate("[...document.querySelectorAll('button')].some(b=>b.textContent.includes('Apply communicated'))"), false);
     assert.equal(await evaluate("document.querySelector('.pf-main').scrollHeight > document.querySelector('.pf-main').clientHeight"), true);
     assert.equal(await evaluate("document.querySelector('.pf-queue nav').scrollHeight > document.querySelector('.pf-queue nav').clientHeight"), true);
@@ -73,6 +74,10 @@ async function main() {
     assert.equal(await evaluate("document.querySelectorAll('.pf-category-tabs [role=tab]').length"), 3);
     assert.equal(await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Apply communicated')).disabled"), true);
     fs.writeFileSync(path.join(output, "reviewer-admin.png"), Buffer.from((await send("Page.captureScreenshot", {format:"png"})).data,"base64"));
+    assert.equal(await evaluate("document.querySelector('.pf-close').textContent"), "Close");
+    await evaluate("document.querySelector('.pf-close').click()"); await waitFor("!document.querySelector('dialog').open");
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    assert.equal(await evaluate("document.querySelector('dialog').open"), false);
     await navigate("owner"); await evaluate("document.querySelector('.pf-banner button').click()"); await waitFor("document.querySelector('dialog').open");
     assert.equal(await evaluate("[...document.querySelectorAll('button')].some(b=>b.textContent==='Complete my work')"), true);
     assert.equal(await evaluate("document.querySelector('dialog').textContent.includes('Record client communication')"), false);
@@ -84,7 +89,7 @@ async function main() {
     assert.equal(await evaluate("document.body.textContent.includes('Unexpected token')"), false);
     await evaluate("window.uiBackendUnavailable=false; document.querySelector('.pf-banner button').click()");
     await waitFor("document.querySelector('.pf-banner [role=status]') === null && document.querySelector('dialog').open");
-    console.log(`Browser smoke passed: independent queue/workspace wheel scrolling, recurring Lead dialog, persisted snooze action, reviewer gate, owner controls, mobile layout, HTML 404 handling and recovery. Screenshots: ${output}`);
+    console.log(`Browser smoke passed: Lead request ownership, unconditional Admin close, independent queue/workspace wheel scrolling, recurring dialog, reviewer gate, owner controls, mobile layout, HTML 404 handling and recovery. Screenshots: ${output}`);
   } finally {
     websocket?.close();
     if (browser.exitCode === null) { const exit = once(browser,"exit"); browser.kill(); await exit; }

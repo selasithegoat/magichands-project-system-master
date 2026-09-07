@@ -169,8 +169,9 @@ test(
       act(p, lead, "request", {
         reason: "Production is delayed",
         remainingHours: 4,
-        proposedAt: future(),
       });
+    const propose = (p, hours = 48) =>
+      act(p, frontDesk, "proposal", { proposedAt: future(hours) });
     const contact = (p) =>
       act(p, frontDesk, "contact", {
         confirmed: true,
@@ -322,6 +323,11 @@ test(
           /client communication/,
         );
         await assert.rejects(
+          contact(p),
+          /Set a proposed delivery date/,
+        );
+        await propose(p);
+        await assert.rejects(
           act(p, frontDesk, "contact", {
             confirmed: true,
             contactedAt: new Date().toISOString(),
@@ -369,6 +375,7 @@ test(
         const p = await fixture();
         await request(p);
         await act(p, frontDesk, "claim");
+        await propose(p);
         await contact(p);
         const current = await read(p);
         const version = current.productionFollowUp.revision;
