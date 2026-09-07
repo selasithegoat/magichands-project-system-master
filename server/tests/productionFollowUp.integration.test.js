@@ -218,6 +218,14 @@ test(
             deliveryTime: "17:00",
           },
         });
+        const adminLeadProject = await fixture({
+          projectLeadId: admin._id,
+          details: {
+            projectName: "Admin-led client project",
+            deliveryDate: "2026-12-05",
+            deliveryTime: "17:00",
+          },
+        });
 
         const leadView = await service.listForUser(lead, { source: "client" });
         const leadIds = new Set(leadView.map((project) => project.id));
@@ -243,6 +251,35 @@ test(
           productionView.find((project) => project.id === W.id(leadProject))
             .categories,
           ["production"],
+        );
+
+        let adminClientView = await service.listForUser(admin, {
+          source: "client",
+        });
+        assert.deepEqual(
+          adminClientView.map((project) => project.id),
+          [W.id(adminLeadProject)],
+        );
+        assert.deepEqual(adminClientView[0].categories, ["lead"]);
+
+        await act(leadProject, lead, "request", {
+          reason: "Production is delayed",
+          remainingHours: 4,
+        });
+        adminClientView = await service.listForUser(admin, {
+          source: "client",
+        });
+        assert.deepEqual(
+          adminClientView.find(
+            (project) => project.id === W.id(leadProject),
+          ).categories,
+          ["frontDesk"],
+        );
+        assert.equal(
+          adminClientView.some((project) =>
+            project.categories.includes("production"),
+          ),
+          false,
         );
 
         const spoofedAdminIds = new Set(

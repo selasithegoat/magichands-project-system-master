@@ -52,12 +52,11 @@ function categoriesForProject(user, project, state, source, now = new Date()) {
     return categories;
   }
 
-  // Admin responsibilities belong in the Admin portal. A source value alone
-  // never grants Admin access to another account.
-  if (user?.role === "admin") return categories;
+  // The Admin portal exposes every workstream. In the Client portal, Admin
+  // accounts retain the Lead and Front Desk views they use in that portal.
   if (W.id(project.projectLeadId) === W.id(user)) categories.push("lead");
-  if (isFrontDeskUser(user) && state.request && state.request.status !== "required") categories.push("frontDesk");
-  if (isProductionUser(user) && !trainee(user) && state.tasks.some((task) => isEngagedInTask(user, task))) categories.push("production");
+  if ((user?.role === "admin" || isFrontDeskUser(user)) && state.request && state.request.status !== "required") categories.push("frontDesk");
+  if (user?.role !== "admin" && isProductionUser(user) && !trainee(user) && state.tasks.some((task) => isEngagedInTask(user, task))) categories.push("production");
   return categories;
 }
 
@@ -125,11 +124,10 @@ async function listForUser(user, { source = "client" } = {}) {
   const users = await User.find({}).select("firstName lastName department role productionAccess").lean();
   const adminView = portalSource(source) === "admin" && W.isReviewer(user);
   let query = {};
-  if (!adminView && user?.role === "admin") query = { _id: null };
-  else if (!adminView) {
+  if (!adminView) {
     const options = [{ projectLeadId: W.id(user) }];
-    if (isFrontDeskUser(user)) options.push({ "productionFollowUp.request.status": { $in: ["submitted", "reviewing", "communicated"] } });
-    if (isProductionUser(user) && !trainee(user)) {
+    if (user?.role === "admin" || isFrontDeskUser(user)) options.push({ "productionFollowUp.request.status": { $in: ["submitted", "reviewing", "communicated"] } });
+    if (user?.role !== "admin" && isProductionUser(user) && !trainee(user)) {
       const explicit = getExplicitProductionSubDepartmentTokens(user.department);
       const assigned = Array.isArray(user.department) ? user.department : [user.department].filter(Boolean);
       const departments = explicit.length ? [...new Set([...assigned, ...explicit])] : resolveProductionSubDepartmentTokens(user.department);

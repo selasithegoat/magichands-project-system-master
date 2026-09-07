@@ -214,7 +214,11 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
   }, [projects, open, requestSource]);
   useEffect(() => { const dialog = dialogRef.current; if (open && dialog && !dialog.open) dialog.showModal(); if (!open && dialog?.open) dialog.close(); }, [open]);
   const categoryCounts = useMemo(() => Object.fromEntries(CATEGORY_ORDER.map((key) => [key, projects.filter((project) => projectCategories(project).includes(key)).length])), [projects]);
-  const availableCategories = useMemo(() => requestSource === "admin" ? CATEGORY_ORDER : CATEGORY_ORDER.filter((key) => categoryCounts[key] > 0), [categoryCounts, requestSource]);
+  const availableCategories = useMemo(() => {
+    if (requestSource === "admin") return CATEGORY_ORDER;
+    if (user?.role === "admin") return ["lead", "frontDesk"];
+    return CATEGORY_ORDER.filter((key) => categoryCounts[key] > 0);
+  }, [categoryCounts, requestSource, user?.role]);
   const categoryOptions = availableCategories.length ? availableCategories : [category || "lead"];
   const activeCategory = category && categoryOptions.includes(category) ? category : categoryOptions.find((key) => categoryCounts[key] > 0) || categoryOptions[0];
   const filteredProjects = useMemo(() => {
@@ -241,7 +245,7 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
   const selectProject = (projectId) => { setSelectedId(projectId); setError(""); setNotice(""); };
   const selectCategory = (nextCategory) => { setCategory(nextCategory); setSelectedId(""); setSearch(""); setFilter("all"); setError(""); setNotice(""); };
   const attention = projects.filter(needsAttention).length;
-  if (!userId || (requestSource === "client" && user?.role === "admin")) return null;
+  if (!userId) return null;
   return <>
     <div className="pf-banner"><button type="button" onClick={() => { setOpen(true); void load(); }}><span className="pf-banner-icon" aria-hidden="true">✓</span><span>Production follow-up</span>{attention > 0 && <b>{attention} need attention</b>}</button>{loadError && <span role="status">{loadError}</span>}</div>
     <dialog ref={dialogRef} className="pf-dialog" aria-labelledby="pf-title" onCancel={(event) => { event.preventDefault(); void close(); }}>

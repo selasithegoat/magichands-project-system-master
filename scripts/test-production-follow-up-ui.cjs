@@ -26,10 +26,11 @@ async function main() {
     const project = ${JSON.stringify(project)};
     if(role === 'reviewer') { project.lead=false; project.reviewer=true; project.ownsReview=true; project.promptDue=true; project.request={number:1,status:'reviewing',reviewer:'reviewer',reviewerName:'Front Desk',reason:'Production delayed',remainingHours:4,proposedAt:'2026-09-12T17:00:00Z'}; }
     if(role === 'owner') { project.manager=false; project.lead=false; project.promptDue=false; project.request=null; project.tasks[0].canAct=true; }
+    if(role === 'adminClient') { project.categories=['lead']; project.promptDue=false; }
     const visibleProjects = () => Array.from({length:role==='lead'?58:1}, (_,index) => ({...structuredClone(project), id:String(index+1).padStart(24,'0'), orderId:'MH-'+String(1042+index), name:index?('Production queue project '+(index+1)):project.name, promptDue:index===0?project.promptDue:false}));
     window.uiBackendUnavailable = role === 'unavailable';
     window.fetch = async (url, options={}) => { if(window.uiBackendUnavailable) return new Response('<!DOCTYPE html>Cannot GET', {status:404}); if(options.method==='POST') { window.lastAction={url,body:JSON.parse(options.body)}; if(url.includes('/snooze'))project.promptDue=false; if(url.includes('/request')){project.promptDue=false; project.request.status='submitted';} return {ok:true,json:async()=>({message:'Saved'})}; } return {ok:true,json:async()=>({projects:visibleProjects()})}; };
-    createRoot(document.getElementById('root')).render(<QueryClientProvider client={new QueryClient()}><ProductionFollowUp user={{_id:role}} requestSource={role==='reviewer'?'admin':'client'} /></QueryClientProvider>);`;
+    createRoot(document.getElementById('root')).render(<QueryClientProvider client={new QueryClient()}><ProductionFollowUp user={{_id:role,role:role==='adminClient'?'admin':'user'}} requestSource={role==='reviewer'?'admin':'client'} /></QueryClientProvider>);`;
   await esbuild.build({ stdin: { contents: entry, resolveDir: path.join(root, "client"), loader: "jsx" }, bundle: true, outfile: path.join(output, "app.js"), define: { "process.env.NODE_ENV": '"production"' }, logLevel: "silent" });
   const server = http.createServer((req, res) => {
     if (req.url.startsWith("/app.")) {
@@ -78,6 +79,9 @@ async function main() {
     await evaluate("document.querySelector('.pf-close').click()"); await waitFor("!document.querySelector('dialog').open");
     await new Promise((resolve) => setTimeout(resolve, 750));
     assert.equal(await evaluate("document.querySelector('dialog').open"), false);
+    await navigate("adminClient"); await evaluate("document.querySelector('.pf-banner button').click()"); await waitFor("document.querySelector('dialog').open");
+    assert.deepEqual(await evaluate("[...document.querySelectorAll('.pf-category-tabs [role=tab]')].map(tab=>tab.textContent.replace(/\\d+$/, ''))"), ["LLead", "FFront Desk"]);
+    assert.equal(await evaluate("[...document.querySelectorAll('.pf-category-tabs [role=tab]')].some(tab=>tab.textContent.includes('Production'))"), false);
     await navigate("owner"); await evaluate("document.querySelector('.pf-banner button').click()"); await waitFor("document.querySelector('dialog').open");
     assert.equal(await evaluate("[...document.querySelectorAll('button')].some(b=>b.textContent==='Complete my work')"), true);
     assert.equal(await evaluate("document.querySelector('dialog').textContent.includes('Record client communication')"), false);
@@ -89,7 +93,7 @@ async function main() {
     assert.equal(await evaluate("document.body.textContent.includes('Unexpected token')"), false);
     await evaluate("window.uiBackendUnavailable=false; document.querySelector('.pf-banner button').click()");
     await waitFor("document.querySelector('.pf-banner [role=status]') === null && document.querySelector('dialog').open");
-    console.log(`Browser smoke passed: Lead request ownership, unconditional Admin close, independent queue/workspace wheel scrolling, recurring dialog, reviewer gate, owner controls, mobile layout, HTML 404 handling and recovery. Screenshots: ${output}`);
+    console.log(`Browser smoke passed: Lead request ownership, unconditional Admin close, Client-portal Admin Lead/Front Desk views, independent queue/workspace wheel scrolling, recurring dialog, reviewer gate, owner controls, mobile layout, HTML 404 handling and recovery. Screenshots: ${output}`);
   } finally {
     websocket?.close();
     if (browser.exitCode === null) { const exit = once(browser,"exit"); browser.kill(); await exit; }
