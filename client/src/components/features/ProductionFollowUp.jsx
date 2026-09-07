@@ -20,6 +20,7 @@ const needsAttention = (project) => Boolean(project.request || openTasks(project
 const projectCategories = (project) => Array.isArray(project.categories) && project.categories.length
   ? project.categories
   : [project.lead ? "lead" : project.reviewer ? "frontDesk" : "production"];
+const promptKey = (project) => `${project?.id || ""}:${project?.request?.number || ""}:${project?.request?.deadlineAt || ""}`;
 
 function ActionForm({ action, project, onAction, busy, children, title, department, onSuccess }) {
   return (
@@ -187,6 +188,7 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
   const [filter, setFilter] = useState("all");
   const [category, setCategory] = useState("");
   const dialogRef = useRef(null);
+  const dismissedPrompts = useRef(new Set());
   const queryClient = useQueryClient();
   const source = `?source=${encodeURIComponent(requestSource)}`;
   const userId = user?._id || user?.id;
@@ -209,7 +211,7 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
   }, [load]);
   useEffect(() => {
     if (requestSource !== "client") return;
-    const due = projects.find((project) => project.promptDue);
+    const due = projects.find((project) => project.promptDue && !dismissedPrompts.current.has(promptKey(project)));
     if (due && !open) { setSelectedId(due.id); setOpen(true); }
   }, [projects, open, requestSource]);
   useEffect(() => { const dialog = dialogRef.current; if (open && dialog && !dialog.open) dialog.showModal(); if (!open && dialog?.open) dialog.close(); }, [open]);
@@ -235,11 +237,22 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
       await load(); await queryClient.invalidateQueries({ queryKey: ["projects"] }); return true;
     } catch (actionFailure) { setError(actionFailure.message); await load(); return false; } finally { setBusy(false); }
   };
-  const close = async () => {
+  const close = () => {
     if (busy) return;
-    if (requestSource === "admin") { setOpen(false); return; }
-    const due = projects.find((project) => project.promptDue);
-    if (due && !(await action(due, "snooze", {}))) return;
+    if (requestSource === "client") {
+      for (const project of projects) {
+        if (project.promptDue) dismissedPrompts.current.add(promptKey(project));
+      }
+    }
+    setOpen(false);
+  };
+  const snooze = async () => {
+    if (busy) return;
+    const dueProjects = projects.filter((project) => project.promptDue);
+    if (!dueProjects.length) { setOpen(false); return; }
+    for (const project of dueProjects) {
+      if (!(await action(project, "snooze", {}))) return;
+    }
     setOpen(false);
   };
   const selectProject = (projectId) => { setSelectedId(projectId); setError(""); setNotice(""); };
@@ -248,8 +261,8 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
   if (!userId) return null;
   return <>
     <div className="pf-banner"><button type="button" onClick={() => { setOpen(true); void load(); }}><span className="pf-banner-icon" aria-hidden="true">✓</span><span>Production follow-up</span>{attention > 0 && <b>{attention} need attention</b>}</button>{loadError && <span role="status">{loadError}</span>}</div>
-    <dialog ref={dialogRef} className="pf-dialog" aria-labelledby="pf-title" onCancel={(event) => { event.preventDefault(); void close(); }}>
-      <header className="pf-header"><div className="pf-header-title"><span className="pf-header-icon" aria-hidden="true">✓</span><div><h2 id="pf-title">Production follow-up</h2><p>Production accountability, delivery commitments and client communication · Accra time</p></div></div><button className="pf-close" disabled={busy} type="button" onClick={close}>{requestSource === "client" && projects.some((project) => project.promptDue) ? "Remind me in 30 working minutes" : "Close"}</button></header>
+    <dialog ref={dialogRef} className="pf-dialog" aria-labelledby="pf-title" onCancel={(event) => { event.preventDefault(); close(); }}>
+      <header className="pf-header"><div className="pf-header-title"><span className="pf-header-icon" aria-hidden="true">✓</span><div><h2 id="pf-title">Production follow-up</h2><p>Production accountability, delivery commitments and client communication · Accra time</p></div></div><div className="pf-header-actions">{requestSource === "client" && projects.some((project) => project.promptDue) && <button className="pf-snooze" disabled={busy} type="button" onClick={snooze}>Remind me in 30 working minutes</button>}<button className="pf-close" disabled={busy} type="button" onClick={close}>Close</button></div></header>
       <div className={`pf-feedback${error || loadError || notice ? " visible" : ""}`}>
         {(error || loadError) && <div className="pf-global-message error" role="alert">{error || loadError}</div>}
         {notice && <div className="pf-global-message notice" role="status">{notice}</div>}

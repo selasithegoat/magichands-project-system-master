@@ -580,10 +580,14 @@ test(
       },
     );
     await t.test(
-      "snoozing is persistent and never changes production or the delivery date",
+      "snoozing tolerates stale views, persists, and never changes production or the delivery date",
       async () => {
         const p = await fixture();
+        const staleRevision = (await read(p)).productionFollowUp?.revision || 0;
         await act(p, lead, "snooze");
+        await service.act(p._id, lead, "snooze", {
+          revision: staleRevision,
+        });
         const saved = await read(p);
         assert.equal(saved.productionFollowUp.request.status, "required");
         assert.equal(saved.status, "Pending Production");

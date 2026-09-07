@@ -97,7 +97,8 @@
 .pf-dialog button.pf-danger-button { color: #be123c; border-color: color-mix(in srgb, #e11d48 42%, var(--pf-border)); }
 .pf-dialog button:focus-visible, .pf-dialog summary:focus-visible, .pf-dialog input:focus-visible, .pf-dialog select:focus-visible, .pf-dialog textarea:focus-visible { outline: 3px solid rgba(59, 130, 246, .42); outline-offset: 2px; }
 
-.pf-close { flex: 0 0 auto; }
+.pf-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 0 0 auto; }
+.pf-close, .pf-snooze { flex: 0 0 auto; }
 .pf-feedback { min-height: 0; }
 .pf-global-message { padding: 12px 26px; border-bottom: 1px solid transparent; font-size: 14px; font-weight: 600; }
 .pf-global-message.error { background: #fff1f2; border-color: #fecdd3; color: #9f1239; }
@@ -372,7 +373,9 @@
   .pf-header-icon { display: none; }
   .pf-header p { display: none; }
   .pf-header h2 { font-size: 18px; }
-  .pf-close { max-width: 180px; font-size: 11px; }
+  .pf-header { align-items: flex-start; }
+  .pf-header-actions { flex-direction: column-reverse; align-items: stretch; gap: 6px; }
+  .pf-close, .pf-snooze { max-width: 190px; min-height: 34px !important; padding: 6px 10px !important; font-size: 11px; }
   .pf-workspace { grid-template-columns: 1fr; grid-template-rows: minmax(0, auto) minmax(0, 1fr); }
   .pf-queue { max-height: 245px; padding: 14px; border-right: 0; border-bottom: 1px solid var(--pf-border); }
   .pf-workstream-heading, .pf-queue-heading { display: none; }

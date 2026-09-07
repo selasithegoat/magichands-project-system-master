@@ -156,7 +156,51 @@ async function notify(project, recipients, title, message, actor) {
   }
 }
 
-async function act(projectId, user, action, input = {}, { source = "client" } = {}) {
+async function snooze(projectId, user) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const project = await Project.findById(projectId).select("+productionFollowUp").lean();
+    if (!project || !W.isActive(project)) W.fail("This active order could not be found.", 404);
+    const now = new Date();
+    const state = W.prepareWorkflow(project, now);
+    W.ensureDeadlineRequest(project, state, now);
+    if (!W.isLead(user, project)) W.fail("Only the assigned Lead can snooze a required request.", 403);
+    if (state.request?.status !== "required") return { message: "The delivery revision prompt is already being handled.", stageBlockMessage: state.stageBlockMessage || "" };
+
+    const message = "Lead deferred the delivery revision prompt for 30 working minutes.";
+    const nextLeadPromptAt = W.shiftWorkingHours(now, 0.5, state.plan).toISOString();
+    const audit = { action: "snooze", at: now.toISOString(), actor: W.id(user), message, department: null };
+    let query;
+    if (project.productionFollowUp?.request?.status === "required") {
+      query = Project.findOneAndUpdate(
+        { ...ACTIVE_QUERY, _id: project._id, projectLeadId: W.id(user), "productionFollowUp.request.status": "required" },
+        {
+          $set: { "productionFollowUp.request.nextLeadPromptAt": nextLeadPromptAt },
+          $inc: { "productionFollowUp.revision": 1 },
+          $push: { "productionFollowUp.events": { $each: [audit], $slice: -100 } },
+        },
+        { new: true, runValidators: true },
+      );
+    } else {
+      state.request.nextLeadPromptAt = nextLeadPromptAt;
+      state.revision = (project.productionFollowUp?.revision || 0) + 1;
+      state.events.push(audit);
+      state.events = state.events.slice(-100);
+      query = Project.findOneAndUpdate(
+        { ...ACTIVE_QUERY, _id: project._id, projectLeadId: W.id(user), "productionFollowUp.request": { $exists: false } },
+        { $set: { productionFollowUp: state } },
+        { new: true, runValidators: true },
+      );
+    }
+    const saved = await query.select("+productionFollowUp").lean();
+    if (!saved) continue;
+    broadcastDataChange({ path: `/api/projects/${project._id}`, projectId: W.id(project), method: "PATCH", source: "production_follow_up" });
+    await logActivity(project._id, W.id(user), "update", message, { productionFollowUp: audit });
+    return { message, stageBlockMessage: state.stageBlockMessage || "" };
+  }
+  W.fail("The reminder could not be postponed because this project is updating. Please try again.", 409);
+}
+
+async function actOnce(projectId, user, action, input = {}, { source = "client" } = {}) {
   const project = await Project.findById(projectId).select("+productionFollowUp").lean();
   if (!project || !W.isActive(project)) W.fail("This active order could not be found.", 404);
   const now = new Date();
@@ -207,10 +251,6 @@ async function act(projectId, user, action, input = {}, { source = "client" } = 
     message = `${task.department}: ${action === "verify" ? "completed and verified on behalf of the owner" : action}. ${reason}`;
   } else if (action === "advance") {
     if (!manager) W.fail("Only project management can retry production advancement.", 403);
-  } else if (action === "snooze") {
-    if (!lead || request?.status !== "required") W.fail("Only the assigned Lead can snooze a required request.", 403);
-    request.nextLeadPromptAt = W.shiftWorkingHours(now, 0.5, state.plan).toISOString();
-    recipients = []; message = "Lead deferred the delivery revision prompt for 30 working minutes.";
   } else if (action === "request") {
     if (!manager) W.fail("Only project management can request a revised delivery deadline.", 403);
     if (request && request.status !== "required") W.fail("A deadline revision request is already open.", 409);
@@ -272,6 +312,11 @@ async function act(projectId, user, action, input = {}, { source = "client" } = 
   if (changedDeadline) await recordProjectRevisionSafely({ projectId: project._id, before, after: saved, actor: user, reason: state.history.at(-1).reason, source: "delivery_revision_after_client_contact" });
   await notify(saved, recipients, changedDeadline ? "Delivery deadline revised" : "Production follow-up", message, user);
   return { message, stageBlockMessage: state.stageBlockMessage || "" };
+}
+
+async function act(projectId, user, action, input = {}, options = {}) {
+  if (action === "snooze") return snooze(projectId, user);
+  return actOnce(projectId, user, action, input, options);
 }
 
 let timer;
