@@ -29,7 +29,7 @@ async function main() {
     const visibleProjects = () => Array.from({length:role==='lead'?58:1}, (_,index) => ({...structuredClone(project), id:String(index+1).padStart(24,'0'), orderId:'MH-'+String(1042+index), name:index?('Production queue project '+(index+1)):project.name, promptDue:index===0?project.promptDue:false}));
     window.uiBackendUnavailable = role === 'unavailable';
     window.fetch = async (url, options={}) => { if(window.uiBackendUnavailable) return new Response('<!DOCTYPE html>Cannot GET', {status:404}); if(options.method==='POST') { window.lastAction={url,body:JSON.parse(options.body)}; if(url.includes('/snooze'))project.promptDue=false; if(url.includes('/request')){project.promptDue=false; project.request.status='submitted';} return {ok:true,json:async()=>({message:'Saved'})}; } return {ok:true,json:async()=>({projects:visibleProjects()})}; };
-    createRoot(document.getElementById('root')).render(<QueryClientProvider client={new QueryClient()}><ProductionFollowUp user={{_id:role}} /></QueryClientProvider>);`;
+    createRoot(document.getElementById('root')).render(<QueryClientProvider client={new QueryClient()}><ProductionFollowUp user={{_id:role}} requestSource={role==='reviewer'?'admin':'client'} /></QueryClientProvider>);`;
   await esbuild.build({ stdin: { contents: entry, resolveDir: path.join(root, "client"), loader: "jsx" }, bundle: true, outfile: path.join(output, "app.js"), define: { "process.env.NODE_ENV": '"production"' }, logLevel: "silent" });
   const server = http.createServer((req, res) => {
     if (req.url.startsWith("/app.")) {
@@ -70,7 +70,9 @@ async function main() {
     await evaluate("document.querySelector('.pf-header button').click()"); await waitFor("!document.querySelector('dialog').open");
     assert.match(await evaluate("window.lastAction.url"), /snooze/);
     await navigate("reviewer"); await evaluate("document.querySelector('.pf-banner button').click()"); await waitFor("document.querySelector('dialog').open");
+    assert.equal(await evaluate("document.querySelectorAll('.pf-category-tabs [role=tab]').length"), 3);
     assert.equal(await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Apply communicated')).disabled"), true);
+    fs.writeFileSync(path.join(output, "reviewer-admin.png"), Buffer.from((await send("Page.captureScreenshot", {format:"png"})).data,"base64"));
     await navigate("owner"); await evaluate("document.querySelector('.pf-banner button').click()"); await waitFor("document.querySelector('dialog').open");
     assert.equal(await evaluate("[...document.querySelectorAll('button')].some(b=>b.textContent==='Complete my work')"), true);
     assert.equal(await evaluate("document.querySelector('dialog').textContent.includes('Record client communication')"), false);

@@ -9,8 +9,17 @@ const inputDate = (value) => value ? new Date(value).toISOString().slice(0, 16) 
 const isoDate = (value) => value ? new Date(`${value}:00Z`).toISOString() : "";
 const titleCase = (value) => String(value || "").replaceAll("-", " ").replace(/\b\w/g, (character) => character.toUpperCase());
 const numberFields = ["remainingHours", "downstreamHours"];
+const CATEGORY_ORDER = ["lead", "frontDesk", "production"];
+const CATEGORY_META = {
+  lead: { label: "Lead", short: "L", description: "Ownership and escalations" },
+  frontDesk: { label: "Front Desk", short: "F", description: "Client delivery revisions" },
+  production: { label: "Production", short: "P", description: "Department confirmations" },
+};
 const openTasks = (project) => project.tasks.filter((task) => task.status !== "completed");
 const needsAttention = (project) => Boolean(project.request || openTasks(project).some((task) => task.overdue || task.escalated || !task.owner));
+const projectCategories = (project) => Array.isArray(project.categories) && project.categories.length
+  ? project.categories
+  : [project.lead ? "lead" : project.reviewer ? "frontDesk" : "production"];
 
 function ActionForm({ action, project, onAction, busy, children, title, department, onSuccess }) {
   return (
@@ -126,9 +135,14 @@ function RevisionPanel({ project, onAction, busy }) {
   </section>;
 }
 
-function ProjectQueue({ projects, selected, onSelect, search, setSearch, filter, setFilter }) {
+function ProjectQueue({ projects, selected, onSelect, search, setSearch, filter, setFilter, category, categories, counts, onCategoryChange }) {
+  const categoryMeta = CATEGORY_META[category];
   return <aside className="pf-queue">
-    <div className="pf-queue-heading"><div><span className="pf-eyebrow">Work queue</span><h3>Active projects</h3></div><span className="pf-count">{projects.length}</span></div>
+    <div className="pf-workstream-heading"><span className="pf-eyebrow">Responsibility</span><strong>Follow-up workstreams</strong></div>
+    <div className="pf-category-tabs" role="tablist" aria-label="Production follow-up workstreams">
+      {categories.map((key) => <button type="button" role="tab" aria-selected={category === key} className={category === key ? "active" : ""} key={key} onClick={() => onCategoryChange(key)}><span className="pf-category-mark" aria-hidden="true">{CATEGORY_META[key].short}</span><span>{CATEGORY_META[key].label}</span><b>{counts[key]}</b></button>)}
+    </div>
+    <div className="pf-queue-heading"><div><span className="pf-eyebrow">{categoryMeta.description}</span><h3>{categoryMeta.label} queue</h3></div><span className="pf-count">{projects.length}</span></div>
     <label className="pf-search"><span className="pf-sr-only">Search projects</span><span aria-hidden="true">⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search order or project" /></label>
     <div className="pf-filter" aria-label="Filter projects"><button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All</button><button type="button" className={filter === "attention" ? "active" : ""} onClick={() => setFilter("attention")}>Needs attention</button></div>
     <nav aria-label="Projects requiring production follow-up" tabIndex="0">
@@ -136,7 +150,7 @@ function ProjectQueue({ projects, selected, onSelect, search, setSearch, filter,
         <span className="pf-queue-card-top"><strong>{project.orderId || "No order number"}</strong>{needsAttention(project) && <span className="pf-attention-dot" title="Needs attention" />}</span>
         <span className="pf-project-name">{project.name}</span><span className="pf-queue-status">{project.request ? `Delivery revision · ${titleCase(project.request.status)}` : remaining ? `${remaining} confirmation${remaining === 1 ? "" : "s"} open` : "Production confirmed"}</span><span className="pf-queue-deadline">Delivery: {formatDate(project.deliveryAt)}</span>
       </button>; })}
-      {!projects.length && <div className="pf-queue-empty">No projects match this view.</div>}
+      {!projects.length && <div className="pf-queue-empty">No {categoryMeta.label.toLowerCase()} projects match this view.</div>}
     </nav>
   </aside>;
 }
@@ -171,6 +185,7 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [category, setCategory] = useState("");
   const dialogRef = useRef(null);
   const queryClient = useQueryClient();
   const source = `?source=${encodeURIComponent(requestSource)}`;
@@ -194,7 +209,14 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
   }, [load]);
   useEffect(() => { const due = projects.find((project) => project.promptDue); if (due && !open) { setSelectedId(due.id); setOpen(true); } }, [projects, open]);
   useEffect(() => { const dialog = dialogRef.current; if (open && dialog && !dialog.open) dialog.showModal(); if (!open && dialog?.open) dialog.close(); }, [open]);
-  const filteredProjects = useMemo(() => { const term = search.trim().toLowerCase(); return projects.filter((project) => (filter !== "attention" || needsAttention(project)) && (!term || `${project.orderId || ""} ${project.name || ""}`.toLowerCase().includes(term))); }, [projects, search, filter]);
+  const categoryCounts = useMemo(() => Object.fromEntries(CATEGORY_ORDER.map((key) => [key, projects.filter((project) => projectCategories(project).includes(key)).length])), [projects]);
+  const availableCategories = useMemo(() => requestSource === "admin" ? CATEGORY_ORDER : CATEGORY_ORDER.filter((key) => categoryCounts[key] > 0), [categoryCounts, requestSource]);
+  const categoryOptions = availableCategories.length ? availableCategories : [category || "lead"];
+  const activeCategory = category && categoryOptions.includes(category) ? category : categoryOptions.find((key) => categoryCounts[key] > 0) || categoryOptions[0];
+  const filteredProjects = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return projects.filter((project) => projectCategories(project).includes(activeCategory) && (filter !== "attention" || needsAttention(project)) && (!term || `${project.orderId || ""} ${project.name || ""}`.toLowerCase().includes(term)));
+  }, [projects, search, filter, activeCategory]);
   const selected = filteredProjects.find((project) => project.id === selectedId) || filteredProjects[0];
   const action = async (project, actionName, values) => {
     setBusy(true); setError(""); setNotice("");
@@ -207,8 +229,9 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
   };
   const close = async () => { if (busy) return; const due = projects.find((project) => project.promptDue); if (due && !(await action(due, "snooze", {}))) return; setOpen(false); };
   const selectProject = (projectId) => { setSelectedId(projectId); setError(""); setNotice(""); };
+  const selectCategory = (nextCategory) => { setCategory(nextCategory); setSelectedId(""); setSearch(""); setFilter("all"); setError(""); setNotice(""); };
   const attention = projects.filter(needsAttention).length;
-  if (!userId) return null;
+  if (!userId || (requestSource === "client" && user?.role === "admin")) return null;
   return <>
     <div className="pf-banner"><button type="button" onClick={() => { setOpen(true); void load(); }}><span className="pf-banner-icon" aria-hidden="true">✓</span><span>Production follow-up</span>{attention > 0 && <b>{attention} need attention</b>}</button>{loadError && <span role="status">{loadError}</span>}</div>
     <dialog ref={dialogRef} className="pf-dialog" aria-labelledby="pf-title" onCancel={(event) => { event.preventDefault(); void close(); }}>
@@ -217,7 +240,7 @@ export default function ProductionFollowUp({ user, requestSource = "client" }) {
         {(error || loadError) && <div className="pf-global-message error" role="alert">{error || loadError}</div>}
         {notice && <div className="pf-global-message notice" role="status">{notice}</div>}
       </div>
-      <div className="pf-workspace"><ProjectQueue projects={filteredProjects} selected={selected} onSelect={selectProject} search={search} setSearch={setSearch} filter={filter} setFilter={setFilter} /><main className="pf-main" tabIndex="0" aria-label="Selected project production follow-up">{!loaded ? <div className="pf-empty-state"><strong>{loadError ? "Production follow-up is unavailable" : "Loading production follow-up..."}</strong><span>{loadError ? "Use the Production follow-up button to retry." : "Retrieving your assigned projects."}</span></div> : !selected ? <div className="pf-empty-state"><strong>Your production queue is clear</strong><span>No active production assignments or delivery requests require your attention.</span></div> : <ProjectWorkspace project={selected} onAction={action} busy={busy} />}</main></div>
+      <div className="pf-workspace"><ProjectQueue projects={filteredProjects} selected={selected} onSelect={selectProject} search={search} setSearch={setSearch} filter={filter} setFilter={setFilter} category={activeCategory} categories={categoryOptions} counts={categoryCounts} onCategoryChange={selectCategory} /><main className="pf-main" tabIndex="0" aria-label="Selected project production follow-up">{!loaded ? <div className="pf-empty-state"><strong>{loadError ? "Production follow-up is unavailable" : "Loading production follow-up..."}</strong><span>{loadError ? "Use the Production follow-up button to retry." : "Retrieving your assigned projects."}</span></div> : !selected ? <div className="pf-empty-state"><strong>The {CATEGORY_META[activeCategory].label} queue is clear</strong><span>No projects in this workstream currently require follow-up.</span></div> : <ProjectWorkspace project={selected} onAction={action} busy={busy} />}</main></div>
     </dialog>
   </>;
 }
