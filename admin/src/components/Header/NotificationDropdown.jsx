@@ -76,6 +76,13 @@ const NotificationDropdown = ({
   clearNotifications,
 }) => {
   const dropdownRef = useRef(null);
+  const openNotification = (notification) => {
+    markAsRead(notification._id);
+    if (notification.source === "production_follow_up") {
+      onClose();
+      window.dispatchEvent(new CustomEvent("mh:open-production-follow-up", { detail: { projectId: notification.project?._id || notification.project } }));
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -122,7 +129,7 @@ const NotificationDropdown = ({
                       <div
                         key={notification._id}
                         className="notification-item unread"
-                        onClick={() => markAsRead(notification._id)}
+                        onClick={() => openNotification(notification)}
                       >
                         <div
                           className={`notification-icon ${typeMeta.className}`}
@@ -160,7 +167,7 @@ const NotificationDropdown = ({
                       <div
                         key={notification._id}
                         className="notification-item"
-                        onClick={() => markAsRead(notification._id)}
+                        onClick={() => openNotification(notification)}
                       >
                         <div
                           className={`notification-icon ${typeMeta.className}`}

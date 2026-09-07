@@ -8,6 +8,7 @@ import DeliveryCalendarFab from "../features/DeliveryCalendarFab";
 import BillingDocumentsFab from "../features/BillingDocumentsFab";
 import MaterialRequestsFab from "../features/MaterialRequestsFab";
 import ProjectCommentsFab from "../features/ProjectCommentsFab";
+import ProductionFollowUp from "../features/ProductionFollowUp";
 import "./Layout.css";
 // Icons
 import XIcon from "../icons/XIcon";
@@ -152,6 +153,11 @@ const Layout = ({
 
   const openProjectFromNotification = React.useCallback(
     (notification, { onBeforeNavigate } = {}) => {
+      if (notification?.source === "production_follow_up") {
+        onBeforeNavigate?.();
+        window.dispatchEvent(new CustomEvent("mh:open-production-follow-up", { detail: { projectId: toEntityId(notification.project) } }));
+        return true;
+      }
       const projectId = toEntityId(
         notification?.project?._id || notification?.project,
       );
@@ -1106,7 +1112,7 @@ const Layout = ({
       <ProjectCommentsFab user={user} />
 
       {/* Page Content */}
-      <main className="layout-content">{children}</main>
+      <main className="layout-content"><ProductionFollowUp user={user} />{children}</main>
     </div>
   );
 };

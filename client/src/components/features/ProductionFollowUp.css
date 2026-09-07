@@ -1,0 +1,44 @@
+.pf-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 24px; border-bottom: 1px solid #e2e8f0; background: var(--bg-card, #fff); }
+.pf-banner [role="status"] { color: #9f1239; font-size: 13px; }
+.pf-banner button { border: 0; background: transparent; color: var(--text-primary, #172554); cursor: pointer; font-weight: 650; }
+.pf-banner b { margin-left: 12px; background: #fff1d6; color: #854d0e; border-radius: 20px; padding: 3px 9px; }
+.pf-dialog { width: min(1120px, 96vw); max-height: 92dvh; padding: 0; border: 1px solid #cbd5e1; border-radius: 16px; background: var(--bg-card, #fff); color: var(--text-primary, #172033); box-shadow: 0 24px 80px #0004; }
+.pf-dialog::backdrop { background: #0f172aa8; }
+.pf-dialog * { box-sizing: border-box; }
+.pf-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 20px 24px; border-bottom: 1px solid #cbd5e1; }
+.pf-header h2 { margin: 0; font-size: 22px; }
+.pf-header p { margin: 6px 0 0; font-size: 13px; }
+.pf-workspace { display: grid; grid-template-columns: 245px minmax(0, 1fr); }
+.pf-workspace nav { padding: 12px; border-right: 1px solid #cbd5e1; overflow-y: auto; max-height: 70dvh; }
+.pf-workspace nav button { display: grid; width: 100%; text-align: left; gap: 5px; margin-bottom: 8px; }
+.pf-workspace nav button.selected { border-color: #2563eb; background: #eff6ff; color: #172554; }
+.pf-workspace main { padding: 20px 24px; overflow-y: auto; max-height: 70dvh; min-width: 0; }
+.pf-dialog button { border: 1px solid #b8c6d8; padding: 8px 12px; border-radius: 8px; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+.pf-dialog button:disabled { opacity: .5; cursor: default; }
+.pf-dialog button.pf-primary { color: #fff; background: #1d4ed8; border-color: #1d4ed8; }
+.pf-dialog button:focus-visible, .pf-dialog summary:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
+.pf-dialog p { line-height: 1.5; overflow-wrap: anywhere; }
+.pf-dates, .pf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.pf-dates { padding: 16px; background: #eff6ff; color: #172554; border-radius: 10px; margin: 16px 0; font-size: 13px; }
+.pf-dates strong { display: block; margin-top: 5px; font-size: 16px; }
+.pf-section, .pf-task { margin: 16px 0; padding: 16px; border: 1px solid #cbd5e1; border-radius: 10px; }
+.pf-section h3 { margin-top: 0; }
+.pf-deadline-alert, .pf-overdue { border-color: #f59e0b; }
+.pf-row, .pf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pf-row { justify-content: space-between; }
+.pf-pill { padding: 3px 8px; font-size: 12px; border-radius: 20px; background: #e2e8f0; color: #334155; }
+.pf-pill.completed { background: #dcfce7; color: #166534; }
+.pf-pill.blocked { background: #fee2e2; color: #991b1b; }
+.pf-note { background: #f1f5f9; color: #334155; padding: 10px; border-radius: 8px; }
+.pf-error, .pf-notice { padding: 12px 20px; background: #fff1f2; color: #9f1239; }
+.pf-notice { background: #ecfdf5; color: #166534; }
+.pf-form { margin-top: 14px; }
+.pf-form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 12px; min-width: 0; }
+.pf-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
+.pf-form input, .pf-form select, .pf-form textarea { font: inherit; color: inherit; background: var(--bg-card, #fff); border: 1px solid #94a3b8; border-radius: 6px; padding: 9px; width: 100%; min-width: 0; }
+.pf-form textarea { min-height: 72px; resize: vertical; }
+.pf-form .pf-check { display: flex; align-items: flex-start; gap: 8px; line-height: 1.5; }
+.pf-check input { width: auto; margin-top: 3px; }
+.pf-dialog details { margin-top: 16px; }
+.pf-dialog summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 700px) { .pf-workspace { grid-template-columns: 1fr; } .pf-workspace nav { max-height: 130px; border-right: 0; border-bottom: 1px solid #cbd5e1; } .pf-workspace main { max-height: 55dvh; padding: 16px; } .pf-header { padding: 16px; align-items: flex-start; } .pf-header h2 { font-size: 18px; } .pf-header button { font-size: 12px; } .pf-grid, .pf-dates { grid-template-columns: 1fr; } }

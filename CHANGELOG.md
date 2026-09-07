@@ -6,6 +6,13 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+- Fixed production follow-up error handling when an outdated backend returns an HTML 404, including recovery and readable banner spacing; added a targeted elevated PM2 restart helper for the LAN API.
+
+- Added production finish targets calculated backward from delivery deadlines using configurable working calendars and downstream stage allowances.
+- Added accountable production owners, persistent completion reminders, Lead escalation, blocker updates, and audited completion on behalf.
+- Added recurring missed-delivery dialogs and a Front Desk/Admin revision queue that requires recorded client communication before applying a new deadline.
+- Protected existing deadline editors and production stage shortcuts, preserved revision history, and added isolated database and browser workflow checks.
+
 ## [1.0.0] - 2026-09-04
 
 - Redesigned the Client Project Details experience with a modern information hierarchy and workflow ribbon.

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const fs = require("fs");
 const Project = require("../models/Project");
+const productionFollowUp = require("../utils/productionFollowUp");
 const Order = require("../models/Order");
 const ActivityLog = require("../models/ActivityLog");
 const ProjectRevision = require("../models/ProjectRevision");
@@ -2753,6 +2754,9 @@ const updateProjectDeliverySchedule = async (req, res) => {
       normalizeProjectStatusFields(unchangedProject);
       return res.json(unchangedProject);
     }
+
+    const deliveryGuard = productionFollowUp.deadlineEditGuard(project, parsedDeliveryDate, deliveryTime);
+    if (deliveryGuard) return res.status(409).json({ code: "DELIVERY_REVISION_REQUIRED", message: deliveryGuard });
 
     project.details.deliveryDate = parsedDeliveryDate;
     project.details.deliveryTime = deliveryTime;
@@ -11377,6 +11381,11 @@ const updateProjectStatus = async (req, res) => {
     }
 
     if (newStatus === "Production Completed") {
+      if (!isQuoteProject(project)) {
+        const followUpProject = await Project.findById(project._id).select("+productionFollowUp").lean();
+        const pendingTasks = productionFollowUp.prepareWorkflow(followUpProject).tasks.filter((task) => task.status !== "completed");
+        if (pendingTasks.length) return res.status(409).json({ code: "PRODUCTION_CONFIRMATIONS_REQUIRED", message: `Open Production follow-up and complete the individual assignments first. Pending: ${pendingTasks.map((task) => task.department).join(", ")}.` });
+      }
       const sampleGuard = getSampleApprovalGuard(project);
       if (sampleGuard) {
         await notifySampleApprovalBlocked({
@@ -11743,7 +11752,7 @@ const updateProjectStatus = async (req, res) => {
     res.json(project);
   } catch (error) {
     console.error("Error updating status:", error);
-    res.status(500).json({ message: "Server Error" });
+    res.status(error.status || 500).json({ message: error.status ? error.message : "Server Error" });
   }
 };
 
@@ -18576,6 +18585,12 @@ const updateProject = async (req, res) => {
       project.details.briefOverview = getValue(briefOverview) || "";
       detailsChanged = true;
     }
+    const deliveryGuard = productionFollowUp.deadlineEditGuard(
+      project,
+      deliveryDate || project.details.deliveryDate,
+      deliveryTime ? getValue(deliveryTime) : project.details.deliveryTime,
+    );
+    if (deliveryGuard) return res.status(409).json({ code: "DELIVERY_REVISION_REQUIRED", message: deliveryGuard });
     if (deliveryDate) {
       project.details.deliveryDate = deliveryDate;
       detailsChanged = true;
@@ -21629,6 +21644,14 @@ const updateProjectBatchStatus = async (req, res) => {
 };
 
 module.exports = {
+  getProductionFollowUpTransition: async (project) => {
+    if (project.status !== "Pending Production" || project.hold?.isOnHold) return { message: "Production must be active before it can advance." };
+    const guard = getSampleApprovalGuard(project) || getBatchProgressGuard(project, "Pending Quality Control");
+    if (guard) return { message: guard.message };
+    const meeting = await resolveMeetingGateState(project);
+    if ((meeting.required || meeting.meetingScheduled) && !meeting.meetingCompleted && !meeting.meetingSkipped) return { message: "Complete the departmental meeting before advancing production." };
+    return { status: getAutoProgressedStatus("Production Completed", project) };
+  },
   createProject,
   getProjects,
   getDashboardSummary,
