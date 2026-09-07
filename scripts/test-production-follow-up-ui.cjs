@@ -26,8 +26,9 @@ async function main() {
     const project = ${JSON.stringify(project)};
     if(role === 'reviewer') { project.lead=false; project.reviewer=true; project.ownsReview=true; project.promptDue=false; project.request={number:1,status:'reviewing',reviewer:'reviewer',reviewerName:'Front Desk',reason:'Production delayed',remainingHours:4,proposedAt:'2026-09-12T17:00:00Z'}; }
     if(role === 'owner') { project.manager=false; project.lead=false; project.promptDue=false; project.request=null; project.tasks[0].canAct=true; }
+    const visibleProjects = () => Array.from({length:role==='lead'?58:1}, (_,index) => ({...structuredClone(project), id:String(index+1).padStart(24,'0'), orderId:'MH-'+String(1042+index), name:index?('Production queue project '+(index+1)):project.name, promptDue:index===0?project.promptDue:false}));
     window.uiBackendUnavailable = role === 'unavailable';
-    window.fetch = async (url, options={}) => { if(window.uiBackendUnavailable) return new Response('<!DOCTYPE html>Cannot GET', {status:404}); if(options.method==='POST') { window.lastAction={url,body:JSON.parse(options.body)}; if(url.includes('/snooze'))project.promptDue=false; if(url.includes('/request')){project.promptDue=false; project.request.status='submitted';} return {ok:true,json:async()=>({message:'Saved'})}; } return {ok:true,json:async()=>({projects:[structuredClone(project)]})}; };
+    window.fetch = async (url, options={}) => { if(window.uiBackendUnavailable) return new Response('<!DOCTYPE html>Cannot GET', {status:404}); if(options.method==='POST') { window.lastAction={url,body:JSON.parse(options.body)}; if(url.includes('/snooze'))project.promptDue=false; if(url.includes('/request')){project.promptDue=false; project.request.status='submitted';} return {ok:true,json:async()=>({message:'Saved'})}; } return {ok:true,json:async()=>({projects:visibleProjects()})}; };
     createRoot(document.getElementById('root')).render(<QueryClientProvider client={new QueryClient()}><ProductionFollowUp user={{_id:role}} /></QueryClientProvider>);`;
   await esbuild.build({ stdin: { contents: entry, resolveDir: path.join(root, "client"), loader: "jsx" }, bundle: true, outfile: path.join(output, "app.js"), define: { "process.env.NODE_ENV": '"production"' }, logLevel: "silent" });
   const server = http.createServer((req, res) => {
@@ -59,6 +60,12 @@ async function main() {
     await navigate("lead"); await waitFor("document.querySelector('dialog').open");
     assert.equal(await evaluate("document.querySelector('dialog').textContent.includes('Delivery deadline missed')"), true);
     assert.equal(await evaluate("[...document.querySelectorAll('button')].some(b=>b.textContent.includes('Apply communicated'))"), false);
+    assert.equal(await evaluate("document.querySelector('.pf-main').scrollHeight > document.querySelector('.pf-main').clientHeight"), true);
+    assert.equal(await evaluate("document.querySelector('.pf-queue nav').scrollHeight > document.querySelector('.pf-queue nav').clientHeight"), true);
+    await send("Input.dispatchMouseEvent", {type:"mouseWheel", x:1000, y:650, deltaX:0, deltaY:520});
+    await waitFor("document.querySelector('.pf-main').scrollTop > 0");
+    await send("Input.dispatchMouseEvent", {type:"mouseWheel", x:180, y:650, deltaX:0, deltaY:520});
+    await waitFor("document.querySelector('.pf-queue nav').scrollTop > 0");
     fs.writeFileSync(path.join(output, "lead-desktop.png"), Buffer.from((await send("Page.captureScreenshot", {format:"png"})).data,"base64"));
     await evaluate("document.querySelector('.pf-header button').click()"); await waitFor("!document.querySelector('dialog').open");
     assert.match(await evaluate("window.lastAction.url"), /snooze/);
@@ -75,7 +82,7 @@ async function main() {
     assert.equal(await evaluate("document.body.textContent.includes('Unexpected token')"), false);
     await evaluate("window.uiBackendUnavailable=false; document.querySelector('.pf-banner button').click()");
     await waitFor("document.querySelector('.pf-banner [role=status]') === null && document.querySelector('dialog').open");
-    console.log(`Browser smoke passed: recurring Lead dialog, persisted snooze action, reviewer gate, owner controls, mobile layout, HTML 404 handling and recovery. Screenshots: ${output}`);
+    console.log(`Browser smoke passed: independent queue/workspace wheel scrolling, recurring Lead dialog, persisted snooze action, reviewer gate, owner controls, mobile layout, HTML 404 handling and recovery. Screenshots: ${output}`);
   } finally {
     websocket?.close();
     if (browser.exitCode === null) { const exit = once(browser,"exit"); browser.kill(); await exit; }

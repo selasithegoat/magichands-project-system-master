@@ -4,7 +4,12 @@ const { createNotification } = require("../utils/notificationService");
 const { logActivity } = require("../utils/activityLogger");
 const { broadcastDataChange } = require("../utils/realtimeHub");
 const { captureProjectRevisionState, recordProjectRevisionSafely } = require("./projectRevisionService");
-const { hasProductionDepartmentOverlap, resolveProductionSubDepartmentTokens } = require("../utils/productionDepartmentAccess");
+const {
+  getExplicitProductionSubDepartmentTokens,
+  hasProductionDepartmentOverlap,
+  normalizeProductionDepartmentToken,
+  resolveProductionSubDepartmentTokens,
+} = require("../utils/productionDepartmentAccess");
 const W = require("../utils/productionFollowUp");
 
 const ACTIVE_QUERY = { projectType: { $ne: "Quote" }, status: { $nin: [...W.CLOSED] }, "cancellation.isCancelled": { $ne: true }, isLatestVersion: { $ne: false }, versionState: { $nin: ["superseded", "archived"] } };
@@ -12,6 +17,46 @@ const FIELDS = "+productionFollowUp orderId details.projectName details.delivery
 const trainee = (u) => u?.productionAccess === "Production Trainee";
 const canOwn = (u, department) => !trainee(u) && hasProductionDepartmentOverlap(u.department, [department]);
 const canRead = (u, p, s) => W.isManager(u, p) || (!trainee(u) && s.tasks.some((t) => W.id(t.owner) === W.id(u) || canOwn(u, t.department)));
+
+const portalSource = (value) => value === "admin" ? "admin" : "client";
+const normalizedDepartments = (user) => (Array.isArray(user?.department) ? user.department : [user?.department])
+  .map(normalizeProductionDepartmentToken)
+  .filter(Boolean);
+
+function isProductionUser(user) {
+  const departments = normalizedDepartments(user);
+  return departments.includes("production") || getExplicitProductionSubDepartmentTokens(departments).length > 0;
+}
+
+function isEngagedInTask(user, task) {
+  if (trainee(user)) return false;
+  if (W.id(task.owner) === W.id(user)) return true;
+  const departments = normalizedDepartments(user);
+  const explicit = getExplicitProductionSubDepartmentTokens(departments);
+  const taskDepartment = normalizeProductionDepartmentToken(task.department);
+  if (explicit.length) return explicit.includes(taskDepartment);
+  return departments.includes("production");
+}
+
+async function resolvePortalAccess(user, source) {
+  // The query string identifies the UI, not the user's authority. Only an
+  // actual reviewer receives the Admin portal's global queue.
+  if (portalSource(source) === "admin" && W.isReviewer(user)) return "reviewer";
+  const lead = await Project.exists({ ...ACTIVE_QUERY, projectLeadId: W.id(user) });
+  if (lead) return "lead";
+  if (W.isReviewer(user)) return "reviewer";
+  if (isProductionUser(user) && !trainee(user)) return "production";
+  const assistant = await Project.exists({ ...ACTIVE_QUERY, assistantLeadId: W.id(user) });
+  return assistant ? "assistant" : "none";
+}
+
+function canReadForAccess(user, project, state, access) {
+  if (access === "reviewer") return true;
+  if (access === "lead") return W.id(project.projectLeadId) === W.id(user);
+  if (access === "assistant") return W.id(project.assistantLeadId) === W.id(user);
+  if (access === "production") return state.tasks.some((task) => isEngagedInTask(user, task));
+  return access === "standard" && canRead(user, project, state);
+}
 
 function snapshotFilter(project) {
   const revision = project.productionFollowUp?.revision;
@@ -39,13 +84,14 @@ async function commit(project, state, extra = {}) {
   return saved;
 }
 
-function present(project, user, users, now = new Date()) {
+function present(project, user, users, now = new Date(), access = "standard") {
   const state = W.prepareWorkflow(project, now);
   W.ensureDeadlineRequest(project, state, now);
   const manager = W.isManager(user, project);
   const reviewer = W.isReviewer(user) && !W.isLead(user, project);
   const name = (value) => { const u = users.find((entry) => W.id(entry) === W.id(value)); return u ? `${u.firstName || ""} ${u.lastName || ""}`.trim() : "Unassigned"; };
-  const tasks = state.tasks.filter((t) => manager || W.id(t.owner) === W.id(user) || canOwn(user, t.department)).map((t) => ({
+  const canSeeEveryTask = access === "reviewer" || access === "lead" || access === "assistant" || (access === "standard" && manager);
+  const tasks = state.tasks.filter((t) => canSeeEveryTask || (access === "production" ? isEngagedInTask(user, t) : W.id(t.owner) === W.id(user) || canOwn(user, t.department))).map((t) => ({
     ...t, ownerName: name(t.owner), canAct: project.status === "Pending Production" && !project.hold?.isOnHold && W.id(t.owner) === W.id(user) && canOwn(user, t.department) && !W.isLead(user, project),
     overdue: t.status !== "completed" && t.dueAt && new Date(t.dueAt) <= now,
     escalated: t.status !== "completed" && (t.status === "blocked" || !t.owner || (t.dueAt && W.shiftWorkingHours(t.dueAt, 1, state.plan) <= now)),
@@ -64,15 +110,29 @@ function present(project, user, users, now = new Date()) {
   };
 }
 
-async function listForUser(user) {
+async function listForUser(user, { source = "client" } = {}) {
   const users = await User.find({}).select("firstName lastName department role productionAccess").lean();
-  let access = {};
-  if (!W.isReviewer(user)) {
-    access = { $or: [{ projectLeadId: W.id(user) }, { assistantLeadId: W.id(user) }] };
-    if (!trainee(user)) access.$or.push({ departments: { $in: [...(user.department || []), ...resolveProductionSubDepartmentTokens(user.department), "Production"] } }, { "productionFollowUp.tasks.owner": W.id(user) });
+  const access = await resolvePortalAccess(user, source);
+  let query = {};
+  if (access === "lead") query = { projectLeadId: W.id(user) };
+  else if (access === "assistant") query = { assistantLeadId: W.id(user) };
+  else if (access === "production") {
+    const explicit = getExplicitProductionSubDepartmentTokens(user.department);
+    const assigned = Array.isArray(user.department) ? user.department : [user.department].filter(Boolean);
+    const departments = explicit.length ? [...new Set([...assigned, ...explicit])] : resolveProductionSubDepartmentTokens(user.department);
+    query = { $or: [
+      { departments: { $in: departments } },
+      { "items.productionAssignments.department": { $in: departments } },
+      { "productionFollowUp.tasks.owner": W.id(user) },
+    ] };
+  } else if (access === "none") query = { _id: null };
+  else if (access === "standard" && !W.isReviewer(user)) {
+    query = { $or: [{ projectLeadId: W.id(user) }, { assistantLeadId: W.id(user) }, { "productionFollowUp.tasks.owner": W.id(user) }] };
   }
-  const projects = await Project.find({ ...ACTIVE_QUERY, ...access }).select(FIELDS).sort({ "details.deliveryDate": 1 }).lean();
-  return projects.filter((p) => canRead(user, p, W.prepareWorkflow(p))).map((p) => present(p, user, users));
+  const projects = await Project.find({ ...ACTIVE_QUERY, ...query }).select(FIELDS).sort({ "details.deliveryDate": 1 }).lean();
+  return projects
+    .filter((project) => canReadForAccess(user, project, W.prepareWorkflow(project), access))
+    .map((project) => present(project, user, users, new Date(), access));
 }
 
 async function notify(project, recipients, title, message, actor) {
@@ -81,13 +141,14 @@ async function notify(project, recipients, title, message, actor) {
   }
 }
 
-async function act(projectId, user, action, input = {}) {
+async function act(projectId, user, action, input = {}, { source = "client" } = {}) {
   const project = await Project.findById(projectId).select("+productionFollowUp").lean();
   if (!project || !W.isActive(project)) W.fail("This active order could not be found.", 404);
   const now = new Date();
   const state = W.prepareWorkflow(project, now);
   W.ensureDeadlineRequest(project, state, now);
-  if (!canRead(user, project, state)) W.fail("You do not have access to this production workflow.", 403);
+  const access = await resolvePortalAccess(user, source);
+  if (!canReadForAccess(user, project, state, access)) W.fail("You do not have access to this production workflow.", 403);
   if (!Number.isInteger(input.revision) || input.revision !== (project.productionFollowUp?.revision || 0)) W.fail("This workflow has changed. Refresh and try again.", 409);
   const manager = W.isManager(user, project), lead = W.isLead(user, project), reviewer = W.isReviewer(user) && !lead;
   const reviewerUsers = await User.find({ $or: [{ role: "admin" }, { department: "Front Desk" }] }).select("_id role").lean();

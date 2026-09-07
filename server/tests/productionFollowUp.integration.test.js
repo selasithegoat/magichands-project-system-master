@@ -29,8 +29,9 @@ test("production follow-up with an isolated MongoDB instance", { skip: !fs.exist
   });
   try { await mongoose.connect(`mongodb://127.0.0.1:${port}/production_follow_up_test`, { serverSelectionTimeoutMS: 20000 }); }
   catch (error) { throw new Error(`${error.message}\n${output}`); }
-  const [lead, frontDesk, admin, owner, outsider, trainee] = await User.insertMany([
+  const [lead, otherLead, frontDesk, admin, owner, outsider, trainee] = await User.insertMany([
     { employeeId: "test-lead", firstName: "Lead", department: [], role: "user" },
+    { employeeId: "test-other-lead", firstName: "Other Lead", department: [], role: "user" },
     { employeeId: "test-frontdesk", firstName: "Front", department: ["Front Desk"], role: "user" },
     { employeeId: "test-admin", firstName: "Admin", department: ["Administration"], role: "admin" },
     { employeeId: "test-owner", firstName: "Owner", department: ["dtf"], role: "user" },
@@ -44,6 +45,31 @@ test("production follow-up with an isolated MongoDB instance", { skip: !fs.exist
   const future = (hours = 48) => { const d = new Date(Date.now() + hours * W.HOUR); d.setUTCSeconds(0, 0); return d.toISOString(); };
   const request = (p) => act(p, lead, "request", { reason: "Production is delayed", remainingHours: 4, proposedAt: future() });
   const contact = (p) => act(p, frontDesk, "contact", { confirmed: true, contactName: "Client Representative", channel: "phone", contactedAt: new Date().toISOString(), outcome: "accepted", summary: "Client was reached and the exact revised date was discussed." });
+
+  await t.test("scopes the Client portal to primary Lead projects and engaged production departments", async () => {
+    const leadProject = await fixture({ details: { projectName: "Primary Lead DTF", deliveryDate: "2026-12-01", deliveryTime: "17:00" } });
+    const otherLeadProject = await fixture({ projectLeadId: otherLead._id, details: { projectName: "Other Lead DTF", deliveryDate: "2026-12-02", deliveryTime: "17:00" } });
+    const embroideryProject = await fixture({ departments: ["embroidery"], acknowledgements: [{ department: "embroidery", user: outsider._id }], details: { projectName: "Embroidery only", deliveryDate: "2026-12-03", deliveryTime: "17:00" } });
+    const genericProductionProject = await fixture({ departments: ["Production"], acknowledgements: [], details: { projectName: "Unscoped production", deliveryDate: "2026-12-04", deliveryTime: "17:00" } });
+
+    const leadIds = new Set((await service.listForUser(lead, { source: "client" })).map((project) => project.id));
+    assert.equal(leadIds.has(W.id(leadProject)), true);
+    assert.equal(leadIds.has(W.id(otherLeadProject)), false);
+
+    const productionIds = new Set((await service.listForUser(owner, { source: "client" })).map((project) => project.id));
+    assert.equal(productionIds.has(W.id(leadProject)), true);
+    assert.equal(productionIds.has(W.id(otherLeadProject)), true);
+    assert.equal(productionIds.has(W.id(embroideryProject)), false);
+    assert.equal(productionIds.has(W.id(genericProductionProject)), false);
+
+    const spoofedAdminIds = new Set((await service.listForUser(owner, { source: "admin" })).map((project) => project.id));
+    assert.equal(spoofedAdminIds.has(W.id(embroideryProject)), false);
+    assert.equal(spoofedAdminIds.has(W.id(genericProductionProject)), false);
+
+    const adminIds = new Set((await service.listForUser(admin, { source: "admin" })).map((project) => project.id));
+    assert.equal(adminIds.has(W.id(otherLeadProject)), true);
+    assert.equal(adminIds.has(W.id(genericProductionProject)), true);
+  });
 
   await t.test("persists one missed-deadline request across repeated scheduler sweeps", async () => {
     const p = await fixture();
