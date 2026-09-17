@@ -3662,7 +3662,7 @@ const ProjectDetails = ({ user }) => {
           </div>
 
           {/* Brief Overview Section (Moved from General Info) */}
-          <div className="detail-card">
+          <div className="detail-card brief-overview-card">
               <h3 className="card-title">
                 Brief Overview
                 <ProjectRevisionStamp
@@ -3671,7 +3671,7 @@ const ProjectDetails = ({ user }) => {
                   onOpen={() => setActiveContentTab("revisions")}
                 />
               </h3>
-              <div style={{ marginTop: "1rem" }}>
+              <div className="brief-overview-content">
                 {isEditing ? (
                   <textarea
                     className="edit-input"
@@ -3692,6 +3692,7 @@ const ProjectDetails = ({ user }) => {
                   />
                 ) : (
                   <p
+                    className="brief-overview-text"
                     style={{
                       whiteSpace: "pre-wrap",
                       color: "var(--text-secondary)",

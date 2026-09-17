@@ -574,6 +574,8 @@
   padding: 1.5rem;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-color);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .card-header {
@@ -1135,6 +1137,8 @@
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border-color);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .project-brief-section h4 {
@@ -1151,6 +1155,8 @@
   color: var(--text-primary);
   line-height: 1.5;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Departments */

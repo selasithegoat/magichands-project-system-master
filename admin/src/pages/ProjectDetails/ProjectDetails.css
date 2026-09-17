@@ -507,14 +507,37 @@
   gap: 1.5rem;
 }
 
+.details-grid > * {
+  min-width: 0;
+}
+
 .detail-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
+  min-width: 0;
   max-height: 540px;
   overflow-y: auto;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
+}
+
+.brief-overview-content {
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 1rem;
+}
+
+.brief-overview-text {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.brief-overview-card .edit-input {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .group-meeting-notice {
