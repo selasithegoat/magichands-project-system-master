@@ -53,6 +53,10 @@ const {
   attachDraftFinalizationMetadata,
 } = require("../services/projectCreationDraftService");
 const {
+  ensureProductionOwnerFromAcknowledgement,
+  syncProductionTrackingAfterProjectChange,
+} = require("../services/productionTrackingService");
+const {
   PRODUCTION_SUB_DEPARTMENT_TOKENS,
   getExplicitProductionSubDepartmentTokens,
   hasProductionDepartmentOverlap,
@@ -181,6 +185,15 @@ const REVISION_LOCKED_STATUSES = new Set([
   "Feedback Completed",
   "Finished",
 ]);
+
+const syncProductionTrackingSafely = async (options) => {
+  try {
+    return await syncProductionTrackingAfterProjectChange(options);
+  } catch (error) {
+    console.error("Failed to synchronize production tracking:", error);
+    return null;
+  }
+};
 
 const normalizeAttachmentNote = (value) =>
   String(value || "").trim();
@@ -456,6 +469,10 @@ const buildProjectResponseQuery = (projectId) =>
         .populate("createdBy", "firstName lastName")
         .populate("projectLeadId", "firstName lastName employeeId email")
         .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate(
+          "productionOwnerId",
+          "firstName lastName employeeId email department avatarUrl",
+        )
         .populate("endOfDayUpdateBy", "firstName lastName department")
         .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
     ),
@@ -2760,6 +2777,14 @@ const updateProjectDeliverySchedule = async (req, res) => {
     project.sectionUpdates.details = new Date();
 
     await project.save();
+
+    if (project.status === "Pending Production") {
+      await syncProductionTrackingSafely({
+        projectId: project._id,
+        previousStatus: project.status,
+        previousOwnerId: project.productionOwnerId,
+      });
+    }
 
     await recordProjectRevisionSafely({
       projectId: project._id,
@@ -10065,6 +10090,10 @@ const getOrderGroupByNumber = async (req, res) => {
             "assistantLeadId",
             "firstName lastName employeeId email avatarUrl",
           )
+          .populate(
+            "productionOwnerId",
+            "firstName lastName employeeId email department avatarUrl",
+          )
           .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
           .sort({ createdAt: -1 }),
       ).lean();
@@ -10194,6 +10223,10 @@ const getProjectById = async (req, res) => {
             "assistantLeadId",
             "firstName lastName employeeId email avatarUrl",
           )
+          .populate(
+            "productionOwnerId",
+            "firstName lastName employeeId email department avatarUrl",
+          )
           .populate("acknowledgements.user", "firstName lastName name avatarUrl")
           .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
       ),
@@ -10244,6 +10277,18 @@ const getProjectById = async (req, res) => {
         return res
           .status(403)
           .json({ message: "Not authorized to view this project" });
+      }
+
+      if (!project.productionOwnerId) {
+        const recoveredProductionOwnerId =
+          await ensureProductionOwnerFromAcknowledgement(project);
+        if (recoveredProductionOwnerId) {
+          project.productionOwnerId = recoveredProductionOwnerId;
+          await project.populate(
+            "productionOwnerId",
+            "firstName lastName employeeId email department avatarUrl",
+          );
+        }
       }
 
       normalizeProjectStatusFields(project);
@@ -11179,6 +11224,7 @@ const updateProjectStatus = async (req, res) => {
     if (!ensureProjectMutationAccess(req, res, project, "status")) return;
 
     const oldStatus = project.status;
+    const previousProductionOwnerId = project.productionOwnerId || null;
     const isAdmin = req.user.role === "admin";
     const allowBillingOverride =
       Boolean(req.body?.allowBillingOverride) && isAdmin;
@@ -11634,6 +11680,11 @@ const updateProjectStatus = async (req, res) => {
 
     project.status = finalStatus;
     await project.save();
+    await syncProductionTrackingSafely({
+      projectId: project._id,
+      previousStatus: oldStatus,
+      previousOwnerId: previousProductionOwnerId,
+    });
 
     // Log Activity
     if (oldStatus !== finalStatus) {
@@ -11740,7 +11791,11 @@ const updateProjectStatus = async (req, res) => {
       }
     }
 
-    res.json(project);
+    const responseProject = await buildProjectResponseQuery(project._id).populate(
+      "acknowledgements.user",
+      "firstName lastName name avatarUrl",
+    );
+    res.json(responseProject || project);
   } catch (error) {
     console.error("Error updating status:", error);
     res.status(500).json({ message: "Server Error" });
@@ -18473,6 +18528,7 @@ const updateProject = async (req, res) => {
       packagingType: project.details?.packagingType || "",
       lead: project.projectLeadId,
       assistantLead: project.assistantLeadId,
+      productionOwner: project.productionOwnerId,
       orderRef: project.orderRef,
       status: project.status,
       referenceProjects: Array.isArray(project.referenceProjects)
@@ -18903,6 +18959,12 @@ const updateProject = async (req, res) => {
 
     const updatedProject = await project.save();
 
+    await syncProductionTrackingSafely({
+      projectId: updatedProject._id,
+      previousStatus: oldValues.status,
+      previousOwnerId: oldValues.productionOwner,
+    });
+
     await recordProjectRevisionSafely({
       projectId: updatedProject._id,
       before: beforeRevisionState,
@@ -19104,7 +19166,6 @@ const updateProject = async (req, res) => {
       : null;
     const leadId = nextLeadId;
     const leadChanged = prevLeadId !== nextLeadId;
-
     let previousLeadName = "Unassigned";
     let nextLeadName = "Unassigned";
 
@@ -19305,6 +19366,10 @@ const updateProject = async (req, res) => {
         .populate("createdBy", "firstName lastName")
         .populate("projectLeadId", "firstName lastName employeeId email")
         .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate(
+          "productionOwnerId",
+          "firstName lastName employeeId email department avatarUrl",
+        )
         .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
     );
 
@@ -20343,6 +20408,21 @@ const acknowledgeProject = async (req, res) => {
     });
 
     const previousStatus = project.status;
+    const previousProductionOwnerId = project.productionOwnerId || null;
+    const isProductionAcknowledgement =
+      canonicalizeDepartment(department) === "production";
+    const acknowledgerIsProductionUser = toDepartmentArray(req.user.department)
+      .map(normalizeDepartmentValue)
+      .some((userDepartment) =>
+        PRODUCTION_DEPARTMENT_TOKENS.has(userDepartment),
+      );
+    const assignsProductionOwner =
+      isProductionAcknowledgement && acknowledgerIsProductionUser;
+
+    if (assignsProductionOwner) {
+      project.productionOwnerId = req.user._id;
+    }
+
     const missingAcknowledgements = getMissingDepartmentAcknowledgements(project);
     const shouldMarkDepartmentalEngagementComplete =
       missingAcknowledgements.length === 0 &&
@@ -20358,6 +20438,13 @@ const acknowledgeProject = async (req, res) => {
     }
 
     await project.save();
+    if (assignsProductionOwner) {
+      await syncProductionTrackingSafely({
+        projectId: project._id,
+        previousStatus,
+        previousOwnerId: previousProductionOwnerId,
+      });
+    }
 
     // Log Activity
     await logActivity(
@@ -20365,7 +20452,12 @@ const acknowledgeProject = async (req, res) => {
       req.user._id,
       "engagement_acknowledge",
       `${department} department has acknowledged the project engagement.`,
-      { department },
+      {
+        department,
+        ...(assignsProductionOwner
+          ? { productionOwnerId: req.user._id }
+          : {}),
+      },
     );
 
     if (previousStatus !== project.status) {
@@ -20396,7 +20488,11 @@ const acknowledgeProject = async (req, res) => {
       );
     }
 
-    res.json(project);
+    const responseProject = await buildProjectResponseQuery(project._id).populate(
+      "acknowledgements.user",
+      "firstName lastName name avatarUrl",
+    );
+    res.json(responseProject || project);
   } catch (error) {
     console.error("Error acknowledging project:", error);
     res.status(500).json({ message: "Server Error" });
@@ -20437,7 +20533,34 @@ const undoAcknowledgeProject = async (req, res) => {
     }
 
     const previousStatus = project.status;
+    const previousProductionOwnerId = project.productionOwnerId || null;
+    const removedAcknowledgement = project.acknowledgements[ackIndex];
     project.acknowledgements.splice(ackIndex, 1);
+    const removedProductionAcknowledgement =
+      canonicalizeDepartment(removedAcknowledgement?.department) ===
+      "production";
+    const removedAcknowledgementUserId = toObjectIdString(
+      removedAcknowledgement?.user,
+    );
+    const ownerWasRemovedAcknowledgementUser =
+      removedProductionAcknowledgement &&
+      removedAcknowledgementUserId &&
+      removedAcknowledgementUserId ===
+        toObjectIdString(project.productionOwnerId);
+
+    if (ownerWasRemovedAcknowledgementUser) {
+      const fallbackProductionAcknowledgement = [
+        ...(project.acknowledgements || []),
+      ]
+        .reverse()
+        .find(
+          (acknowledgement) =>
+            canonicalizeDepartment(acknowledgement?.department) ===
+              "production" && acknowledgement?.user,
+        );
+      project.productionOwnerId =
+        fallbackProductionAcknowledgement?.user || null;
+    }
     const progressedDepartmentStatus = getAutoProgressedStatus(
       "Departmental Engagement Completed",
       project,
@@ -20449,6 +20572,13 @@ const undoAcknowledgeProject = async (req, res) => {
       project.status = "Pending Departmental Engagement";
     }
     await project.save();
+    if (ownerWasRemovedAcknowledgementUser) {
+      await syncProductionTrackingSafely({
+        projectId: project._id,
+        previousStatus,
+        previousOwnerId: previousProductionOwnerId,
+      });
+    }
 
     await logActivity(
       project._id,
@@ -20481,7 +20611,11 @@ const undoAcknowledgeProject = async (req, res) => {
       );
     }
 
-    res.json(project);
+    const responseProject = await buildProjectResponseQuery(project._id).populate(
+      "acknowledgements.user",
+      "firstName lastName name avatarUrl",
+    );
+    res.json(responseProject || project);
   } catch (error) {
     console.error("Error undoing acknowledgement:", error);
     res.status(500).json({ message: "Server Error" });

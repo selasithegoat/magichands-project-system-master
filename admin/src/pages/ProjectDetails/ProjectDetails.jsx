@@ -2105,7 +2105,8 @@ const ProjectDetails = ({ user }) => {
         applyProjectToState(updatedProject);
         setIsEditingLead(false);
       } else {
-        alert("Failed to update Project Lead");
+        const errorData = await res.json().catch(() => ({}));
+        alert(errorData.message || "Failed to update project assignments");
       }
     } catch (error) {
       console.error("Error updating lead:", error);
@@ -5412,6 +5413,15 @@ const ProjectDetails = ({ user }) => {
                     : "None"}
                 </p>
               )}
+            </div>
+
+            <div className="info-item" style={{ marginBottom: "1.5rem" }}>
+              <label>Primary Production Owner</label>
+              <p>{getPersonName(project.productionOwnerId) || "Unassigned"}</p>
+              <small>
+                Assigned automatically when a Production user acknowledges the
+                project.
+              </small>
             </div>
 
             <div className="info-item" style={{ marginBottom: "1.5rem" }}>

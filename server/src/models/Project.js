@@ -550,6 +550,59 @@ const ReferenceProjectSchema = new mongoose.Schema(
   { _id: true },
 );
 
+const ProductionWorkstreamEstimateSchema = new mongoose.Schema(
+  {
+    department: { type: String, trim: true, default: "production" },
+    minutes: { type: Number, min: 0, default: 0 },
+  },
+  { _id: false },
+);
+
+const ProductionTrackingSchema = new mongoose.Schema(
+  {
+    startedAt: { type: Date, default: null },
+    productionDueAt: { type: Date, default: null },
+    predictedStartAt: { type: Date, default: null },
+    predictedCompletionAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    estimatedProductionMinutes: { type: Number, min: 0, default: 0 },
+    actualProductionMinutes: { type: Number, min: 0, default: null },
+    availableProductionMinutes: { type: Number, min: 0, default: null },
+    queueMinutes: { type: Number, min: 0, default: 0 },
+    postProductionBufferMinutes: { type: Number, min: 0, default: 0 },
+    postProductionAllowance: {
+      totalMinutes: { type: Number, min: 0, default: 0 },
+      qualityControlMinutes: { type: Number, min: 0, default: 0 },
+      photographyMinutes: { type: Number, min: 0, default: 0 },
+      packagingMinutes: { type: Number, min: 0, default: 0 },
+      deliveryPreparationMinutes: { type: Number, min: 0, default: 0 },
+    },
+    totalQuantity: { type: Number, min: 0, default: 0 },
+    itemLineCount: { type: Number, min: 0, default: 0 },
+    workstreams: {
+      type: [ProductionWorkstreamEstimateSchema],
+      default: [],
+    },
+    riskLevel: {
+      type: String,
+      enum: [
+        "not_started",
+        "deadline_required",
+        "on_track",
+        "attention",
+        "at_risk",
+        "overdue",
+        "completed",
+      ],
+      default: "not_started",
+    },
+    riskReasons: { type: [String], default: [] },
+    lastCalculatedAt: { type: Date, default: null },
+    calculationVersion: { type: Number, min: 1, default: 1 },
+  },
+  { _id: false },
+);
+
 const ProjectSchema = new mongoose.Schema(
   {
     orderId: {
@@ -866,6 +919,15 @@ const ProjectSchema = new mongoose.Schema(
     assistantLeadId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+    },
+    productionOwnerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    productionTracking: {
+      type: ProductionTrackingSchema,
+      default: () => ({}),
     },
     workstreamCode: {
       type: String,
@@ -1418,6 +1480,7 @@ ProjectSchema.index({ status: 1, projectType: 1, createdAt: -1 });
 ProjectSchema.index({ priority: 1 });
 ProjectSchema.index({ projectLeadId: 1 });
 ProjectSchema.index({ assistantLeadId: 1 });
+ProjectSchema.index({ productionOwnerId: 1, status: 1 });
 ProjectSchema.index({ createdBy: 1 });
 ProjectSchema.index(
   { creationDraftId: 1 },

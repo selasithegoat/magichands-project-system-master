@@ -58,6 +58,9 @@ const { startReminderScheduler } = require("./utils/reminderScheduler");
 const {
   startEndOfDayReportScheduler,
 } = require("./utils/endOfDayReportScheduler");
+const {
+  startProductionTrackingScheduler,
+} = require("./utils/productionTrackingScheduler");
 
 // Connect to database
 connectDB();
@@ -626,5 +629,6 @@ app.listen(PORT, HOST, () => {
   startWeeklyDigestScheduler();
   startReminderScheduler();
   startEndOfDayReportScheduler();
+  startProductionTrackingScheduler();
 });
 // Trigger restart to rebuild indexes
