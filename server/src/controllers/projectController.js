@@ -54,6 +54,7 @@ const {
 } = require("../services/projectCreationDraftService");
 const {
   ensureProductionOwnerFromAcknowledgement,
+  recalculateProductionQueueForOwner,
   syncProductionTrackingAfterProjectChange,
 } = require("../services/productionTrackingService");
 const {
@@ -10316,6 +10317,112 @@ const getProjectById = async (req, res) => {
     } else {
       res.status(500).json({ message: "Server Error" });
     }
+  }
+};
+
+const PRODUCTION_QUEUE_RISK_ORDER = {
+  overdue: 0,
+  at_risk: 1,
+  deadline_required: 2,
+  attention: 3,
+  on_track: 4,
+  not_started: 5,
+};
+
+// @desc    Get Pending Production work owned by the signed-in Production user
+// @route   GET /api/projects/production/my-queue
+// @access  Private (Production users)
+const getMyProductionQueue = async (req, res) => {
+  try {
+    const productionDepartments = resolveProductionSubDepartmentTokens(
+      req.user?.department,
+    );
+    if (productionDepartments.length === 0) {
+      return res.status(403).json({
+        message: "Production access is required to view this queue.",
+      });
+    }
+
+    await recalculateProductionQueueForOwner(req.user._id);
+
+    const projects = await Project.find({
+      productionOwnerId: req.user._id,
+      status: "Pending Production",
+      "cancellation.isCancelled": { $ne: true },
+      isLatestVersion: { $ne: false },
+      versionState: { $nin: ["superseded", "archived"] },
+    })
+      .select(
+        [
+          "_id",
+          "orderId",
+          "projectType",
+          "priority",
+          "status",
+          "departments",
+          "details.projectName",
+          "details.projectNameRaw",
+          "details.projectIndicator",
+          "details.client",
+          "details.deliveryDate",
+          "details.deliveryTime",
+          "items.description",
+          "items.breakdown",
+          "items.qty",
+          "items.productionAssignments",
+          "productionOwnerId",
+          "productionTracking",
+          "createdAt",
+          "updatedAt",
+        ].join(" "),
+      )
+      .lean();
+
+    projects.sort((left, right) => {
+      const leftRisk =
+        PRODUCTION_QUEUE_RISK_ORDER[left?.productionTracking?.riskLevel] ?? 99;
+      const rightRisk =
+        PRODUCTION_QUEUE_RISK_ORDER[right?.productionTracking?.riskLevel] ?? 99;
+      if (leftRisk !== rightRisk) return leftRisk - rightRisk;
+
+      const leftDue = left?.productionTracking?.productionDueAt
+        ? new Date(left.productionTracking.productionDueAt).getTime()
+        : Number.MAX_SAFE_INTEGER;
+      const rightDue = right?.productionTracking?.productionDueAt
+        ? new Date(right.productionTracking.productionDueAt).getTime()
+        : Number.MAX_SAFE_INTEGER;
+      return leftDue - rightDue;
+    });
+
+    const summary = projects.reduce(
+      (acc, project) => {
+        const riskLevel = project?.productionTracking?.riskLevel || "not_started";
+        acc.total += 1;
+        if (Object.prototype.hasOwnProperty.call(acc, riskLevel)) {
+          acc[riskLevel] += 1;
+        }
+        return acc;
+      },
+      {
+        total: 0,
+        overdue: 0,
+        at_risk: 0,
+        deadline_required: 0,
+        attention: 0,
+        on_track: 0,
+        not_started: 0,
+      },
+    );
+
+    return res.json({
+      ownerId: String(req.user._id),
+      recalculatedAt: new Date(),
+      summary,
+      projects,
+    });
+  } catch (error) {
+    console.error("Error fetching Production queue:", error);
+    return res.status(500).json({ message: "Server Error" });
   }
 };
 
@@ -21776,6 +21883,7 @@ module.exports = {
   getOrderGroups,
   getOrderGroupByNumber,
   getUserStats,
+  getMyProductionQueue,
   getProjectById,
   addItemToProject,
   deleteItemFromProject,

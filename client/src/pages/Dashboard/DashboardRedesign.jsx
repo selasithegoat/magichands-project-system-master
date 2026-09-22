@@ -28,6 +28,10 @@ import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getProjectCardImageUrl } from "../../utils/referenceAttachments";
 import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
 import {
+  getUserProductionDepartmentIds,
+  hasUnrestrictedProductionAccess,
+} from "../../utils/productionWork";
+import {
   getQuoteProgressPercent,
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
@@ -179,6 +183,25 @@ const EMPTY_DASHBOARD_SUMMARY = {
   workload: {
     departments: [],
   },
+};
+const EMPTY_PRODUCTION_QUEUE = {
+  summary: {
+    total: 0,
+    overdue: 0,
+    at_risk: 0,
+    deadline_required: 0,
+    attention: 0,
+    on_track: 0,
+  },
+  projects: [],
+};
+const PRODUCTION_RISK_META = {
+  overdue: { label: "Overdue", tone: "overdue" },
+  at_risk: { label: "At Risk", tone: "at-risk" },
+  deadline_required: { label: "Deadline Required", tone: "deadline" },
+  attention: { label: "Attention", tone: "attention" },
+  on_track: { label: "On Track", tone: "on-track" },
+  not_started: { label: "Not Started", tone: "neutral" },
 };
 
 const PENDING_ACCEPTANCE_STATUSES = new Set([
@@ -411,6 +434,40 @@ const getProjectDepartmentIds = (project) => {
   return project.departments.map((department) => toEntityId(department)).filter(Boolean);
 };
 
+const formatProductionMinutes = (value) => {
+  const minutes = Math.max(0, Math.round(Number(value) || 0));
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (!hours) return `${remainingMinutes}m`;
+  if (!remainingMinutes) return `${hours}h`;
+  return `${hours}h ${remainingMinutes}m`;
+};
+
+const formatProductionDateTime = (value) => {
+  if (!value) return "Not available";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Not available";
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const formatProductionCountdown = (dueAt, nowValue) => {
+  if (!dueAt) return "Delivery deadline required";
+  const parsed = new Date(dueAt);
+  if (Number.isNaN(parsed.getTime())) return "Deadline unavailable";
+  const differenceMinutes = Math.round(
+    Math.abs(parsed.getTime() - nowValue) / (60 * 1000),
+  );
+  const duration = formatProductionMinutes(differenceMinutes);
+  return parsed.getTime() < nowValue
+    ? `Overdue by ${duration}`
+    : `${duration} remaining`;
+};
+
 const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const navigate = useNavigate();
   const { navigateToProject, projectRouteChoiceDialog } =
@@ -469,8 +526,44 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
       realtimePaths: ["/api/projects", "/api/updates"],
     },
   });
+  const isProductionDashboardUser =
+    getUserProductionDepartmentIds(user).length > 0 ||
+    hasUnrestrictedProductionAccess(user);
+  const {
+    data: productionQueue = EMPTY_PRODUCTION_QUEUE,
+    isPending: productionQueueLoading,
+    isError: productionQueueError,
+  } = useQuery({
+    queryKey: ["projects", "production", "my-queue"],
+    queryFn: async () => {
+      const response = await fetch("/api/projects/production/my-queue", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Failed to fetch Production queue.");
+      const payload = await response.json();
+      return {
+        ...EMPTY_PRODUCTION_QUEUE,
+        ...(payload || {}),
+        summary: {
+          ...EMPTY_PRODUCTION_QUEUE.summary,
+          ...(payload?.summary || {}),
+        },
+        projects: Array.isArray(payload?.projects) ? payload.projects : [],
+      };
+    },
+    enabled: isProductionDashboardUser,
+    refetchInterval: isProductionDashboardUser ? 60_000 : false,
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
+  });
   const nextActions = nextActionsPayload?.actions || [];
   const nextActionsTotal = nextActionsPayload?.total || 0;
+  const productionQueueProjects = productionQueue.projects || [];
+  const productionQueueSummary =
+    productionQueue.summary || EMPTY_PRODUCTION_QUEUE.summary;
+  const [productionClockNow, setProductionClockNow] = useState(() => Date.now());
   const [toast, setToast] = useState(null);
   const [projectViewMode, setProjectViewMode] = usePersistedState(
     "client-dashboard-project-view-mode",
@@ -496,6 +589,15 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const [activeTimelineEvent, setActiveTimelineEvent] = useState(null);
   const [isDrawerMounted, setIsDrawerMounted] = useState(false);
   const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!isProductionDashboardUser) return undefined;
+    const timer = window.setInterval(
+      () => setProductionClockNow(Date.now()),
+      30_000,
+    );
+    return () => window.clearInterval(timer);
+  }, [isProductionDashboardUser]);
 
   const previousLeadPendingIdsRef = useRef(new Set());
   const drawerCloseTimeoutRef = useRef(null);
@@ -1186,6 +1288,143 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
               </article>
             ))}
           </div>
+        </section>
+      )}
+
+      {isProductionDashboardUser && (
+        <section className="dashboard-production-queue" aria-live="polite">
+          <div className="dashboard-production-queue-header">
+            <div>
+              <span className="dashboard-production-kicker">
+                <ClipboardListIcon width="15" height="15" /> Production Due
+              </span>
+              <h2>My Production Queue</h2>
+              <p>
+                Your Pending Production jobs, ordered by risk and production
+                deadline.
+              </p>
+            </div>
+            <div className="dashboard-production-summary" aria-label="Queue summary">
+              <span className="total">
+                <strong>{Number(productionQueueSummary.total) || 0}</strong> Total
+              </span>
+              {(Number(productionQueueSummary.overdue) || 0) > 0 && (
+                <span className="overdue">
+                  <strong>{productionQueueSummary.overdue}</strong> Overdue
+                </span>
+              )}
+              {(Number(productionQueueSummary.at_risk) || 0) > 0 && (
+                <span className="at-risk">
+                  <strong>{productionQueueSummary.at_risk}</strong> At Risk
+                </span>
+              )}
+            </div>
+          </div>
+
+          {productionQueueLoading ? (
+            <div className="dashboard-production-state">Loading your queue…</div>
+          ) : productionQueueError ? (
+            <div className="dashboard-production-state error">
+              Production queue could not be loaded. It will retry automatically.
+            </div>
+          ) : productionQueueProjects.length === 0 ? (
+            <div className="dashboard-production-state empty">
+              <CheckCircleIcon width="20" height="20" />
+              <div>
+                <strong>No Pending Production jobs assigned to you.</strong>
+                <p>A job will appear here after you acknowledge its Production engagement.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="dashboard-production-list">
+              {productionQueueProjects.map((project) => {
+                const tracking = project?.productionTracking || {};
+                const risk =
+                  PRODUCTION_RISK_META[tracking.riskLevel] ||
+                  PRODUCTION_RISK_META.not_started;
+                const workstreamLabels = (tracking.workstreams || [])
+                  .map((workstream) => getDepartmentLabel(workstream.department))
+                  .filter(Boolean)
+                  .slice(0, 3);
+                return (
+                  <article
+                    key={project._id}
+                    className={`dashboard-production-job risk-${risk.tone}`}
+                  >
+                    <div className="dashboard-production-job-main">
+                      <div className="dashboard-production-job-heading">
+                        <span className="dashboard-production-order">
+                          {project.orderId || "Order pending"}
+                        </span>
+                        <span className={`dashboard-production-risk risk-${risk.tone}`}>
+                          {risk.label}
+                        </span>
+                      </div>
+                      <h3>
+                        {renderProjectName(
+                          project.details,
+                          null,
+                          "Untitled Project",
+                        )}
+                      </h3>
+                      {project.details?.client && (
+                        <p className="dashboard-production-client">
+                          {project.details.client}
+                        </p>
+                      )}
+                      <div className="dashboard-production-job-chips">
+                        <span>{Number(tracking.totalQuantity) || 0} items</span>
+                        <span>
+                          {formatProductionMinutes(
+                            tracking.estimatedProductionMinutes,
+                          )} estimate
+                        </span>
+                        {workstreamLabels.map((label) => (
+                          <span key={label}>{label}</span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="dashboard-production-timing">
+                      <div>
+                        <span>Production deadline</span>
+                        <strong>
+                          {formatProductionDateTime(tracking.productionDueAt)}
+                        </strong>
+                        <em>
+                          {formatProductionCountdown(
+                            tracking.productionDueAt,
+                            productionClockNow,
+                          )}
+                        </em>
+                      </div>
+                      <div>
+                        <span>Predicted completion</span>
+                        <strong>
+                          {formatProductionDateTime(
+                            tracking.predictedCompletionAt,
+                          )}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="dashboard-production-job-action">
+                      {Array.isArray(tracking.riskReasons) &&
+                        tracking.riskReasons.length > 0 && (
+                          <p>{tracking.riskReasons[0]}</p>
+                        )}
+                      <button
+                        type="button"
+                        onClick={() => handleDetailsClick(project)}
+                      >
+                        Open Project <ChevronRightIcon width="14" height="14" />
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
