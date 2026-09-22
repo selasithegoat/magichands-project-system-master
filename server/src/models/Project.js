@@ -577,6 +577,12 @@ const ProductionNotificationStateSchema = new mongoose.Schema(
     timeToBeginSentAt: { type: Date, default: null },
     atRiskLastSentAt: { type: Date, default: null },
     overdueLastSentAt: { type: Date, default: null },
+    leadPromptLastSentAt: { type: Date, default: null },
+    leadPromptedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     lastAlertStage: {
       type: String,
       enum: ["", "attention", "time_to_begin", "at_risk", "overdue"],

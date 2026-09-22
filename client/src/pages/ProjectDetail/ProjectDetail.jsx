@@ -73,6 +73,7 @@ import {
 } from "../../utils/referenceAttachments";
 import ProductionRiskSuggestionModal from "../../components/features/ProductionRiskSuggestionModal";
 import ProjectReminderPanel from "../../components/features/ProjectReminderPanel";
+import ProjectLeadProductionFollowUp from "../../components/features/ProjectLeadProductionFollowUp";
 import PostProjectReviewCard from "../../components/features/PostProjectReviewCard";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import ReferenceProjectsCard from "../../components/features/ReferenceProjectsCard";
@@ -1561,6 +1562,11 @@ const ProjectDetail = ({ user }) => {
                 required={isMeetingRequired}
                 loading={meetingLoading}
                 error={meetingError}
+              />
+              <ProjectLeadProductionFollowUp
+                project={project}
+                user={user}
+                onUpdate={fetchProject}
               />
               <ProjectReminderPanel project={project} user={user} />
               <PostProjectReviewCard review={project.postProjectReview} />

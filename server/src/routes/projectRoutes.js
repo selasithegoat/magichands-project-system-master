@@ -17,6 +17,7 @@ const {
   getProductionOverview,
   getMyProductionQueue,
   startProjectProduction,
+  remindProductionOwner,
   getProjectById,
   addItemToProject,
   deleteItemFromProject,
@@ -256,6 +257,12 @@ router.patch(
   protect,
   enforceProjectNotOnHold,
   startProjectProduction,
+);
+router.post(
+  "/:id/production/remind-owner",
+  protect,
+  enforceProjectNotOnHold,
+  remindProductionOwner,
 );
 router.get("/dashboard-summary", protect, getDashboardSummary);
 router.get("/dashboard-counts", protect, getDashboardCounts);

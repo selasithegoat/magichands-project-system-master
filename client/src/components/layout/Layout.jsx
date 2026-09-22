@@ -40,6 +40,9 @@ const HIDDEN_NOTIFICATION_POLL_INTERVAL_MS = 60000;
 const CHAT_OPEN_EVENT_NAME = "mh:open-chat";
 const CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX = "chat_mention";
 const PRODUCTION_NOTIFICATION_SOURCE_PREFIX = "production_follow_up";
+const PRODUCTION_LEAD_NOTIFICATION_SOURCE_PREFIX =
+  "production_lead_follow_up";
+const PRODUCTION_LEAD_MANUAL_SOURCE = "production_lead_manual_prompt";
 let notificationBootstrapUserId = "";
 
 const toEntityId = (value) => {
@@ -74,13 +77,21 @@ const isChatMentionNotification = (notification) =>
 
 const getProductionNotificationToastType = (notification) => {
   const source = String(notification?.source || "").trim().toLowerCase();
-  if (!source.startsWith(PRODUCTION_NOTIFICATION_SOURCE_PREFIX)) return "";
+  const isProductionNotification =
+    source.startsWith(PRODUCTION_NOTIFICATION_SOURCE_PREFIX) ||
+    source.startsWith(PRODUCTION_LEAD_NOTIFICATION_SOURCE_PREFIX) ||
+    source === PRODUCTION_LEAD_MANUAL_SOURCE;
+  if (!isProductionNotification) return "";
   if (source.endsWith(":overdue") || source.endsWith(":at_risk")) {
     return "error";
   }
   if (
     source.endsWith(":attention") ||
-    source.endsWith(":time_to_begin")
+    source.endsWith(":time_to_begin") ||
+    source.endsWith(":start_due") ||
+    source.endsWith(":start_follow_up") ||
+    source.endsWith(":completion_due") ||
+    source === PRODUCTION_LEAD_MANUAL_SOURCE
   ) {
     return "warning";
   }

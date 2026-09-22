@@ -3,11 +3,16 @@ const test = require("node:test");
 
 const {
   AT_RISK_CADENCE_MS,
+  LEAD_OVERDUE_CADENCE_MS,
+  LEAD_REGULAR_CADENCE_MS,
   OVERDUE_CADENCE_MS,
   buildProductionAlert,
+  buildProductionLeadNotificationKey,
+  buildProductionLeadReminder,
   buildProductionNotificationKey,
   getLatestProductionStartAt,
   resolveProductionAlertStage,
+  resolveProductionLeadReminderStage,
   shouldCloseProductionNotifications,
   shouldSendProductionAlert,
 } = require("./productionNotificationService");
@@ -218,4 +223,151 @@ test("pre-production ownership stays visible but completed work resolves alerts"
     }),
     true,
   );
+});
+
+test("lead reminders follow queued production from awareness to start follow-up", () => {
+  const project = buildProject({
+    productionTracking: {
+      productionDueAt: new Date("2026-09-22T13:00:00.000Z"),
+      estimatedProductionMinutes: 120,
+      queuedAt: new Date("2026-09-22T09:00:00.000Z"),
+      riskLevel: "on_track",
+    },
+  });
+
+  assert.equal(
+    resolveProductionLeadReminderStage(
+      project,
+      new Date("2026-09-22T10:00:00.000Z"),
+    ),
+    "awareness",
+  );
+  assert.equal(
+    resolveProductionLeadReminderStage(
+      project,
+      new Date("2026-09-22T11:00:00.000Z"),
+    ),
+    "start_due",
+  );
+  assert.equal(
+    resolveProductionLeadReminderStage(
+      project,
+      new Date("2026-09-22T11:30:00.000Z"),
+    ),
+    "start_follow_up",
+  );
+});
+
+test("lead reminders use production progress and completion checkpoints", () => {
+  const project = buildProject({
+    status: "Production In Progress",
+    productionTracking: {
+      productionDueAt: new Date("2026-09-22T13:00:00.000Z"),
+      estimatedProductionMinutes: 120,
+      workStartedAt: new Date("2026-09-22T08:00:00.000Z"),
+      riskLevel: "on_track",
+    },
+  });
+
+  assert.equal(
+    resolveProductionLeadReminderStage(
+      project,
+      new Date("2026-09-22T08:30:00.000Z"),
+    ),
+    "awareness",
+  );
+  assert.equal(
+    resolveProductionLeadReminderStage(
+      project,
+      new Date("2026-09-22T09:00:00.000Z"),
+    ),
+    "progress_checkpoint",
+  );
+  assert.equal(
+    resolveProductionLeadReminderStage(
+      project,
+      new Date("2026-09-22T10:00:00.000Z"),
+    ),
+    "completion_due",
+  );
+});
+
+test("lead production risk stages override ordinary progress checkpoints", () => {
+  const atRiskProject = buildProject({
+    productionTracking: {
+      ...buildProject().productionTracking,
+      riskLevel: "at_risk",
+    },
+  });
+  const overdueProject = buildProject({
+    productionTracking: {
+      ...buildProject().productionTracking,
+      riskLevel: "overdue",
+    },
+  });
+
+  assert.equal(
+    resolveProductionLeadReminderStage(atRiskProject, NOW),
+    "at_risk",
+  );
+  assert.equal(
+    resolveProductionLeadReminderStage(overdueProject, NOW),
+    "overdue",
+  );
+  assert.equal(LEAD_REGULAR_CADENCE_MS, 60 * 60 * 1000);
+  assert.equal(LEAD_OVERDUE_CADENCE_MS, 30 * 60 * 1000);
+});
+
+test("lead reminder keys repeat only when their cadence window advances", () => {
+  const project = buildProject({
+    projectLeadId: "66f000000000000000000003",
+    productionTracking: {
+      productionDueAt: new Date("2026-09-22T13:00:00.000Z"),
+      estimatedProductionMinutes: 120,
+      queuedAt: new Date("2026-09-22T09:00:00.000Z"),
+      riskLevel: "on_track",
+    },
+  });
+  const leadId = project.projectLeadId;
+  const first = buildProductionLeadNotificationKey(
+    project,
+    leadId,
+    "start_follow_up",
+    new Date("2026-09-22T11:31:00.000Z"),
+  );
+  const sameWindow = buildProductionLeadNotificationKey(
+    project,
+    leadId,
+    "start_follow_up",
+    new Date("2026-09-22T12:20:00.000Z"),
+  );
+  const nextWindow = buildProductionLeadNotificationKey(
+    project,
+    leadId,
+    "start_follow_up",
+    new Date("2026-09-22T12:31:00.000Z"),
+  );
+
+  assert.equal(first, sameWindow);
+  assert.notEqual(first, nextWindow);
+});
+
+test("lead reminder content tells the lead what action to prompt", () => {
+  const reminder = buildProductionLeadReminder(
+    buildProject({
+      productionOwnerId: {
+        _id: "66f000000000000000000002",
+        firstName: "Ama",
+        lastName: "Mensah",
+      },
+    }),
+    "start_follow_up",
+    NOW,
+  );
+
+  assert.equal(reminder.type, "REMINDER");
+  assert.equal(reminder.source, "production_lead_follow_up:start_follow_up");
+  assert.match(reminder.message, /MH-2401/);
+  assert.match(reminder.message, /Ama Mensah/);
+  assert.match(reminder.message, /start/i);
 });

@@ -319,6 +319,8 @@ const syncProductionTrackingAfterProjectChange = async ({
               ? "in_progress"
               : "queued",
           "productionTracking.elapsedProductionMinutes": 0,
+          "productionTracking.notificationState.leadPromptLastSentAt": null,
+          "productionTracking.notificationState.leadPromptedBy": null,
         },
       },
     );
@@ -342,6 +344,13 @@ const syncProductionTrackingAfterProjectChange = async ({
           ? "in_progress"
           : "queued",
       elapsedProductionMinutes: 0,
+      notificationState: {
+        ...(project.productionTracking?.notificationState?.toObject?.() ||
+          project.productionTracking?.notificationState ||
+          {}),
+        leadPromptLastSentAt: null,
+        leadPromptedBy: null,
+      },
     };
   }
 

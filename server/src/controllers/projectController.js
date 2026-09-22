@@ -60,9 +60,14 @@ const {
 } = require("../services/productionTrackingService");
 const {
   ACTIVE_PRODUCTION_STATUSES,
+  PENDING_PRODUCTION_STATUS,
   PRODUCTION_IN_PROGRESS_STATUS,
   isActiveProductionStatus,
 } = require("../utils/productionStatus");
+const {
+  LEAD_MANUAL_PROMPT_COOLDOWN_MS,
+  PRODUCTION_LEAD_MANUAL_SOURCE,
+} = require("../services/productionNotificationService");
 const {
   buildProductionOversightSummary,
   compareProductionOversightProjects,
@@ -10578,6 +10583,177 @@ const startProjectProduction = async (req, res) => {
   } catch (error) {
     console.error("Error starting Production:", error);
     return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Let a Project Lead prompt the Production owner for a progress update
+// @route   POST /api/projects/:id/production/remind-owner
+// @access  Private (Project Lead or Assistant Lead)
+const remindProductionOwner = async (req, res) => {
+  const actorId = toObjectIdString(req.user?._id || req.user?.id);
+  const now = new Date();
+
+  try {
+    const project = await Project.findById(req.params.id).populate(
+      "productionOwnerId",
+      "firstName lastName name employeeId",
+    );
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    const isProjectLead =
+      actorId &&
+      [project.projectLeadId, project.assistantLeadId]
+        .map(toObjectIdString)
+        .filter(Boolean)
+        .includes(actorId);
+    if (!isProjectLead) {
+      return res.status(403).json({
+        message:
+          "Only the Project Lead or Assistant Lead can remind the Production owner.",
+      });
+    }
+    if (!isActiveProductionStatus(project.status)) {
+      return res.status(409).json({
+        message: "Production reminders are only available while production is active.",
+      });
+    }
+
+    const ownerId = toObjectIdString(project.productionOwnerId);
+    if (!ownerId) {
+      return res.status(409).json({
+        message:
+          "No Production owner is assigned yet. The first Production user to acknowledge this project will become the owner.",
+      });
+    }
+    if (ownerId === actorId) {
+      return res.status(409).json({
+        message: "You are already the Production owner for this project.",
+      });
+    }
+
+    const cooldownCutoff = new Date(
+      now.getTime() - LEAD_MANUAL_PROMPT_COOLDOWN_MS,
+    );
+    const updatedProject = await Project.findOneAndUpdate(
+      {
+        _id: project._id,
+        status: { $in: ACTIVE_PRODUCTION_STATUSES },
+        productionOwnerId:
+          project.productionOwnerId._id || project.productionOwnerId,
+        $or: [
+          {
+            "productionTracking.notificationState.leadPromptLastSentAt": {
+              $exists: false,
+            },
+          },
+          {
+            "productionTracking.notificationState.leadPromptLastSentAt": null,
+          },
+          {
+            "productionTracking.notificationState.leadPromptLastSentAt": {
+              $lte: cooldownCutoff,
+            },
+          },
+        ],
+      },
+      {
+        $set: {
+          "productionTracking.notificationState.leadPromptLastSentAt": now,
+          "productionTracking.notificationState.leadPromptedBy": actorId,
+        },
+      },
+      { new: true },
+    );
+
+    if (!updatedProject) {
+      const lastSentAt =
+        project?.productionTracking?.notificationState?.leadPromptLastSentAt;
+      const nextAllowedAt = lastSentAt
+        ? new Date(
+            new Date(lastSentAt).getTime() + LEAD_MANUAL_PROMPT_COOLDOWN_MS,
+          )
+        : new Date(now.getTime() + LEAD_MANUAL_PROMPT_COOLDOWN_MS);
+      return res.status(429).json({
+        message:
+          "A reminder was sent recently. Please wait before sending another.",
+        nextAllowedAt,
+      });
+    }
+
+    const actorName = getUserDisplayName(req.user);
+    const ownerName = getUserDisplayName(project.productionOwnerId);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    const requestedAction =
+      project.status === PENDING_PRODUCTION_STATUS
+        ? "Please start production or share an update with the Project Lead."
+        : "Please complete production or share an update with the Project Lead.";
+
+    let notification = null;
+    try {
+      notification = await createNotification(
+        ownerId,
+        actorId,
+        project._id,
+        "REMINDER",
+        "Production progress reminder",
+        `${actorName} requested a progress update for ${projectRef} - ${projectName}. ${requestedAction}`,
+        { source: PRODUCTION_LEAD_MANUAL_SOURCE },
+      );
+    } catch (notificationError) {
+      await Project.updateOne(
+        {
+          _id: project._id,
+          "productionTracking.notificationState.leadPromptLastSentAt": now,
+          "productionTracking.notificationState.leadPromptedBy": actorId,
+        },
+        {
+          $set: {
+            "productionTracking.notificationState.leadPromptLastSentAt": null,
+            "productionTracking.notificationState.leadPromptedBy": null,
+          },
+        },
+      );
+      throw notificationError;
+    }
+
+    if (!notification) {
+      await Project.updateOne(
+        {
+          _id: project._id,
+          "productionTracking.notificationState.leadPromptLastSentAt": now,
+          "productionTracking.notificationState.leadPromptedBy": actorId,
+        },
+        {
+          $set: {
+            "productionTracking.notificationState.leadPromptLastSentAt": null,
+            "productionTracking.notificationState.leadPromptedBy": null,
+          },
+        },
+      );
+      return res.status(503).json({
+        message: "The Production owner could not be notified. Please try again.",
+      });
+    }
+
+    await logActivity(
+      project._id,
+      actorId,
+      "production_owner_reminded",
+      `${actorName} reminded ${ownerName} to provide a Production progress update.`,
+      { productionOwnerId: ownerId, productionStatus: project.status },
+    );
+
+    return res.json({
+      message: `Reminder sent to ${ownerName}.`,
+      sentAt: now,
+      nextAllowedAt: new Date(now.getTime() + LEAD_MANUAL_PROMPT_COOLDOWN_MS),
+    });
+  } catch (error) {
+    console.error("Error reminding Production owner:", error);
+    return res.status(500).json({ message: "The reminder could not be sent." });
   }
 };
 
@@ -22068,6 +22244,7 @@ module.exports = {
   getProductionOverview,
   getMyProductionQueue,
   startProjectProduction,
+  remindProductionOwner,
   getProjectById,
   addItemToProject,
   deleteItemFromProject,
