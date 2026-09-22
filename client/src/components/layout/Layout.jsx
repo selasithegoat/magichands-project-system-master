@@ -98,6 +98,42 @@ const getProductionNotificationToastType = (notification) => {
   return "info";
 };
 
+const getNotificationCreatedAtTime = (notification) => {
+  const parsed = new Date(notification?.createdAt || 0).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getMissedProductionAlerts = (notificationList = []) => {
+  const latestByProject = new Map();
+
+  notificationList
+    .filter(
+      (notification) =>
+        !notification?.isRead &&
+        Boolean(getProductionNotificationToastType(notification)),
+    )
+    .forEach((notification) => {
+      const projectId = toEntityId(
+        notification?.project?._id || notification?.project,
+      );
+      const key = projectId || toEntityId(notification?._id);
+      if (!key) return;
+
+      const current = latestByProject.get(key);
+      if (
+        !current ||
+        getNotificationCreatedAtTime(notification) >
+          getNotificationCreatedAtTime(current)
+      ) {
+        latestByProject.set(key, notification);
+      }
+    });
+
+  return Array.from(latestByProject.values()).sort(
+    (a, b) => getNotificationCreatedAtTime(a) - getNotificationCreatedAtTime(b),
+  );
+};
+
 // --- Icons ---
 const MenuIcon = () => (
   <svg
@@ -261,7 +297,16 @@ const Layout = ({
     }
   };
 
-  const addToast = (notification) => {
+  const addToast = (
+    notification,
+    {
+      persistent = false,
+      silent = false,
+      showNative = true,
+      acknowledgeOnDismiss = false,
+      missed = false,
+    } = {},
+  ) => {
     // Prevent duplicate toasts
     if (shownToastsRef.current.has(notification._id)) {
       return;
@@ -273,23 +318,27 @@ const Layout = ({
     if (!allowPush) return;
     const allowSound = user?.notificationSettings?.sound ?? true;
 
-    if (!isChatMentionNotification(notification)) {
+    if (!silent && !isChatMentionNotification(notification)) {
       playNotificationSound(notification.type, allowSound).catch(() => {});
     }
 
     // Show Native Notification
-    showNativeNotification(notification);
+    if (showNative) {
+      showNativeNotification(notification);
+    }
 
-    triggerNotificationVibration();
+    if (!silent) {
+      triggerNotificationVibration();
+    }
 
     const id = Date.now() + Math.random();
     const projectId = toEntityId(
       notification?.project?._id || notification?.project,
     );
     setToasts((prev) => [
-      ...prev,
       {
         id,
+        title: notification.title,
         message: notification.message,
         type:
           getProductionNotificationToastType(notification) ||
@@ -297,7 +346,11 @@ const Layout = ({
         chatKind: isChatMentionNotification(notification) ? "public" : "",
         projectId,
         notification,
+        persistent,
+        acknowledgeOnDismiss,
+        missed,
       },
+      ...prev,
     ]);
   };
 
@@ -395,6 +448,12 @@ const Layout = ({
         ),
       );
       setNotificationCount((prev) => Math.max(0, prev - 1));
+      setToasts((prev) =>
+        prev.filter(
+          (toast) =>
+            toEntityId(toast.notification?._id) !== String(notificationId),
+        ),
+      );
       dismissedReminderNotificationIdsRef.current.delete(notificationId);
     } catch (error) {
       console.error("Error marking reminder notification as read:", error);
@@ -517,7 +576,10 @@ const Layout = ({
 
   const EXCLUDED_NOTIFICATION_SOURCE = "inventory";
 
-  const fetchNotifications = async (isInitial = false) => {
+  const fetchNotifications = async (
+    isInitial = false,
+    { replayMissedProduction = false } = {},
+  ) => {
     try {
       const res = await fetch(
         `/api/notifications?excludeSource=${encodeURIComponent(
@@ -528,11 +590,36 @@ const Layout = ({
         const data = await res.json();
         setNotifications(data);
         const unreadCount = data.filter((n) => !n.isRead).length;
+        const unreadNotificationIds = new Set(
+          data.filter((n) => !n.isRead).map((n) => toEntityId(n._id)),
+        );
         setNotificationCount(unreadCount);
+        setToasts((prev) =>
+          prev.filter(
+            (toast) =>
+              !toast.acknowledgeOnDismiss ||
+              unreadNotificationIds.has(toEntityId(toast.notification?._id)),
+          ),
+        );
         syncReminderQueueFromNotifications(data);
 
-        // On refresh/first load, do not popup existing unread notifications.
+        // On login, replay the latest unread Production alert per project.
+        // Other existing unread notifications remain available in the notification list.
         if (isInitial) {
+          if (replayMissedProduction) {
+            const missedProductionAlerts = getMissedProductionAlerts(data);
+            missedProductionAlerts.forEach((notification, index) => {
+              const isNewestAlert =
+                index === missedProductionAlerts.length - 1;
+              addToast(notification, {
+                persistent: true,
+                silent: !isNewestAlert,
+                showNative: isNewestAlert,
+                acknowledgeOnDismiss: true,
+                missed: true,
+              });
+            });
+          }
           data.forEach((n) => {
             if (!n.isRead) {
               shownToastsRef.current.add(n._id);
@@ -564,7 +651,9 @@ const Layout = ({
     const currentUserId = user?._id || "";
     if (!currentUserId) return;
 
-    if (notificationBootstrapUserId !== currentUserId) {
+    const shouldReplayMissedProduction =
+      notificationBootstrapUserId !== currentUserId;
+    if (shouldReplayMissedProduction) {
       notificationBootstrapUserId = currentUserId;
       shownToastsRef.current = new Set();
       lastIdsRef.current = new Set();
@@ -577,7 +666,9 @@ const Layout = ({
     }
 
     // Always fetch once on mount so the unread dot is in sync across route changes.
-    fetchNotifications(true);
+    fetchNotifications(true, {
+      replayMissedProduction: shouldReplayMissedProduction,
+    });
   }, [user]);
 
   useAdaptivePolling(() => fetchNotifications(false), {
@@ -678,6 +769,7 @@ const Layout = ({
       if (res.ok) {
         setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
         setNotificationCount(0);
+        setToasts([]);
         setReminderQueue([]);
         setActiveReminderAlert(null);
         setReminderActionError("");
@@ -701,6 +793,7 @@ const Layout = ({
         setNotifications([]);
         lastIdsRef.current = new Set();
         setNotificationCount(0);
+        setToasts([]);
         setReminderQueue([]);
         setActiveReminderAlert(null);
         setReminderActionError("");
@@ -726,6 +819,11 @@ const Layout = ({
           prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
         );
         setNotificationCount((prev) => Math.max(0, prev - 1));
+        setToasts((prev) =>
+          prev.filter(
+            (toast) => toEntityId(toast.notification?._id) !== String(id),
+          ),
+        );
         setReminderQueue((prev) =>
           prev.filter((item) => item.notificationId !== String(id)),
         );
@@ -1075,11 +1173,22 @@ const Layout = ({
         {toasts.map((toast) => (
           <Toast
             key={toast.id}
+            title={toast.title}
             message={toast.message}
             type={toast.type}
-            onClose={() => removeToast(toast.id)}
+            persistent={toast.persistent}
+            missed={toast.missed}
+            onClose={() => {
+              if (toast.acknowledgeOnDismiss && toast.notification?._id) {
+                void markNotificationReadSilently(toast.notification._id);
+              }
+              removeToast(toast.id);
+            }}
             duration={10000}
             onClick={() => {
+              if (toast.acknowledgeOnDismiss && toast.notification?._id) {
+                void markNotificationReadSilently(toast.notification._id);
+              }
               if (toast.chatKind) {
                 dispatchOpenChat({ kind: toast.chatKind });
                 removeToast(toast.id);

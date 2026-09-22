@@ -6,11 +6,14 @@ import AlertTriangleIcon from "../icons/AlertTriangleIcon";
 import "./Toast.css";
 
 const Toast = ({
+  title,
   message,
   type = "info",
   onClose,
   onClick,
   duration = 10000,
+  persistent = false,
+  missed = false,
 }) => {
   const [isExiting, setIsExiting] = useState(false);
   const hasClosedRef = useRef(false);
@@ -44,7 +47,9 @@ const Toast = ({
 
   return (
     <div
-      className={`ui-toast ${type} ${isExiting ? "exiting" : ""}`}
+      className={`ui-toast ${type} ${persistent ? "persistent" : ""} ${
+        isExiting ? "exiting" : ""
+      }`}
       onClick={onClick}
       onAnimationEnd={handleAnimationEnd}
       style={{
@@ -53,7 +58,11 @@ const Toast = ({
       }}
     >
       <div className="ui-toast-icon">{getIcon()}</div>
-      <div className="ui-toast-message">{message}</div>
+      <div className="ui-toast-content">
+        {missed ? <span className="ui-toast-kicker">While you were away</span> : null}
+        {title ? <strong className="ui-toast-title">{title}</strong> : null}
+        <div className="ui-toast-message">{message}</div>
+      </div>
       <button
         className="ui-toast-close"
         onClick={(e) => {
