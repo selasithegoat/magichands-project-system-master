@@ -84,6 +84,13 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
             Deadlines
           </NavLink>
           <NavLink
+            to="/production-oversight"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <ReportsIcon className="nav-icon" />
+            Production Oversight
+          </NavLink>
+          <NavLink
             to="/orders-management"
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >

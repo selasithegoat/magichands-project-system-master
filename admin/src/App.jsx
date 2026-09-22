@@ -10,6 +10,9 @@ import {
 const Login = lazy(() => import("./pages/Login/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
 const Deadlines = lazy(() => import("./pages/Deadlines/Deadlines"));
+const ProductionOversight = lazy(
+  () => import("./pages/ProductionOversight/ProductionOversight"),
+);
 const Projects = lazy(() => import("./pages/Projects/Projects"));
 const CancelledOrders = lazy(
   () => import("./pages/CancelledOrders/CancelledOrders"),
@@ -256,6 +259,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Deadlines />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production-oversight"
+            element={
+              <ProtectedRoute>
+                <ProductionOversight />
               </ProtectedRoute>
             }
           />

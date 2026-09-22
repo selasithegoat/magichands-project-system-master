@@ -64,6 +64,10 @@ const {
   isActiveProductionStatus,
 } = require("../utils/productionStatus");
 const {
+  buildProductionOversightSummary,
+  compareProductionOversightProjects,
+} = require("../utils/productionOversight");
+const {
   PRODUCTION_SUB_DEPARTMENT_TOKENS,
   getExplicitProductionSubDepartmentTokens,
   hasProductionDepartmentOverlap,
@@ -10341,6 +10345,65 @@ const PRODUCTION_QUEUE_RISK_ORDER = {
   attention: 3,
   on_track: 4,
   not_started: 5,
+};
+
+// @desc    Get active Production work across all owners
+// @route   GET /api/projects/production/overview
+// @access  Private (Admin)
+const getProductionOverview = async (req, res) => {
+  try {
+    if (req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Admin access is required." });
+    }
+
+    const projects = await Project.find({
+      status: { $in: ACTIVE_PRODUCTION_STATUSES },
+      "cancellation.isCancelled": { $ne: true },
+      isLatestVersion: { $ne: false },
+      versionState: { $nin: ["superseded", "archived"] },
+    })
+      .select(
+        [
+          "_id",
+          "orderId",
+          "projectType",
+          "priority",
+          "status",
+          "departments",
+          "details.projectName",
+          "details.projectNameRaw",
+          "details.projectIndicator",
+          "details.client",
+          "details.deliveryDate",
+          "details.deliveryTime",
+          "productionOwnerId",
+          "projectLeadId",
+          "productionTracking",
+          "createdAt",
+          "updatedAt",
+        ].join(" "),
+      )
+      .populate(
+        "productionOwnerId",
+        "firstName lastName name employeeId email department avatarUrl",
+      )
+      .populate(
+        "projectLeadId",
+        "firstName lastName name employeeId email avatarUrl",
+      )
+      .lean();
+
+    projects.sort(compareProductionOversightProjects);
+
+    return res.json({
+      asOf: new Date().toISOString(),
+      summary: buildProductionOversightSummary(projects),
+      projects,
+    });
+  } catch (error) {
+    console.error("Error fetching Production overview:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
 };
 
 // @desc    Get Pending Production work owned by the signed-in Production user
@@ -22002,6 +22065,7 @@ module.exports = {
   getOrderGroups,
   getOrderGroupByNumber,
   getUserStats,
+  getProductionOverview,
   getMyProductionQueue,
   startProjectProduction,
   getProjectById,

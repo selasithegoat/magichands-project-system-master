@@ -14,6 +14,7 @@ const {
   getOrderGroups,
   getOrderGroupByNumber,
   getUserStats,
+  getProductionOverview,
   getMyProductionQueue,
   startProjectProduction,
   getProjectById,
@@ -248,6 +249,7 @@ router.get("/clients", protect, getClients); // [NEW] - Get all clients with the
 router.get("/orders", protect, getOrderGroups);
 router.get("/orders/:orderNumber", protect, getOrderGroupByNumber);
 router.get("/stats", protect, getUserStats);
+router.get("/production/overview", protect, getProductionOverview);
 router.get("/production/my-queue", protect, getMyProductionQueue);
 router.patch(
   "/:id/production/start",
