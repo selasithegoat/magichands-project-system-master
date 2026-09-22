@@ -39,6 +39,7 @@ const NOTIFICATION_POLL_INTERVAL_MS = 15000;
 const HIDDEN_NOTIFICATION_POLL_INTERVAL_MS = 60000;
 const CHAT_OPEN_EVENT_NAME = "mh:open-chat";
 const CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX = "chat_mention";
+const PRODUCTION_NOTIFICATION_SOURCE_PREFIX = "production_follow_up";
 let notificationBootstrapUserId = "";
 
 const toEntityId = (value) => {
@@ -70,6 +71,21 @@ const isChatMentionNotification = (notification) =>
     .trim()
     .toLowerCase()
     .startsWith(CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX);
+
+const getProductionNotificationToastType = (notification) => {
+  const source = String(notification?.source || "").trim().toLowerCase();
+  if (!source.startsWith(PRODUCTION_NOTIFICATION_SOURCE_PREFIX)) return "";
+  if (source.endsWith(":overdue") || source.endsWith(":at_risk")) {
+    return "error";
+  }
+  if (
+    source.endsWith(":attention") ||
+    source.endsWith(":time_to_begin")
+  ) {
+    return "warning";
+  }
+  return "info";
+};
 
 // --- Icons ---
 const MenuIcon = () => (
@@ -264,7 +280,9 @@ const Layout = ({
       {
         id,
         message: notification.message,
-        type: notification.type === "ASSIGNMENT" ? "warning" : "info",
+        type:
+          getProductionNotificationToastType(notification) ||
+          (notification.type === "ASSIGNMENT" ? "warning" : "info"),
         chatKind: isChatMentionNotification(notification) ? "public" : "",
         projectId,
         notification,

@@ -7,6 +7,9 @@ const {
   PRODUCTION_SUB_DEPARTMENT_TOKENS,
   normalizeProductionDepartmentToken,
 } = require("../utils/productionDepartmentAccess");
+const {
+  syncProductionNotificationsAfterProjectChange,
+} = require("./productionNotificationService");
 
 const PENDING_PRODUCTION_STATUS = "Pending Production";
 const POST_PRODUCTION_STATUSES = new Set([
@@ -282,6 +285,16 @@ const syncProductionTrackingAfterProjectChange = async ({
 
   if (project.status === PENDING_PRODUCTION_STATUS && !currentOwnerId) {
     await recalculateProductionProject(project, nowValue);
+  }
+
+  const refreshedProject = await Project.findById(project._id);
+  if (refreshedProject) {
+    await syncProductionNotificationsAfterProjectChange({
+      project: refreshedProject,
+      previousStatus,
+      previousOwnerId,
+      now: nowValue,
+    });
   }
 
   return Project.findById(project._id);

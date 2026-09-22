@@ -51,6 +51,11 @@ const NotificationSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    dedupeKey: {
+      type: String,
+      trim: true,
+      default: undefined,
+    },
   },
   { timestamps: true },
 );
@@ -58,5 +63,12 @@ const NotificationSchema = new mongoose.Schema(
 // Indexes
 NotificationSchema.index({ recipient: 1, createdAt: -1 }); // Optimize fetching user notifications
 NotificationSchema.index({ recipient: 1, isRead: 1 }); // Optimize unread count checks
+NotificationSchema.index(
+  { recipient: 1, dedupeKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { dedupeKey: { $type: "string" } },
+  },
+);
 
 module.exports = mongoose.model("Notification", NotificationSchema);

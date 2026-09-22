@@ -35,6 +35,7 @@ const createNotification = async (
     const reminderKey = deliveryOptions?.reminderId?.toString?.() || null;
     const allowSelf = Boolean(deliveryOptions?.allowSelf);
     const sourceKey = String(deliveryOptions?.source || "").trim();
+    const dedupeKey = String(deliveryOptions?.dedupeKey || "").trim();
 
     if (!recipientKey || !senderKey) return null;
 
@@ -65,28 +66,41 @@ const createNotification = async (
     if (inAppEnabled) {
       // Guard against duplicate notifications from overlapping triggers
       const dedupeStart = new Date(Date.now() - NOTIFICATION_DEDUPE_WINDOW_MS);
-      const existing = await Notification.findOne({
-        recipient: recipientKey,
-        project: projectKey,
-        title,
-        message,
-        source: sourceKey,
-        createdAt: { $gte: dedupeStart },
-      }).lean();
+      const existing = await Notification.findOne(
+        dedupeKey
+          ? { recipient: recipientKey, dedupeKey }
+          : {
+              recipient: recipientKey,
+              project: projectKey,
+              title,
+              message,
+              source: sourceKey,
+              createdAt: { $gte: dedupeStart },
+            },
+      ).lean();
       if (existing) {
         notification = existing;
       } else {
-        notification = await Notification.create({
-          recipient: recipientKey,
-          sender: senderKey,
-          project: projectKey,
-          reminder: normalizedReminderKey,
-          type,
-          title,
-          message,
-          source: sourceKey,
-        });
-        createdNewNotification = true;
+        try {
+          notification = await Notification.create({
+            recipient: recipientKey,
+            sender: senderKey,
+            project: projectKey,
+            reminder: normalizedReminderKey,
+            type,
+            title,
+            message,
+            source: sourceKey,
+            ...(dedupeKey ? { dedupeKey } : {}),
+          });
+          createdNewNotification = true;
+        } catch (error) {
+          if (error?.code !== 11000 || !dedupeKey) throw error;
+          notification = await Notification.findOne({
+            recipient: recipientKey,
+            dedupeKey,
+          }).lean();
+        }
       }
     }
 

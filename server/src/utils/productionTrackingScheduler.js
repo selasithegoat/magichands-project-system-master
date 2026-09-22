@@ -1,6 +1,9 @@
 const {
   recalculateAllPendingProduction,
 } = require("../services/productionTrackingService");
+const {
+  runProductionNotificationSweep,
+} = require("../services/productionNotificationService");
 
 const configuredInterval = Number.parseInt(
   process.env.PRODUCTION_TRACKING_SCHEDULER_INTERVAL_MS,
@@ -17,7 +20,9 @@ const runProductionTrackingSweep = async () => {
   if (schedulerRunning) return null;
   schedulerRunning = true;
   try {
-    return await recalculateAllPendingProduction();
+    const tracking = await recalculateAllPendingProduction();
+    const notifications = await runProductionNotificationSweep();
+    return { tracking, notifications };
   } catch (error) {
     console.error("Production tracking scheduler sweep failed:", error);
     return null;

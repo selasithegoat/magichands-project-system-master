@@ -558,6 +558,35 @@ const ProductionWorkstreamEstimateSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ProductionNotificationStateSchema = new mongoose.Schema(
+  {
+    assignedOwnerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    planDueAt: { type: Date, default: null },
+    planEstimatedProductionMinutes: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+    assignmentSentAt: { type: Date, default: null },
+    attentionSentAt: { type: Date, default: null },
+    timeToBeginSentAt: { type: Date, default: null },
+    atRiskLastSentAt: { type: Date, default: null },
+    overdueLastSentAt: { type: Date, default: null },
+    lastAlertStage: {
+      type: String,
+      enum: ["", "attention", "time_to_begin", "at_risk", "overdue"],
+      default: "",
+    },
+    lastEvaluatedAt: { type: Date, default: null },
+    closedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const ProductionTrackingSchema = new mongoose.Schema(
   {
     startedAt: { type: Date, default: null },
@@ -599,6 +628,10 @@ const ProductionTrackingSchema = new mongoose.Schema(
     riskReasons: { type: [String], default: [] },
     lastCalculatedAt: { type: Date, default: null },
     calculationVersion: { type: Number, min: 1, default: 1 },
+    notificationState: {
+      type: ProductionNotificationStateSchema,
+      default: () => ({}),
+    },
   },
   { _id: false },
 );
