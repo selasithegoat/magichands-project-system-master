@@ -38,6 +38,7 @@ const QUOTE_MULTI_REQUIREMENT_PENDING_STATUSES = new Set([
   "Pending Sample Retrieval",
   "Pending Sample / Work done Retrieval",
   "Pending Production",
+  "Production In Progress",
   "Pending Sample Production",
   "Production Completed",
   "Pending Bid Submission / Documents",
@@ -118,6 +119,7 @@ const QUOTE_STATUS_DISPLAY_OVERRIDES = {
     "Scope Approval Completed": "Pending Mockup",
     "Mockup Completed": "Pending Sample Production",
     "Pending Production": "Pending Sample Production",
+    "Production In Progress": "Sample Production In Progress",
     "Production Completed": "Pending Quote Submission",
     "Quote Submission Completed": "Pending Client Decision",
   },
@@ -317,7 +319,11 @@ export const getQuoteWorkflowJourneySteps = (modeOrChecklist) => {
       {
         key: "production",
         label: "Sample Production",
-        statuses: ["Pending Production", "Pending Sample Production"],
+        statuses: [
+          "Pending Production",
+          "Production In Progress",
+          "Pending Sample Production",
+        ],
       },
       {
         key: "submission",
@@ -414,6 +420,7 @@ export const QUOTE_PROGRESS_MAP_BY_MODE = {
     "Pending Mockup": 40,
     "Mockup Completed": 45,
     "Pending Production": 55,
+    "Production In Progress": 62,
     "Pending Sample Production": 55,
     "Pending Quote Submission": 70,
     "Quote Submission Completed": 80,
@@ -499,6 +506,7 @@ export const isQuoteMockupCompletionConfirmed = (
   if (requirementMode === "sampleProduction") {
     return [
       "Pending Production",
+      "Production In Progress",
       "Pending Sample Production",
       "Production Completed",
       "Pending Quote Submission",

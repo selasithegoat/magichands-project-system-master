@@ -100,6 +100,7 @@ test("missing delivery deadline and overdue work receive explicit risk states", 
 test("in-progress predictions use the actual work start and live elapsed time", () => {
   const result = calculateProductionTracking(
     {
+      status: "Production In Progress",
       productionOwnerId: "owner-1",
       productionTracking: {
         executionState: "in_progress",

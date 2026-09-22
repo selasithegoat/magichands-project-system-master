@@ -92,6 +92,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
       case "Master Approval Completed":
         return { class: "in-progress", color: "#ec4899", textClass: "purple" };
       case "Pending Production":
+      case "Production In Progress":
       case "Pending Sample Production":
       case "Production Completed":
         return { class: "in-progress", color: "#3b82f6", textClass: "blue" };
@@ -205,6 +206,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Pending Master Approval": 48,
     "Master Approval Completed": 52,
     "Pending Production": 58,
+    "Production In Progress": 62,
     "Production Completed": 66,
     "Pending Quality Control": 72,
     "Quality Control Completed": 76,

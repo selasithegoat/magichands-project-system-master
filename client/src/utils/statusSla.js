@@ -17,6 +17,7 @@ const STATUS_SLA_RULES = {
   "Pending Master Approval": { yellowHours: 8, redHours: 24 },
   "Master Approval Completed": { yellowHours: 12, redHours: 24 },
   "Pending Production": { yellowHours: 48, redHours: 96 },
+  "Production In Progress": { yellowHours: 48, redHours: 96 },
   "Pending Sample Production": { yellowHours: 24, redHours: 48 },
   "Production Completed": { yellowHours: 12, redHours: 24 },
   "Pending Quality Control": { yellowHours: 12, redHours: 24 },

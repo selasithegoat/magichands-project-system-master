@@ -72,6 +72,7 @@ const PIPELINE_GROUPS = [
     label: "Production",
     statuses: new Set([
       "Pending Production",
+      "Production In Progress",
       "Production Completed",
       "Pending Quality Control",
       "Quality Control Completed",

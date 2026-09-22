@@ -244,6 +244,7 @@ const STANDARD_STATUS_FLOW = [
   "Pending Master Approval",
   "Master Approval Completed",
   "Pending Production",
+  "Production In Progress",
   "Production Completed",
   "Pending Quality Control",
   "Quality Control Completed",
@@ -310,6 +311,7 @@ const QUOTE_STATUS_FLOW_BY_MODE = {
     "Pending Mockup",
     "Mockup Completed",
     "Pending Production",
+    "Production In Progress",
     "Production Completed",
     "Pending Quote Submission",
     "Quote Submission Completed",
@@ -357,6 +359,9 @@ const getQuoteStatusOptionLabel = (status, requirementMode = "") => {
 
   if (requirementMode === "sampleProduction") {
     if (normalized === "Pending Production") return "Pending Sample Production";
+    if (normalized === "Production In Progress") {
+      return "Sample Production In Progress";
+    }
     if (normalized === "Production Completed") {
       return "Sample Production Completed";
     }
@@ -5435,7 +5440,7 @@ const ProjectDetails = ({ user }) => {
             <div className="info-item" style={{ marginBottom: "1.5rem" }}>
               <label>Production Execution</label>
               <p>
-                {project.productionTracking?.executionState === "in_progress"
+                {project.status === "Production In Progress"
                   ? "In Progress"
                   : project.productionTracking?.executionState === "completed"
                     ? "Completed"

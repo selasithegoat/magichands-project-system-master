@@ -66,6 +66,7 @@ const STANDARD_STATUS_OPTIONS = [
   "Pending Master Approval",
   "Master Approval Completed",
   "Pending Production",
+  "Production In Progress",
   "Production Completed",
   "Pending Quality Control",
   "Quality Control Completed",

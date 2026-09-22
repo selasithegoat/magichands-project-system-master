@@ -119,7 +119,11 @@ const STATUS_STEPS = [
   },
   {
     label: "Production",
-    statuses: ["Pending Production", "Production Completed"],
+    statuses: [
+      "Pending Production",
+      "Production In Progress",
+      "Production Completed",
+    ],
   },
   {
     label: "Quality Control",
@@ -222,7 +226,11 @@ const QUOTE_STEPS_BY_MODE = {
     },
     {
       label: "Sample Production",
-      statuses: ["Pending Production", "Pending Sample Production"],
+      statuses: [
+        "Pending Production",
+        "Production In Progress",
+        "Pending Sample Production",
+      ],
     },
     {
       label: "Quote Submission",
@@ -376,6 +384,7 @@ const STANDARD_WORKFLOW_STATUSES = new Set([
   "Pending Master Approval",
   "Master Approval Completed",
   "Pending Production",
+  "Production In Progress",
   "Production Completed",
   "Pending Quality Control",
   "Quality Control Completed",
@@ -410,6 +419,7 @@ const QUOTE_WORKFLOW_STATUSES = new Set([
   "Mockup Completed",
   "Pending Sample Production",
   "Pending Production",
+  "Production In Progress",
   "Pending Cost",
   "Pending Cost Verification",
   "Cost Completed",
@@ -496,6 +506,7 @@ const getStatusColor = (status) => {
     case "Master Approval":
       return "#ec4899"; // Pink
     case "Pending Production":
+    case "Production In Progress":
     case "Pending Sample Production":
     case "Production Completed":
     case "Production":
@@ -4906,6 +4917,8 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
         return 52;
       case "Pending Production":
         return 58;
+      case "Production In Progress":
+        return 62;
       case "Production Completed":
         return 66;
       case "Pending Quality Control":

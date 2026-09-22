@@ -191,6 +191,7 @@ const ORDER_WORKFLOW_STEPS = [
       "Pending Master Approval",
       "Master Approval Completed",
       "Pending Production",
+      "Production In Progress",
       "Production Completed",
       "Pending Quality Control",
       "Quality Control Completed",
@@ -205,6 +206,7 @@ const ORDER_WORKFLOW_STEPS = [
     label: "Billing",
     statuses: [
       "Pending Production",
+      "Production In Progress",
       "Production Completed",
       "Pending Quality Control",
       "Quality Control Completed",
@@ -335,7 +337,11 @@ const QUOTE_WORKFLOW_STEPS_BY_MODE = {
     {
       key: "production",
       label: "Sample Production",
-      statuses: ["Pending Production", "Pending Sample Production"],
+      statuses: [
+        "Pending Production",
+        "Production In Progress",
+        "Pending Sample Production",
+      ],
     },
     {
       key: "submission",
@@ -504,6 +510,7 @@ const QUOTE_CONVERSION_STATUS_OPTIONS = [
   "Pending Master Approval",
   "Master Approval Completed",
   "Pending Production",
+  "Production In Progress",
   "Production Completed",
   "Pending Quality Control",
   "Quality Control Completed",

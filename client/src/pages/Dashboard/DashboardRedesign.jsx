@@ -64,6 +64,7 @@ const STANDARD_PROGRESS_MAP = {
   "Pending Master Approval": 48,
   "Master Approval Completed": 52,
   "Pending Production": 58,
+  "Production In Progress": 62,
   "Production Completed": 66,
   "Pending Quality Control": 72,
   "Quality Control Completed": 76,
@@ -125,6 +126,7 @@ const QUOTE_SAMPLE_PRODUCTION_PROGRESS_MAP = {
   "Pending Mockup": 40,
   "Mockup Completed": 45,
   "Pending Production": 55,
+  "Production In Progress": 62,
   "Pending Sample Production": 55,
   "Pending Quote Submission": 70,
   "Quote Submission Completed": 80,
@@ -1406,7 +1408,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
             <div className="dashboard-production-state empty">
               <CheckCircleIcon width="20" height="20" />
               <div>
-                <strong>No Pending Production jobs assigned to you.</strong>
+                <strong>No active Production jobs assigned to you.</strong>
                 <p>A job will appear here after you acknowledge its Production engagement.</p>
               </div>
             </div>
@@ -1414,8 +1416,12 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
             <div className="dashboard-production-list">
               {productionQueueProjects.map((project) => {
                 const tracking = project?.productionTracking || {};
+                const productionInProgress =
+                  project?.status === "Production In Progress";
                 const execution =
-                  PRODUCTION_EXECUTION_META[tracking.executionState] ||
+                  PRODUCTION_EXECUTION_META[
+                    productionInProgress ? "in_progress" : "queued"
+                  ] ||
                   PRODUCTION_EXECUTION_META.queued;
                 const actionPending =
                   productionAction.projectId === toEntityId(project._id);
@@ -1475,7 +1481,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                             tracking.estimatedProductionMinutes,
                           )} estimate
                         </span>
-                        {tracking.executionState === "in_progress" && (
+                        {productionInProgress && (
                           <span>
                             {formatProductionMinutes(elapsedProductionMinutes)} elapsed
                           </span>
@@ -1522,7 +1528,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                           onClick={() =>
                             handleProductionAction(
                               project,
-                              tracking.executionState === "in_progress"
+                              productionInProgress
                                 ? "complete"
                                 : "start",
                             )
@@ -1532,7 +1538,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                             ? productionAction.action === "start"
                               ? "Starting..."
                               : "Completing..."
-                            : tracking.executionState === "in_progress"
+                            : productionInProgress
                               ? "Complete Production"
                               : "Start Production"}
                         </button>

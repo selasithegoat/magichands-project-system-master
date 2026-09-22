@@ -1,4 +1,8 @@
 const { parseProjectDeliveryDeadline } = require("./projectDeadline");
+const {
+  PENDING_PRODUCTION_STATUS,
+  PRODUCTION_IN_PROGRESS_STATUS,
+} = require("./productionStatus");
 
 const MINUTE_MS = 60 * 1000;
 const CALCULATION_VERSION = 1;
@@ -178,9 +182,12 @@ const calculateProductionTracking = (
   const productionDueAt = deliveryDeadline
     ? new Date(deliveryDeadline.getTime() - allowance.totalMinutes * MINUTE_MS)
     : null;
-  const executionState = String(
-    project?.productionTracking?.executionState || "queued",
-  ).trim();
+  const executionState =
+    project?.status === PRODUCTION_IN_PROGRESS_STATUS
+      ? "in_progress"
+      : project?.status === PENDING_PRODUCTION_STATUS
+        ? "queued"
+        : String(project?.productionTracking?.executionState || "queued").trim();
   const workStartedAt = toValidDate(
     project?.productionTracking?.workStartedAt,
   );

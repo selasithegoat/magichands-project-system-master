@@ -74,6 +74,7 @@ const ACTIVE_STATUS_OPTIONS = [
   { value: "Pending Mockup", label: "Pending Mockup" },
   { value: "Pending Master Approval", label: "Pending Master Approval" },
   { value: "Pending Production", label: "Pending Production" },
+  { value: "Production In Progress", label: "Production In Progress" },
   { value: "Pending Quality Control", label: "Pending Quality Control" },
   { value: "Pending Photography", label: "Pending Photography" },
   { value: "Pending Packaging", label: "Pending Packaging" },

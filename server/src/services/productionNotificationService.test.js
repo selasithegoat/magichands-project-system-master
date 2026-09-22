@@ -72,6 +72,7 @@ test("attention, start-now, at-risk, and overdue stages escalate in order", () =
 
 test("an in-progress job no longer receives a start-now alert", () => {
   const project = buildProject({
+    status: "Production In Progress",
     productionTracking: {
       productionDueAt: new Date("2026-09-22T12:00:00.000Z"),
       estimatedProductionMinutes: 120,

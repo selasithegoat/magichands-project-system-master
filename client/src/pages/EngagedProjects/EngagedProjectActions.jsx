@@ -92,6 +92,7 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Pending Master Approval",
   "Master Approval Completed",
   "Pending Production",
+  "Production In Progress",
   "Production Completed",
   "Pending Quality Control",
   "Quality Control Completed",
@@ -189,6 +190,7 @@ const QUOTE_SAMPLE_PRODUCTION_SUBMIT_TRANSITIONS = {
 const PRODUCTION_MOCKUP_VISIBILITY_STATUSES = new Set([
   "Master Approval Completed",
   "Pending Production",
+  "Production In Progress",
   "Production Completed",
   "Pending Quality Control",
   "Quality Control Completed",
@@ -561,6 +563,7 @@ const ENGAGED_WORKFLOW_STEPS = [
       "Pending Sample Retrieval",
       "Pending Sample / Work done Retrieval",
       "Pending Production",
+      "Production In Progress",
       "Pending Sample Production",
       "Production Completed",
       "Pending Bid Submission / Documents",
@@ -573,6 +576,7 @@ const ENGAGED_WORKFLOW_STEPS = [
       "Pending Master Approval",
       "Master Approval Completed",
       "Pending Production",
+      "Production In Progress",
       "Production Completed",
       "Pending Quality Control",
       "Quality Control Completed",
@@ -1194,7 +1198,7 @@ const EngagedProjectActions = ({ user }) => {
     BATCH_RECOVERY_CREATION_STATUSES.has(project?.status || "");
   const canCreateBatchNow =
     canCreateBatches &&
-    (project?.status === "Pending Production" ||
+    (["Pending Production", "Production In Progress"].includes(project?.status) ||
       canRecoverIncompleteBatchProduction);
   const canShowApprovedMockupReference = useMemo(() => {
     if (!project) return false;
@@ -1877,7 +1881,7 @@ const EngagedProjectActions = ({ user }) => {
         message:
           hasExistingProjectBatches
             ? "New batches are only available while production is pending or when existing batches leave project quantity unassigned."
-            : "Batches can only be created when the project is Pending Production.",
+            : "Batches can only be created while Production is active.",
       });
       return;
     }
@@ -1978,7 +1982,7 @@ const EngagedProjectActions = ({ user }) => {
         message:
           hasExistingProjectBatches
             ? "New batches are only available while production is pending or when existing batches leave project quantity unassigned."
-            : "Batches can only be created when the project is Pending Production.",
+            : "Batches can only be created while Production is active.",
       });
       return;
     }
@@ -3441,7 +3445,7 @@ const EngagedProjectActions = ({ user }) => {
                       ? "Create new batch"
                       : hasExistingProjectBatches && batchRemainingQtyTotal > 0
                         ? "Available when incomplete batch production can be reopened"
-                        : "Available once project is Pending Production"
+                        : "Available once Production is active"
                   }
                 >
                   New Batch
@@ -3754,7 +3758,7 @@ const EngagedProjectActions = ({ user }) => {
                         ? "Create first batch"
                         : hasExistingProjectBatches && batchRemainingQtyTotal > 0
                           ? "Available when incomplete batch production can be reopened"
-                          : "Available once project is Pending Production"
+                          : "Available once Production is active"
                     }
                   >
                     Create First Batch
@@ -3903,7 +3907,10 @@ const EngagedProjectActions = ({ user }) => {
                   </div>
 
                   {showStageCompletionAction && (() => {
-                    const isPending = project.status === action.pending;
+                    const isPending =
+                      project.status === action.pending ||
+                      (isProductionSection &&
+                        project.status === "Production In Progress");
                     const isProductionAction =
                       action.complete === "Production Completed";
                     const isStoresAction = action.complete === "Packaging Completed";

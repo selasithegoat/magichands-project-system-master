@@ -2,8 +2,12 @@ const Notification = require("../models/Notification");
 const Project = require("../models/Project");
 const { createNotification } = require("../utils/notificationService");
 const { broadcastNotificationChange } = require("../utils/realtimeHub");
-
-const PENDING_PRODUCTION_STATUS = "Pending Production";
+const {
+  ACTIVE_PRODUCTION_STATUSES,
+  PENDING_PRODUCTION_STATUS,
+  PRODUCTION_IN_PROGRESS_STATUS,
+  isActiveProductionStatus,
+} = require("../utils/productionStatus");
 const PRODUCTION_NOTIFICATION_SOURCE_PREFIX = "production_follow_up";
 const MINUTE_MS = 60 * 1000;
 
@@ -84,7 +88,12 @@ const resolveProductionAlertStage = (project, nowValue = new Date()) => {
   const now = toValidDate(nowValue) || new Date();
   const tracking = project?.productionTracking || {};
   const riskLevel = String(tracking.riskLevel || "").trim();
-  const executionState = String(tracking.executionState || "queued").trim();
+  const executionState =
+    project?.status === PRODUCTION_IN_PROGRESS_STATUS
+      ? "in_progress"
+      : project?.status === PENDING_PRODUCTION_STATUS
+        ? "queued"
+        : String(tracking.executionState || "queued").trim();
 
   if (riskLevel === "overdue") return "overdue";
   if (riskLevel === "at_risk") return "at_risk";
@@ -211,7 +220,7 @@ const shouldCloseProductionNotifications = ({
   previousStatus = "",
   state = {},
 } = {}) =>
-  previousStatus === PENDING_PRODUCTION_STATUS ||
+  isActiveProductionStatus(previousStatus) ||
   Boolean(project?.cancellation?.isCancelled) ||
   Boolean(
     toValidDate(state.attentionSentAt) ||
@@ -380,7 +389,7 @@ const processProductionProjectNotification = async (
   if (
     !project?._id ||
     !ownerId ||
-    project.status !== PENDING_PRODUCTION_STATUS ||
+    !isActiveProductionStatus(project.status) ||
     project?.cancellation?.isCancelled
   ) {
     return null;
@@ -521,7 +530,7 @@ const syncProductionNotificationsAfterProjectChange = async ({
   await notifyProductionOwnership(project, nowValue);
 
   if (
-    project.status !== PENDING_PRODUCTION_STATUS ||
+    !isActiveProductionStatus(project.status) ||
     project?.cancellation?.isCancelled
   ) {
     const state = getNotificationState(project);
@@ -535,7 +544,7 @@ const syncProductionNotificationsAfterProjectChange = async ({
 
 const runProductionNotificationSweep = async (nowValue = new Date()) => {
   const activeProjects = await Project.find({
-    status: PENDING_PRODUCTION_STATUS,
+    status: { $in: ACTIVE_PRODUCTION_STATUSES },
     productionOwnerId: { $ne: null },
     "cancellation.isCancelled": { $ne: true },
     isLatestVersion: { $ne: false },
@@ -557,7 +566,7 @@ const runProductionNotificationSweep = async (nowValue = new Date()) => {
     $and: [
       {
         $or: [
-          { status: { $ne: PENDING_PRODUCTION_STATUS } },
+          { status: { $nin: ACTIVE_PRODUCTION_STATUSES } },
           { "cancellation.isCancelled": true },
           { isLatestVersion: false },
           { versionState: { $in: ["superseded", "archived"] } },

@@ -1,0 +1,17 @@
+const PENDING_PRODUCTION_STATUS = "Pending Production";
+const PRODUCTION_IN_PROGRESS_STATUS = "Production In Progress";
+const ACTIVE_PRODUCTION_STATUSES = Object.freeze([
+  PENDING_PRODUCTION_STATUS,
+  PRODUCTION_IN_PROGRESS_STATUS,
+]);
+const ACTIVE_PRODUCTION_STATUS_SET = new Set(ACTIVE_PRODUCTION_STATUSES);
+
+const isActiveProductionStatus = (value) =>
+  ACTIVE_PRODUCTION_STATUS_SET.has(String(value || "").trim());
+
+module.exports = {
+  ACTIVE_PRODUCTION_STATUSES,
+  PENDING_PRODUCTION_STATUS,
+  PRODUCTION_IN_PROGRESS_STATUS,
+  isActiveProductionStatus,
+};

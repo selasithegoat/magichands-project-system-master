@@ -59,6 +59,11 @@ const {
   syncProductionTrackingAfterProjectChange,
 } = require("../services/productionTrackingService");
 const {
+  ACTIVE_PRODUCTION_STATUSES,
+  PRODUCTION_IN_PROGRESS_STATUS,
+  isActiveProductionStatus,
+} = require("../utils/productionStatus");
+const {
   PRODUCTION_SUB_DEPARTMENT_TOKENS,
   getExplicitProductionSubDepartmentTokens,
   hasProductionDepartmentOverlap,
@@ -167,7 +172,11 @@ const SMS_STATUS_STAGE_STATUSES = {
     "In Progress",
   ]),
   mockup: new Set(["Pending Mockup", "Mockup Completed"]),
-  production: new Set(["Pending Production", "Production Completed"]),
+  production: new Set([
+    "Pending Production",
+    PRODUCTION_IN_PROGRESS_STATUS,
+    "Production Completed",
+  ]),
   delivery: new Set([
     "Photography Completed",
     "Pending Delivery/Pickup",
@@ -1340,6 +1349,7 @@ const QUOTE_GRAPHICS_MOCKUP_ENGAGED_STATUSES = [
   "Pending Quote Requirements",
   "Pending Mockup",
   "Pending Production",
+  PRODUCTION_IN_PROGRESS_STATUS,
   "Pending Sample Production",
 ];
 const QUOTE_GRAPHICS_MOCKUP_REQUIREMENT_STATUSES = [
@@ -2780,7 +2790,7 @@ const updateProjectDeliverySchedule = async (req, res) => {
 
     await project.save();
 
-    if (project.status === "Pending Production") {
+    if (isActiveProductionStatus(project.status)) {
       await syncProductionTrackingSafely({
         projectId: project._id,
         previousStatus: project.status,
@@ -3776,22 +3786,22 @@ const getBatchProgressGuard = (project, targetStatus = "") => {
   }
 
   const flow = STANDARD_STATUS_FLOW;
-  const pendingProductionIndex = flow.indexOf("Pending Production");
+  const productionInProgressIndex = flow.indexOf(PRODUCTION_IN_PROGRESS_STATUS);
   const pendingDeliveryIndex = flow.indexOf("Pending Delivery/Pickup");
   const targetIndex = flow.indexOf(toText(targetStatus));
 
   if (targetIndex === -1) return null;
 
   if (
-    pendingProductionIndex !== -1 &&
-    targetIndex > pendingProductionIndex &&
+    productionInProgressIndex !== -1 &&
+    targetIndex > productionInProgressIndex &&
     !areAllBatchesProduced(project)
   ) {
     return {
       code: "BATCH_PRODUCTION_INCOMPLETE",
       targetStatus,
       message:
-        "All project quantities must be assigned to active batches and fully produced before this project can move past Pending Production.",
+        "All project quantities must be assigned to active batches and fully produced before production can be completed.",
     };
   }
 
@@ -3818,11 +3828,11 @@ const canCreateBatchAtCurrentStatus = (project = {}) => {
     (entry) => normalizeBatchStatus(entry?.status) !== "cancelled",
   ).length;
   if (activeBatchCount === 0) {
-    return toText(project.status) === "Pending Production";
+    return isActiveProductionStatus(project.status);
   }
 
   if (hasFullBatchAllocationCoverage(project) && areAllBatchesProduced(project)) {
-    return toText(project.status) === "Pending Production";
+    return isActiveProductionStatus(project.status);
   }
 
   const flow = STANDARD_STATUS_FLOW;
@@ -3844,17 +3854,17 @@ const reconcileProjectStatusForBatchProduction = async (
   if (project.status === HOLD_STATUS) return false;
 
   const flow = STANDARD_STATUS_FLOW;
-  const pendingProductionIndex = flow.indexOf("Pending Production");
+  const productionInProgressIndex = flow.indexOf(PRODUCTION_IN_PROGRESS_STATUS);
   const currentIndex = flow.indexOf(toText(project.status));
-  if (pendingProductionIndex === -1 || currentIndex === -1) return false;
+  if (productionInProgressIndex === -1 || currentIndex === -1) return false;
 
-  if (currentIndex > pendingProductionIndex && !areAllBatchesProduced(project)) {
-    project.status = "Pending Production";
+  if (currentIndex > productionInProgressIndex && !areAllBatchesProduced(project)) {
+    project.status = PRODUCTION_IN_PROGRESS_STATUS;
     await logActivity(
       project._id,
       actor?._id || actor?.id,
       "batch_status_reconciled",
-      "Project reverted to Pending Production because batches are incomplete.",
+      "Project returned to Production In Progress because batches are incomplete.",
       {},
     );
     return true;
@@ -4213,6 +4223,7 @@ const STANDARD_STATUS_FLOW = [
   "Pending Master Approval",
   "Master Approval Completed",
   "Pending Production",
+  PRODUCTION_IN_PROGRESS_STATUS,
   "Production Completed",
   "Pending Quality Control",
   "Quality Control Completed",
@@ -4235,6 +4246,7 @@ const QUOTE_STATUS_FLOW = [
   "Pending Mockup",
   "Mockup Completed",
   "Pending Production",
+  PRODUCTION_IN_PROGRESS_STATUS,
   "Production Completed",
   "Pending Sample Retrieval",
   "Pending Cost Verification",
@@ -4887,6 +4899,7 @@ const isQuoteMockupCompletionConfirmed = (project = {}) => {
   if (requirementMode === "sampleProduction") {
     return [
       "Pending Production",
+      PRODUCTION_IN_PROGRESS_STATUS,
       "Pending Sample Production",
       "Production Completed",
       "Pending Quote Submission",
@@ -10348,7 +10361,7 @@ const getMyProductionQueue = async (req, res) => {
 
     const projects = await Project.find({
       productionOwnerId: req.user._id,
-      status: "Pending Production",
+      status: { $in: ACTIVE_PRODUCTION_STATUSES },
       "cancellation.isCancelled": { $ne: true },
       isLatestVersion: { $ne: false },
       versionState: { $nin: ["superseded", "archived"] },
@@ -10381,9 +10394,9 @@ const getMyProductionQueue = async (req, res) => {
 
     projects.sort((left, right) => {
       const leftExecution =
-        left?.productionTracking?.executionState === "in_progress" ? 0 : 1;
+        left?.status === PRODUCTION_IN_PROGRESS_STATUS ? 0 : 1;
       const rightExecution =
-        right?.productionTracking?.executionState === "in_progress" ? 0 : 1;
+        right?.status === PRODUCTION_IN_PROGRESS_STATUS ? 0 : 1;
       if (leftExecution !== rightExecution) {
         return leftExecution - rightExecution;
       }
@@ -10407,7 +10420,7 @@ const getMyProductionQueue = async (req, res) => {
       (acc, project) => {
         const riskLevel = project?.productionTracking?.riskLevel || "not_started";
         const executionState =
-          project?.productionTracking?.executionState === "in_progress"
+          project?.status === PRODUCTION_IN_PROGRESS_STATUS
             ? "inProgress"
             : "queued";
         acc.total += 1;
@@ -10478,8 +10491,7 @@ const startProjectProduction = async (req, res) => {
       });
     }
 
-    const wasInProgress =
-      project?.productionTracking?.executionState === "in_progress";
+    const wasInProgress = project.status === PRODUCTION_IN_PROGRESS_STATUS;
     await startProductionTracking({
       projectId: project._id,
       actorId: req.user._id || req.user.id,
@@ -11515,7 +11527,7 @@ const updateProjectStatus = async (req, res) => {
       },
       {
         dept: "Production",
-        from: "Pending Production",
+        from: PRODUCTION_IN_PROGRESS_STATUS,
         to: "Production Completed",
       },
       {
@@ -11621,7 +11633,7 @@ const updateProjectStatus = async (req, res) => {
           });
         }
         if (
-          project?.productionTracking?.executionState !== "in_progress" ||
+          project.status !== PRODUCTION_IN_PROGRESS_STATUS ||
           !project?.productionTracking?.workStartedAt
         ) {
           return res.status(400).json({
@@ -12567,7 +12579,11 @@ const NEXT_ACTION_DEPARTMENT_CONFIG = {
   },
   production: {
     label: "Production",
-    pendingStatuses: new Set(["Pending Production", "Pending Sample Production"]),
+    pendingStatuses: new Set([
+      "Pending Production",
+      PRODUCTION_IN_PROGRESS_STATUS,
+      "Pending Sample Production",
+    ]),
     completeLabel: "Complete production stage",
   },
   photography: {
@@ -20519,6 +20535,7 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Pending Master Approval",
   "Master Approval Completed",
   "Pending Production",
+  PRODUCTION_IN_PROGRESS_STATUS,
   "Production Completed",
   "Pending Quality Control",
   "Quality Control Completed",

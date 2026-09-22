@@ -11,8 +11,12 @@ const {
   resolveProductionStartedNotifications,
   syncProductionNotificationsAfterProjectChange,
 } = require("./productionNotificationService");
-
-const PENDING_PRODUCTION_STATUS = "Pending Production";
+const {
+  ACTIVE_PRODUCTION_STATUSES,
+  PENDING_PRODUCTION_STATUS,
+  PRODUCTION_IN_PROGRESS_STATUS,
+  isActiveProductionStatus,
+} = require("../utils/productionStatus");
 const POST_PRODUCTION_STATUSES = new Set([
   "Production Completed",
   "Pending Quality Control",
@@ -38,6 +42,7 @@ const OWNER_BACKFILL_EXCLUDED_STATUSES = [
   "Feedback Completed",
 ];
 let legacyOwnerBackfillComplete = false;
+let legacyExecutionStatusBackfillComplete = false;
 
 const toId = (value) => {
   if (!value) return "";
@@ -126,9 +131,9 @@ const toTrackingPayload = (tracking, existing = {}) => ({
 
 const comparePlans = (left, right) => {
   const leftInProgress =
-    left.project?.productionTracking?.executionState === "in_progress" ? 0 : 1;
+    left.project?.status === PRODUCTION_IN_PROGRESS_STATUS ? 0 : 1;
   const rightInProgress =
-    right.project?.productionTracking?.executionState === "in_progress" ? 0 : 1;
+    right.project?.status === PRODUCTION_IN_PROGRESS_STATUS ? 0 : 1;
   if (leftInProgress !== rightInProgress) return leftInProgress - rightInProgress;
 
   const leftDue = left.plan.productionDueAt?.getTime?.() ?? Number.MAX_SAFE_INTEGER;
@@ -145,7 +150,7 @@ const recalculateProductionProject = async (projectOrId, nowValue = new Date()) 
     typeof projectOrId === "object" && projectOrId?._id
       ? projectOrId
       : await Project.findById(projectOrId);
-  if (!project || project.status !== PENDING_PRODUCTION_STATUS) return null;
+  if (!project || !isActiveProductionStatus(project.status)) return null;
 
   const tracking = calculateProductionTracking(project, {
     now: nowValue,
@@ -171,7 +176,7 @@ const recalculateProductionQueueForOwner = async (
 
   const projects = await Project.find({
     productionOwnerId: normalizedOwnerId,
-    status: PENDING_PRODUCTION_STATUS,
+    status: { $in: ACTIVE_PRODUCTION_STATUSES },
     "cancellation.isCancelled": { $ne: true },
     isLatestVersion: { $ne: false },
     versionState: { $nin: ["superseded", "archived"] },
@@ -280,11 +285,14 @@ const syncProductionTrackingAfterProjectChange = async ({
   const currentOwnerId = toId(project.productionOwnerId);
   const oldOwnerId = toId(previousOwnerId);
   const enteredProduction =
-    project.status === PENDING_PRODUCTION_STATUS &&
-    previousStatus !== PENDING_PRODUCTION_STATUS;
+    isActiveProductionStatus(project.status) &&
+    !isActiveProductionStatus(previousStatus);
+  const startedProduction =
+    project.status === PRODUCTION_IN_PROGRESS_STATUS &&
+    previousStatus !== PRODUCTION_IN_PROGRESS_STATUS;
   const leftProduction =
-    previousStatus === PENDING_PRODUCTION_STATUS &&
-    project.status !== PENDING_PRODUCTION_STATUS;
+    isActiveProductionStatus(previousStatus) &&
+    !isActiveProductionStatus(project.status);
 
   if (enteredProduction) {
     await Project.updateOne(
@@ -295,12 +303,21 @@ const syncProductionTrackingAfterProjectChange = async ({
             project.statusChangedAt || new Date(nowValue),
           "productionTracking.queuedAt":
             project.statusChangedAt || new Date(nowValue),
-          "productionTracking.workStartedAt": null,
-          "productionTracking.startedBy": null,
+          "productionTracking.workStartedAt":
+            project.status === PRODUCTION_IN_PROGRESS_STATUS
+              ? project.statusChangedAt || new Date(nowValue)
+              : null,
+          "productionTracking.startedBy":
+            project.status === PRODUCTION_IN_PROGRESS_STATUS
+              ? actorId || null
+              : null,
           "productionTracking.completedAt": null,
           "productionTracking.completedBy": null,
           "productionTracking.actualProductionMinutes": null,
-          "productionTracking.executionState": "queued",
+          "productionTracking.executionState":
+            project.status === PRODUCTION_IN_PROGRESS_STATUS
+              ? "in_progress"
+              : "queued",
           "productionTracking.elapsedProductionMinutes": 0,
         },
       },
@@ -311,12 +328,49 @@ const syncProductionTrackingAfterProjectChange = async ({
         {}),
       startedAt: project.statusChangedAt || new Date(nowValue),
       queuedAt: project.statusChangedAt || new Date(nowValue),
-      workStartedAt: null,
-      startedBy: null,
+      workStartedAt:
+        project.status === PRODUCTION_IN_PROGRESS_STATUS
+          ? project.statusChangedAt || new Date(nowValue)
+          : null,
+      startedBy:
+        project.status === PRODUCTION_IN_PROGRESS_STATUS ? actorId || null : null,
       completedAt: null,
       completedBy: null,
       actualProductionMinutes: null,
-      executionState: "queued",
+      executionState:
+        project.status === PRODUCTION_IN_PROGRESS_STATUS
+          ? "in_progress"
+          : "queued",
+      elapsedProductionMinutes: 0,
+    };
+  }
+
+  if (startedProduction && !enteredProduction) {
+    const workStartedAt = project.statusChangedAt || new Date(nowValue);
+    await Project.updateOne(
+      { _id: project._id, status: PRODUCTION_IN_PROGRESS_STATUS },
+      {
+        $set: {
+          "productionTracking.executionState": "in_progress",
+          "productionTracking.workStartedAt": workStartedAt,
+          "productionTracking.startedBy": actorId || null,
+          "productionTracking.completedAt": null,
+          "productionTracking.completedBy": null,
+          "productionTracking.actualProductionMinutes": null,
+          "productionTracking.elapsedProductionMinutes": 0,
+        },
+      },
+    );
+    project.productionTracking = {
+      ...(project.productionTracking?.toObject?.() ||
+        project.productionTracking ||
+        {}),
+      executionState: "in_progress",
+      workStartedAt,
+      startedBy: actorId || null,
+      completedAt: null,
+      completedBy: null,
+      actualProductionMinutes: null,
       elapsedProductionMinutes: 0,
     };
   }
@@ -334,7 +388,7 @@ const syncProductionTrackingAfterProjectChange = async ({
     await recalculateProductionQueueForOwner(ownerId, nowValue);
   }
 
-  if (project.status === PENDING_PRODUCTION_STATUS && !currentOwnerId) {
+  if (isActiveProductionStatus(project.status) && !currentOwnerId) {
     await recalculateProductionProject(project, nowValue);
   }
 
@@ -358,15 +412,20 @@ const startProductionTracking = async ({
 } = {}) => {
   if (!projectId || !actorId) return null;
   const project = await Project.findById(projectId);
-  if (!project || project.status !== PENDING_PRODUCTION_STATUS) return null;
+  if (!project || !isActiveProductionStatus(project.status)) return null;
 
   const state = String(
     project?.productionTracking?.executionState || "queued",
   );
+  if (project.status === PENDING_PRODUCTION_STATUS) {
+    project.status = PRODUCTION_IN_PROGRESS_STATUS;
+    await project.save();
+  }
+
   if (state !== "in_progress") {
     const startedAt = new Date(nowValue);
     await Project.updateOne(
-      { _id: project._id, status: PENDING_PRODUCTION_STATUS },
+      { _id: project._id, status: PRODUCTION_IN_PROGRESS_STATUS },
       {
         $set: {
           "productionTracking.executionState": "in_progress",
@@ -404,8 +463,25 @@ const startProductionTracking = async ({
 };
 
 const recalculateAllPendingProduction = async (nowValue = new Date()) => {
+  // Preserve jobs started before Production In Progress became an official
+  // project status.
+  if (!legacyExecutionStatusBackfillComplete) {
+    const legacyStartedProjects = await Project.find({
+      status: PENDING_PRODUCTION_STATUS,
+      "productionTracking.executionState": "in_progress",
+      "cancellation.isCancelled": { $ne: true },
+      isLatestVersion: { $ne: false },
+      versionState: { $nin: ["superseded", "archived"] },
+    });
+    for (const project of legacyStartedProjects) {
+      project.status = PRODUCTION_IN_PROGRESS_STATUS;
+      await project.save();
+    }
+    legacyExecutionStatusBackfillComplete = true;
+  }
+
   const activeQuery = {
-    status: PENDING_PRODUCTION_STATUS,
+    status: { $in: ACTIVE_PRODUCTION_STATUSES },
     "cancellation.isCancelled": { $ne: true },
     isLatestVersion: { $ne: false },
     versionState: { $nin: ["superseded", "archived"] },
@@ -466,6 +542,7 @@ const recalculateAllPendingProduction = async (nowValue = new Date()) => {
 
 module.exports = {
   PENDING_PRODUCTION_STATUS,
+  PRODUCTION_IN_PROGRESS_STATUS,
   calculateActualProductionMinutes,
   ensureProductionOwnerFromAcknowledgement,
   recalculateAllPendingProduction,

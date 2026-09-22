@@ -12,6 +12,7 @@ const STATUS_OWNER = {
   "Pending Mockup": "Graphics",
   "Pending Master Approval": "Administration",
   "Pending Production": "Production",
+  "Production In Progress": "Production",
   "Pending Quality Control": "Administration",
   "Pending Photography": "Photography",
   "Pending Packaging": "Stores",
@@ -122,8 +123,10 @@ const generateWeeklyDigestForUser = async (user, range, options = {}) => {
     })
     .filter((item) => item.projectName || item.orderId);
 
-  const pendingProjects = projects.filter((project) =>
-    project.status?.startsWith("Pending"),
+  const pendingProjects = projects.filter(
+    (project) =>
+      project.status?.startsWith("Pending") ||
+      project.status === "Production In Progress",
   );
 
   const pendingItems = pendingProjects.map((project) => ({
