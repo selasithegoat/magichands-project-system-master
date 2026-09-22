@@ -70,6 +70,19 @@ test("attention, start-now, at-risk, and overdue stages escalate in order", () =
   assert.equal(resolveProductionAlertStage(overdueProject, NOW), "overdue");
 });
 
+test("an in-progress job no longer receives a start-now alert", () => {
+  const project = buildProject({
+    productionTracking: {
+      productionDueAt: new Date("2026-09-22T12:00:00.000Z"),
+      estimatedProductionMinutes: 120,
+      executionState: "in_progress",
+      workStartedAt: new Date("2026-09-22T09:30:00.000Z"),
+      riskLevel: "on_track",
+    },
+  });
+  assert.equal(resolveProductionAlertStage(project, NOW), "");
+});
+
 test("one-time stages do not repeat for the same production plan", () => {
   assert.equal(shouldSendProductionAlert("attention", {}, NOW), true);
   assert.equal(

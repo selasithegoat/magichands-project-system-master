@@ -273,6 +273,12 @@
   color: color-mix(in srgb, var(--warning) 82%, #7c2d12);
 }
 
+.dashboard-production-summary span.in-progress {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary);
+}
+
 .dashboard-production-list {
   display: grid;
   gap: 0.65rem;
@@ -334,6 +340,26 @@
   font-size: 0.64rem;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.dashboard-production-execution {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-alt);
+  color: var(--muted-strong);
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dashboard-production-execution.execution-in-progress {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--primary);
 }
 
 .dashboard-production-job-main h3 {
@@ -433,6 +459,24 @@
   font-size: 0.72rem;
   font-weight: 750;
   cursor: pointer;
+}
+
+.dashboard-production-action-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.42rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-production-job-action button.primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-contrast, #fff);
+}
+
+.dashboard-production-job-action button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .dashboard-production-state {
@@ -1876,6 +1920,11 @@
 
   .dashboard-production-job-action button {
     width: 100%;
+  }
+
+  .dashboard-production-action-buttons {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .dashboard-kpi-layout {

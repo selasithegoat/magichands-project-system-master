@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import "./Dashboard.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import { getDepartmentLabel } from "../../constants/departments";
@@ -187,6 +187,8 @@ const EMPTY_DASHBOARD_SUMMARY = {
 const EMPTY_PRODUCTION_QUEUE = {
   summary: {
     total: 0,
+    queued: 0,
+    inProgress: 0,
     overdue: 0,
     at_risk: 0,
     deadline_required: 0,
@@ -202,6 +204,10 @@ const PRODUCTION_RISK_META = {
   attention: { label: "Attention", tone: "attention" },
   on_track: { label: "On Track", tone: "on-track" },
   not_started: { label: "Not Started", tone: "neutral" },
+};
+const PRODUCTION_EXECUTION_META = {
+  queued: { label: "Queued", tone: "queued" },
+  in_progress: { label: "In Progress", tone: "in-progress" },
 };
 
 const PENDING_ACCEPTANCE_STATUSES = new Set([
@@ -470,6 +476,7 @@ const formatProductionCountdown = (dueAt, nowValue) => {
 
 const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { navigateToProject, projectRouteChoiceDialog } =
     useAuthorizedProjectNavigation(user);
   const {
@@ -564,6 +571,10 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const productionQueueSummary =
     productionQueue.summary || EMPTY_PRODUCTION_QUEUE.summary;
   const [productionClockNow, setProductionClockNow] = useState(() => Date.now());
+  const [productionAction, setProductionAction] = useState({
+    projectId: "",
+    action: "",
+  });
   const [toast, setToast] = useState(null);
   const [projectViewMode, setProjectViewMode] = usePersistedState(
     "client-dashboard-project-view-mode",
@@ -722,6 +733,67 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
           "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
       },
     );
+  };
+
+  const handleProductionAction = async (project, action) => {
+    const projectId = toEntityId(project?._id);
+    if (!projectId || !["start", "complete"].includes(action)) return;
+    if (
+      action === "complete" &&
+      !window.confirm(
+        "Mark Production as complete and move this project to its next stage?",
+      )
+    ) {
+      return;
+    }
+
+    setProductionAction({ projectId, action });
+    try {
+      const response = await fetch(
+        action === "start"
+          ? `/api/projects/${projectId}/production/start`
+          : `/api/projects/${projectId}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          ...(action === "complete"
+            ? { body: JSON.stringify({ status: "Production Completed" }) }
+            : {}),
+        },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          payload.message ||
+            `Production could not be ${action === "start" ? "started" : "completed"}.`,
+        );
+      }
+
+      setToast({
+        message:
+          action === "start"
+            ? "Production started. Actual time is now being tracked."
+            : "Production completed and moved to the next stage.",
+        type: "success",
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["projects", "production", "my-queue"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["projects", "dashboard-summary"],
+        }),
+      ]);
+      if (onProjectChange) onProjectChange();
+    } catch (error) {
+      setToast({
+        message: error.message || "Production action failed.",
+        type: "error",
+      });
+    } finally {
+      setProductionAction({ projectId: "", action: "" });
+    }
   };
 
   const handleUpdateStatusClick = async (project) => {
@@ -1300,13 +1372,16 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
               </span>
               <h2>My Production Queue</h2>
               <p>
-                Your Pending Production jobs, ordered by risk and production
-                deadline.
+                In-progress work first, followed by risk and production deadline.
               </p>
             </div>
             <div className="dashboard-production-summary" aria-label="Queue summary">
               <span className="total">
                 <strong>{Number(productionQueueSummary.total) || 0}</strong> Total
+              </span>
+              <span className="in-progress">
+                <strong>{Number(productionQueueSummary.inProgress) || 0}</strong>{" "}
+                In Progress
               </span>
               {(Number(productionQueueSummary.overdue) || 0) > 0 && (
                 <span className="overdue">
@@ -1339,6 +1414,22 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
             <div className="dashboard-production-list">
               {productionQueueProjects.map((project) => {
                 const tracking = project?.productionTracking || {};
+                const execution =
+                  PRODUCTION_EXECUTION_META[tracking.executionState] ||
+                  PRODUCTION_EXECUTION_META.queued;
+                const actionPending =
+                  productionAction.projectId === toEntityId(project._id);
+                const workStartedAt = tracking.workStartedAt
+                  ? new Date(tracking.workStartedAt).getTime()
+                  : Number.NaN;
+                const elapsedProductionMinutes = Number.isFinite(workStartedAt)
+                  ? Math.max(
+                      0,
+                      Math.floor(
+                        (productionClockNow - workStartedAt) / (60 * 1000),
+                      ),
+                    )
+                  : Number(tracking.elapsedProductionMinutes) || 0;
                 const risk =
                   PRODUCTION_RISK_META[tracking.riskLevel] ||
                   PRODUCTION_RISK_META.not_started;
@@ -1358,6 +1449,11 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                         </span>
                         <span className={`dashboard-production-risk risk-${risk.tone}`}>
                           {risk.label}
+                        </span>
+                        <span
+                          className={`dashboard-production-execution execution-${execution.tone}`}
+                        >
+                          {execution.label}
                         </span>
                       </div>
                       <h3>
@@ -1379,6 +1475,11 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                             tracking.estimatedProductionMinutes,
                           )} estimate
                         </span>
+                        {tracking.executionState === "in_progress" && (
+                          <span>
+                            {formatProductionMinutes(elapsedProductionMinutes)} elapsed
+                          </span>
+                        )}
                         {workstreamLabels.map((label) => (
                           <span key={label}>{label}</span>
                         ))}
@@ -1413,12 +1514,35 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                         tracking.riskReasons.length > 0 && (
                           <p>{tracking.riskReasons[0]}</p>
                         )}
-                      <button
-                        type="button"
-                        onClick={() => handleDetailsClick(project)}
-                      >
-                        Open Project <ChevronRightIcon width="14" height="14" />
-                      </button>
+                      <div className="dashboard-production-action-buttons">
+                        <button
+                          type="button"
+                          className="primary"
+                          disabled={actionPending}
+                          onClick={() =>
+                            handleProductionAction(
+                              project,
+                              tracking.executionState === "in_progress"
+                                ? "complete"
+                                : "start",
+                            )
+                          }
+                        >
+                          {actionPending
+                            ? productionAction.action === "start"
+                              ? "Starting..."
+                              : "Completing..."
+                            : tracking.executionState === "in_progress"
+                              ? "Complete Production"
+                              : "Start Production"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDetailsClick(project)}
+                        >
+                          Open Project <ChevronRightIcon width="14" height="14" />
+                        </button>
+                      </div>
                     </div>
                   </article>
                 );

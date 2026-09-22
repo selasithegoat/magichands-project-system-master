@@ -84,9 +84,13 @@ const resolveProductionAlertStage = (project, nowValue = new Date()) => {
   const now = toValidDate(nowValue) || new Date();
   const tracking = project?.productionTracking || {};
   const riskLevel = String(tracking.riskLevel || "").trim();
+  const executionState = String(tracking.executionState || "queued").trim();
 
   if (riskLevel === "overdue") return "overdue";
   if (riskLevel === "at_risk") return "at_risk";
+  if (executionState === "in_progress") {
+    return riskLevel === "attention" ? "attention" : "";
+  }
 
   const latestStartAt = getLatestProductionStartAt(project);
   if (latestStartAt && now.getTime() >= latestStartAt.getTime()) {
@@ -240,6 +244,44 @@ const resolveProductionNotifications = async (
       path: "/api/notifications",
       method: "PATCH",
       source: "production_notification_service",
+      portal: PRODUCTION_NOTIFICATION_SOURCE_PREFIX,
+      recipientId: normalizedOwnerId,
+      projectId: normalizedProjectId,
+      resolvedAt: nowValue,
+    });
+  }
+  return modifiedCount;
+};
+
+const resolveProductionStartedNotifications = async (
+  projectId,
+  ownerId,
+  nowValue = new Date(),
+) => {
+  const normalizedProjectId = toId(projectId);
+  const normalizedOwnerId = toId(ownerId);
+  if (!normalizedProjectId || !normalizedOwnerId) return 0;
+
+  const result = await Notification.updateMany(
+    {
+      project: normalizedProjectId,
+      recipient: normalizedOwnerId,
+      source: {
+        $in: [
+          `${PRODUCTION_NOTIFICATION_SOURCE_PREFIX}:attention`,
+          `${PRODUCTION_NOTIFICATION_SOURCE_PREFIX}:time_to_begin`,
+        ],
+      },
+      isRead: false,
+    },
+    { $set: { isRead: true } },
+  );
+  const modifiedCount = Number(result?.modifiedCount || 0);
+  if (modifiedCount > 0) {
+    broadcastNotificationChange({
+      path: "/api/notifications",
+      method: "PATCH",
+      source: "production_execution_service",
       portal: PRODUCTION_NOTIFICATION_SOURCE_PREFIX,
       recipientId: normalizedOwnerId,
       projectId: normalizedProjectId,
@@ -559,6 +601,7 @@ module.exports = {
   notifyProductionOwnership,
   processProductionProjectNotification,
   resolveProductionAlertStage,
+  resolveProductionStartedNotifications,
   runProductionNotificationSweep,
   shouldCloseProductionNotifications,
   shouldSendProductionAlert,

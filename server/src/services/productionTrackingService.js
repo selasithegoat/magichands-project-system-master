@@ -8,6 +8,7 @@ const {
   normalizeProductionDepartmentToken,
 } = require("../utils/productionDepartmentAccess");
 const {
+  resolveProductionStartedNotifications,
   syncProductionNotificationsAfterProjectChange,
 } = require("./productionNotificationService");
 
@@ -42,6 +43,23 @@ const toId = (value) => {
   if (!value) return "";
   if (value?._id) return String(value._id);
   return String(value);
+};
+
+const calculateActualProductionMinutes = (startedAtValue, completedAtValue) => {
+  const startedAt = startedAtValue ? new Date(startedAtValue) : null;
+  const completedAt = completedAtValue ? new Date(completedAtValue) : null;
+  if (
+    !startedAt ||
+    !completedAt ||
+    Number.isNaN(startedAt.getTime()) ||
+    Number.isNaN(completedAt.getTime())
+  ) {
+    return null;
+  }
+  return Math.max(
+    0,
+    Math.round((completedAt.getTime() - startedAt.getTime()) / 60000),
+  );
 };
 
 const isProductionDepartmentToken = (value) => {
@@ -107,6 +125,12 @@ const toTrackingPayload = (tracking, existing = {}) => ({
 });
 
 const comparePlans = (left, right) => {
+  const leftInProgress =
+    left.project?.productionTracking?.executionState === "in_progress" ? 0 : 1;
+  const rightInProgress =
+    right.project?.productionTracking?.executionState === "in_progress" ? 0 : 1;
+  if (leftInProgress !== rightInProgress) return leftInProgress - rightInProgress;
+
   const leftDue = left.plan.productionDueAt?.getTime?.() ?? Number.MAX_SAFE_INTEGER;
   const rightDue = right.plan.productionDueAt?.getTime?.() ?? Number.MAX_SAFE_INTEGER;
   if (leftDue !== rightDue) return leftDue - rightDue;
@@ -189,22 +213,30 @@ const recalculateProductionQueueForOwner = async (
   return results;
 };
 
-const completeProductionTracking = async (project, nowValue = new Date()) => {
+const completeProductionTracking = async (
+  project,
+  nowValue = new Date(),
+  actorId = null,
+) => {
   if (!project?._id) return;
-  const startedAtValue = project?.productionTracking?.startedAt;
-  const startedAt = startedAtValue ? new Date(startedAtValue) : null;
+  const startedAtValue = project?.productionTracking?.workStartedAt;
   const completedAt = new Date(nowValue);
-  const actualProductionMinutes =
-    startedAt && !Number.isNaN(startedAt.getTime())
-      ? Math.max(0, Math.round((completedAt.getTime() - startedAt.getTime()) / 60000))
-      : null;
+  const actualProductionMinutes = calculateActualProductionMinutes(
+    startedAtValue,
+    completedAt,
+  );
 
   await Project.updateOne(
     { _id: project._id },
     {
       $set: {
         "productionTracking.completedAt": completedAt,
+        "productionTracking.completedBy": actorId || null,
         "productionTracking.actualProductionMinutes": actualProductionMinutes,
+        "productionTracking.executionState": "completed",
+        "productionTracking.elapsedProductionMinutes":
+          actualProductionMinutes || 0,
+        "productionTracking.remainingProductionMinutes": 0,
         "productionTracking.riskLevel": "completed",
         "productionTracking.riskReasons": [],
         "productionTracking.lastCalculatedAt": completedAt,
@@ -220,7 +252,12 @@ const resetInactiveProductionTracking = async (project, nowValue = new Date()) =
     {
       $set: {
         "productionTracking.completedAt": null,
+        "productionTracking.completedBy": null,
         "productionTracking.actualProductionMinutes": null,
+        "productionTracking.executionState": "queued",
+        "productionTracking.workStartedAt": null,
+        "productionTracking.startedBy": null,
+        "productionTracking.elapsedProductionMinutes": 0,
         "productionTracking.riskLevel": "not_started",
         "productionTracking.riskReasons": [],
         "productionTracking.lastCalculatedAt": new Date(nowValue),
@@ -233,6 +270,7 @@ const syncProductionTrackingAfterProjectChange = async ({
   projectId,
   previousStatus = "",
   previousOwnerId = null,
+  actorId = null,
   now: nowValue = new Date(),
 } = {}) => {
   if (!projectId) return null;
@@ -255,8 +293,15 @@ const syncProductionTrackingAfterProjectChange = async ({
         $set: {
           "productionTracking.startedAt":
             project.statusChangedAt || new Date(nowValue),
+          "productionTracking.queuedAt":
+            project.statusChangedAt || new Date(nowValue),
+          "productionTracking.workStartedAt": null,
+          "productionTracking.startedBy": null,
           "productionTracking.completedAt": null,
+          "productionTracking.completedBy": null,
           "productionTracking.actualProductionMinutes": null,
+          "productionTracking.executionState": "queued",
+          "productionTracking.elapsedProductionMinutes": 0,
         },
       },
     );
@@ -265,14 +310,20 @@ const syncProductionTrackingAfterProjectChange = async ({
         project.productionTracking ||
         {}),
       startedAt: project.statusChangedAt || new Date(nowValue),
+      queuedAt: project.statusChangedAt || new Date(nowValue),
+      workStartedAt: null,
+      startedBy: null,
       completedAt: null,
+      completedBy: null,
       actualProductionMinutes: null,
+      executionState: "queued",
+      elapsedProductionMinutes: 0,
     };
   }
 
   if (leftProduction) {
     if (POST_PRODUCTION_STATUSES.has(project.status)) {
-      await completeProductionTracking(project, nowValue);
+      await completeProductionTracking(project, nowValue, actorId);
     } else {
       await resetInactiveProductionTracking(project, nowValue);
     }
@@ -295,6 +346,58 @@ const syncProductionTrackingAfterProjectChange = async ({
       previousOwnerId,
       now: nowValue,
     });
+  }
+
+  return Project.findById(project._id);
+};
+
+const startProductionTracking = async ({
+  projectId,
+  actorId,
+  now: nowValue = new Date(),
+} = {}) => {
+  if (!projectId || !actorId) return null;
+  const project = await Project.findById(projectId);
+  if (!project || project.status !== PENDING_PRODUCTION_STATUS) return null;
+
+  const state = String(
+    project?.productionTracking?.executionState || "queued",
+  );
+  if (state !== "in_progress") {
+    const startedAt = new Date(nowValue);
+    await Project.updateOne(
+      { _id: project._id, status: PENDING_PRODUCTION_STATUS },
+      {
+        $set: {
+          "productionTracking.executionState": "in_progress",
+          "productionTracking.queuedAt":
+            project?.productionTracking?.queuedAt ||
+            project?.productionTracking?.startedAt ||
+            project.statusChangedAt ||
+            startedAt,
+          "productionTracking.workStartedAt": startedAt,
+          "productionTracking.startedBy": actorId,
+          "productionTracking.completedAt": null,
+          "productionTracking.completedBy": null,
+          "productionTracking.actualProductionMinutes": null,
+          "productionTracking.elapsedProductionMinutes": 0,
+        },
+      },
+    );
+  }
+
+  if (project.productionOwnerId) {
+    await resolveProductionStartedNotifications(
+      project._id,
+      project.productionOwnerId,
+      nowValue,
+    );
+    await recalculateProductionQueueForOwner(
+      project.productionOwnerId,
+      nowValue,
+    );
+  } else {
+    await recalculateProductionProject(project._id, nowValue);
   }
 
   return Project.findById(project._id);
@@ -363,9 +466,11 @@ const recalculateAllPendingProduction = async (nowValue = new Date()) => {
 
 module.exports = {
   PENDING_PRODUCTION_STATUS,
+  calculateActualProductionMinutes,
   ensureProductionOwnerFromAcknowledgement,
   recalculateAllPendingProduction,
   recalculateProductionProject,
   recalculateProductionQueueForOwner,
+  startProductionTracking,
   syncProductionTrackingAfterProjectChange,
 };

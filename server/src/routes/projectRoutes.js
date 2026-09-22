@@ -15,6 +15,7 @@ const {
   getOrderGroupByNumber,
   getUserStats,
   getMyProductionQueue,
+  startProjectProduction,
   getProjectById,
   addItemToProject,
   deleteItemFromProject,
@@ -248,6 +249,12 @@ router.get("/orders", protect, getOrderGroups);
 router.get("/orders/:orderNumber", protect, getOrderGroupByNumber);
 router.get("/stats", protect, getUserStats);
 router.get("/production/my-queue", protect, getMyProductionQueue);
+router.patch(
+  "/:id/production/start",
+  protect,
+  enforceProjectNotOnHold,
+  startProjectProduction,
+);
 router.get("/dashboard-summary", protect, getDashboardSummary);
 router.get("/dashboard-counts", protect, getDashboardCounts);
 router.get("/health-performance", protect, getHealthPerformance);

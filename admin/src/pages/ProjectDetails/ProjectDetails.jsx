@@ -2558,6 +2558,14 @@ const ProjectDetails = ({ user }) => {
     });
   };
 
+  const formatProductionDuration = (value) => {
+    const minutes = Math.max(0, Math.round(Number(value) || 0));
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    if (!hours) return `${remainder}m`;
+    return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+  };
+
   const formatFeedbackDate = (dateString) => {
     if (!dateString) return "N/A";
     return new Date(dateString).toLocaleString("en-US", {
@@ -5421,6 +5429,40 @@ const ProjectDetails = ({ user }) => {
               <small>
                 Assigned automatically when a Production user acknowledges the
                 project.
+              </small>
+            </div>
+
+            <div className="info-item" style={{ marginBottom: "1.5rem" }}>
+              <label>Production Execution</label>
+              <p>
+                {project.productionTracking?.executionState === "in_progress"
+                  ? "In Progress"
+                  : project.productionTracking?.executionState === "completed"
+                    ? "Completed"
+                    : "Queued"}
+              </p>
+              <small>
+                {project.productionTracking?.workStartedAt
+                  ? `Started ${formatLastUpdated(
+                      project.productionTracking.workStartedAt,
+                    )}`
+                  : `Queued ${
+                      formatLastUpdated(
+                        project.productionTracking?.queuedAt ||
+                          project.productionTracking?.startedAt,
+                      ) || "time unavailable"
+                    }`}
+                {project.productionTracking?.completedAt
+                  ? ` | Completed ${formatLastUpdated(
+                      project.productionTracking.completedAt,
+                    )}`
+                  : ""}
+                {project.productionTracking?.actualProductionMinutes !== null &&
+                project.productionTracking?.actualProductionMinutes !== undefined
+                  ? ` | Actual ${formatProductionDuration(
+                      project.productionTracking.actualProductionMinutes,
+                    )}`
+                  : ""}
               </small>
             </div>
 

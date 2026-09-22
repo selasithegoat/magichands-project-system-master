@@ -55,6 +55,7 @@ const {
 const {
   ensureProductionOwnerFromAcknowledgement,
   recalculateProductionQueueForOwner,
+  startProductionTracking,
   syncProductionTrackingAfterProjectChange,
 } = require("../services/productionTrackingService");
 const {
@@ -10379,6 +10380,14 @@ const getMyProductionQueue = async (req, res) => {
       .lean();
 
     projects.sort((left, right) => {
+      const leftExecution =
+        left?.productionTracking?.executionState === "in_progress" ? 0 : 1;
+      const rightExecution =
+        right?.productionTracking?.executionState === "in_progress" ? 0 : 1;
+      if (leftExecution !== rightExecution) {
+        return leftExecution - rightExecution;
+      }
+
       const leftRisk =
         PRODUCTION_QUEUE_RISK_ORDER[left?.productionTracking?.riskLevel] ?? 99;
       const rightRisk =
@@ -10397,7 +10406,12 @@ const getMyProductionQueue = async (req, res) => {
     const summary = projects.reduce(
       (acc, project) => {
         const riskLevel = project?.productionTracking?.riskLevel || "not_started";
+        const executionState =
+          project?.productionTracking?.executionState === "in_progress"
+            ? "inProgress"
+            : "queued";
         acc.total += 1;
+        acc[executionState] += 1;
         if (Object.prototype.hasOwnProperty.call(acc, riskLevel)) {
           acc[riskLevel] += 1;
         }
@@ -10405,6 +10419,8 @@ const getMyProductionQueue = async (req, res) => {
       },
       {
         total: 0,
+        queued: 0,
+        inProgress: 0,
         overdue: 0,
         at_risk: 0,
         deadline_required: 0,
@@ -10422,6 +10438,70 @@ const getMyProductionQueue = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching Production queue:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Start work on an owned Pending Production project
+// @route   PATCH /api/projects/:id/production/start
+// @access  Private (Production owner or Admin)
+const startProjectProduction = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
+
+    const isAdmin = req.user?.role === "admin";
+    const hasProductionAccess =
+      resolveProductionSubDepartmentTokens(req.user?.department).length > 0;
+    if (!isAdmin && !hasProductionAccess) {
+      return res.status(403).json({
+        message: "Production access is required to start this job.",
+      });
+    }
+
+    const ownerId = toObjectIdString(project.productionOwnerId);
+    const actorId = toObjectIdString(req.user?._id || req.user?.id);
+    if (!ownerId) {
+      return res.status(409).json({
+        message:
+          "A Production user must acknowledge and own this project before work can start.",
+      });
+    }
+    if (!isAdmin && ownerId !== actorId) {
+      return res.status(403).json({
+        message: "Only the Production owner can start this job.",
+      });
+    }
+    if (project.status !== "Pending Production") {
+      return res.status(400).json({
+        message: "Production can only start while the project is Pending Production.",
+      });
+    }
+
+    const wasInProgress =
+      project?.productionTracking?.executionState === "in_progress";
+    await startProductionTracking({
+      projectId: project._id,
+      actorId: req.user._id || req.user.id,
+    });
+
+    if (!wasInProgress) {
+      await logActivity(
+        project._id,
+        req.user._id || req.user.id,
+        "production_started",
+        `Production started by ${getUserDisplayName(req.user)}.`,
+        { productionOwnerId: project.productionOwnerId },
+      );
+    }
+
+    const responseProject = await buildProjectResponseQuery(project._id).populate(
+      "acknowledgements.user",
+      "firstName lastName name avatarUrl",
+    );
+    return res.json(responseProject || project);
+  } catch (error) {
+    console.error("Error starting Production:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };
@@ -11530,6 +11610,27 @@ const updateProjectStatus = async (req, res) => {
     }
 
     if (newStatus === "Production Completed") {
+      if (!isAdmin) {
+        const ownerId = toObjectIdString(project.productionOwnerId);
+        const actorId = toObjectIdString(req.user?._id || req.user?.id);
+        if (!ownerId || ownerId !== actorId) {
+          return res.status(403).json({
+            code: "PRODUCTION_OWNER_REQUIRED",
+            message:
+              "Only the Production owner who acknowledged this project can complete production.",
+          });
+        }
+        if (
+          project?.productionTracking?.executionState !== "in_progress" ||
+          !project?.productionTracking?.workStartedAt
+        ) {
+          return res.status(400).json({
+            code: "PRODUCTION_NOT_STARTED",
+            message: "Start Production before marking this job as complete.",
+          });
+        }
+      }
+
       const sampleGuard = getSampleApprovalGuard(project);
       if (sampleGuard) {
         await notifySampleApprovalBlocked({
@@ -11791,6 +11892,7 @@ const updateProjectStatus = async (req, res) => {
       projectId: project._id,
       previousStatus: oldStatus,
       previousOwnerId: previousProductionOwnerId,
+      actorId: req.user._id || req.user.id,
     });
 
     // Log Activity
@@ -21884,6 +21986,7 @@ module.exports = {
   getOrderGroupByNumber,
   getUserStats,
   getMyProductionQueue,
+  startProjectProduction,
   getProjectById,
   addItemToProject,
   deleteItemFromProject,

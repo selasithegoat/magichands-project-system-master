@@ -47,6 +47,12 @@ const toPositiveNumber = (value) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
+const toValidDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const roundMinutes = (value) => Math.max(0, Math.ceil(Number(value) || 0));
 
 const getPackagingMinutes = (totalQuantity) => {
@@ -172,15 +178,40 @@ const calculateProductionTracking = (
   const productionDueAt = deliveryDeadline
     ? new Date(deliveryDeadline.getTime() - allowance.totalMinutes * MINUTE_MS)
     : null;
+  const executionState = String(
+    project?.productionTracking?.executionState || "queued",
+  ).trim();
+  const workStartedAt = toValidDate(
+    project?.productionTracking?.workStartedAt,
+  );
   const requestedPredictedStart = predictedStartValue
     ? new Date(predictedStartValue)
     : startedAt;
-  const predictedStartAt = Number.isNaN(requestedPredictedStart.getTime())
-    ? startedAt
-    : requestedPredictedStart;
+  const predictedStartAt =
+    executionState === "in_progress" && workStartedAt
+      ? workStartedAt
+      : Number.isNaN(requestedPredictedStart.getTime())
+        ? startedAt
+        : requestedPredictedStart;
   const estimatedProductionMinutes = work.estimatedProductionMinutes;
-  const predictedCompletionAt = new Date(
+  const scheduledCompletionAt = new Date(
     predictedStartAt.getTime() + estimatedProductionMinutes * MINUTE_MS,
+  );
+  const predictedCompletionAt =
+    executionState === "in_progress" &&
+    scheduledCompletionAt.getTime() < safeNow.getTime()
+      ? safeNow
+      : scheduledCompletionAt;
+  const elapsedProductionMinutes =
+    executionState === "in_progress" && workStartedAt
+      ? Math.max(
+          0,
+          Math.floor((safeNow.getTime() - workStartedAt.getTime()) / MINUTE_MS),
+        )
+      : 0;
+  const remainingProductionMinutes = Math.max(
+    0,
+    estimatedProductionMinutes - elapsedProductionMinutes,
   );
   const availableProductionMinutes = productionDueAt
     ? Math.max(
@@ -229,13 +260,24 @@ const calculateProductionTracking = (
   if (queueMinutes > 0) {
     riskReasons.push(`${queueMinutes} minute(s) of assigned production work are queued first.`);
   }
+  if (
+    executionState === "in_progress" &&
+    estimatedProductionMinutes > 0 &&
+    remainingProductionMinutes === 0
+  ) {
+    riskReasons.push("Production has exceeded its original time estimate.");
+    if (riskLevel === "on_track") riskLevel = "attention";
+  }
 
   return {
     startedAt,
+    executionState,
     productionDueAt,
     predictedStartAt,
     predictedCompletionAt,
     estimatedProductionMinutes,
+    elapsedProductionMinutes,
+    remainingProductionMinutes,
     availableProductionMinutes,
     queueMinutes,
     postProductionBufferMinutes: allowance.totalMinutes,

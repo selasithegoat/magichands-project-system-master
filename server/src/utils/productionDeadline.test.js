@@ -96,3 +96,32 @@ test("missing delivery deadline and overdue work receive explicit risk states", 
   );
   assert.equal(overdue.riskLevel, "overdue");
 });
+
+test("in-progress predictions use the actual work start and live elapsed time", () => {
+  const result = calculateProductionTracking(
+    {
+      productionOwnerId: "owner-1",
+      productionTracking: {
+        executionState: "in_progress",
+        workStartedAt: "2026-09-19T08:00:00.000Z",
+      },
+      details: {
+        deliveryDate: "2026-09-19T00:00:00.000Z",
+        deliveryTime: "1:00 PM",
+      },
+      items: [
+        {
+          qty: 40,
+          productionAssignments: [{ department: "dtf" }],
+        },
+      ],
+    },
+    { now: "2026-09-19T08:30:00.000Z" },
+  );
+
+  assert.equal(result.executionState, "in_progress");
+  assert.equal(result.predictedStartAt.toISOString(), "2026-09-19T08:00:00.000Z");
+  assert.equal(result.predictedCompletionAt.toISOString(), "2026-09-19T09:30:00.000Z");
+  assert.equal(result.elapsedProductionMinutes, 30);
+  assert.equal(result.remainingProductionMinutes, 60);
+});

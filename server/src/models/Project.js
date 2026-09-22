@@ -590,12 +590,31 @@ const ProductionNotificationStateSchema = new mongoose.Schema(
 const ProductionTrackingSchema = new mongoose.Schema(
   {
     startedAt: { type: Date, default: null },
+    queuedAt: { type: Date, default: null },
+    workStartedAt: { type: Date, default: null },
+    startedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     productionDueAt: { type: Date, default: null },
     predictedStartAt: { type: Date, default: null },
     predictedCompletionAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
+    completedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    executionState: {
+      type: String,
+      enum: ["queued", "in_progress", "completed"],
+      default: "queued",
+    },
     estimatedProductionMinutes: { type: Number, min: 0, default: 0 },
     actualProductionMinutes: { type: Number, min: 0, default: null },
+    elapsedProductionMinutes: { type: Number, min: 0, default: 0 },
+    remainingProductionMinutes: { type: Number, min: 0, default: 0 },
     availableProductionMinutes: { type: Number, min: 0, default: null },
     queueMinutes: { type: Number, min: 0, default: 0 },
     postProductionBufferMinutes: { type: Number, min: 0, default: 0 },
