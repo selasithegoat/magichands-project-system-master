@@ -32,9 +32,7 @@
   background:
     linear-gradient(135deg, rgba(var(--toast-accent-rgb), 0.08), transparent 44%),
     rgba(8, 14, 10, 0.96);
-  box-shadow:
-    0 18px 52px rgba(0, 0, 0, 0.36),
-    0 0 0 1px rgba(255, 255, 255, 0.025) inset;
+  
   backdrop-filter: blur(18px) saturate(130%);
   animation: toastLifecycle var(--toast-duration) ease-in-out forwards;
   pointer-events: auto;
@@ -118,7 +116,6 @@
   border-radius: 13px;
   color: var(--toast-accent);
   background: rgba(var(--toast-accent-rgb), 0.11);
-  box-shadow: 0 8px 22px rgba(var(--toast-accent-rgb), 0.1);
 }
 
 .ui-toast-content {
