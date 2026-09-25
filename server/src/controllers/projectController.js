@@ -8,6 +8,7 @@ const ProjectUpdate = require("../models/ProjectUpdate");
 const SmsPrompt = require("../models/SmsPrompt");
 const OrderMeeting = require("../models/OrderMeeting");
 const Reminder = require("../models/Reminder");
+const Notification = require("../models/Notification");
 const { logActivity } = require("../utils/activityLogger");
 const {
   captureProjectRevisionState,
@@ -66,6 +67,7 @@ const {
 } = require("../utils/productionStatus");
 const {
   LEAD_MANUAL_PROMPT_COOLDOWN_MS,
+  PRODUCTION_COMPLETION_REQUEST_SOURCE,
   PRODUCTION_LEAD_MANUAL_SOURCE,
 } = require("../services/productionNotificationService");
 const {
@@ -205,6 +207,8 @@ const REVISION_LOCKED_STATUSES = new Set([
   "Feedback Completed",
   "Finished",
 ]);
+const PRODUCTION_COMPLETION_CONFIRMATION_PHRASE =
+  "I confirm this engagement is complete";
 
 const syncProductionTrackingSafely = async (options) => {
   try {
@@ -10757,6 +10761,238 @@ const remindProductionOwner = async (req, res) => {
   }
 };
 
+// @desc    Record the Project Lead's predicted-completion feedback
+// @route   POST /api/projects/:id/production/completion-review
+// @access  Private (assigned Project Lead, or Assistant Lead fallback)
+const respondToProductionCompletionReview = async (req, res) => {
+  const actorId = toObjectIdString(req.user?._id || req.user?.id);
+  const notificationId = toObjectIdString(req.body?.notificationId);
+  const decision = toText(req.body?.decision).toLowerCase();
+  const note = toText(req.body?.note).slice(0, 500);
+  const now = new Date();
+
+  try {
+    if (
+      !notificationId ||
+      !mongoose.Types.ObjectId.isValid(notificationId) ||
+      !["done", "not_done"].includes(decision)
+    ) {
+      return res.status(400).json({
+        message: "Choose whether Production is done or not yet complete.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id).populate(
+      "productionOwnerId",
+      "firstName lastName name employeeId",
+    );
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+    if (project.status !== PRODUCTION_IN_PROGRESS_STATUS) {
+      return res.status(409).json({
+        message: "This Production completion check is no longer active.",
+      });
+    }
+
+    const ownerId = toObjectIdString(project.productionOwnerId);
+    const primaryLeadId = toObjectIdString(project.projectLeadId);
+    const assistantLeadId = toObjectIdString(project.assistantLeadId);
+    const assignedLeadId =
+      primaryLeadId && primaryLeadId !== ownerId
+        ? primaryLeadId
+        : assistantLeadId && assistantLeadId !== ownerId
+          ? assistantLeadId
+          : "";
+    if (!assignedLeadId || assignedLeadId !== actorId) {
+      return res.status(403).json({
+        message: "Only the assigned Project Lead can answer this completion check.",
+      });
+    }
+
+    const leadNotification = await Notification.findOne({
+      _id: notificationId,
+      recipient: actorId,
+      project: project._id,
+      source: "production_lead_follow_up:completion_due",
+      isRead: false,
+    });
+    const review = project?.productionTracking?.completionReview || {};
+    if (
+      !leadNotification ||
+      review.status !== "awaiting_lead" ||
+      toObjectIdString(review.leadNotificationId) !== notificationId
+    ) {
+      return res.status(409).json({
+        message: "This completion check has already been answered or replaced.",
+      });
+    }
+
+    if (decision === "not_done") {
+      const revisedCompletionAt = new Date(req.body?.revisedCompletionAt);
+      if (note.length < 3) {
+        return res.status(400).json({
+          message: "Add a short reason why Production is not yet complete.",
+        });
+      }
+      if (
+        Number.isNaN(revisedCompletionAt.getTime()) ||
+        revisedCompletionAt.getTime() <= now.getTime()
+      ) {
+        return res.status(400).json({
+          message: "Choose a revised completion time in the future.",
+        });
+      }
+
+      const updatedProject = await Project.findOneAndUpdate(
+        {
+          _id: project._id,
+          status: PRODUCTION_IN_PROGRESS_STATUS,
+          "productionTracking.completionReview.status": "awaiting_lead",
+          "productionTracking.completionReview.leadNotificationId":
+            leadNotification._id,
+        },
+        {
+          $set: {
+            "productionTracking.completionReview.status": "not_ready",
+            "productionTracking.completionReview.nextCheckAt":
+              revisedCompletionAt,
+            "productionTracking.completionReview.leadDecision": "not_done",
+            "productionTracking.completionReview.leadRespondedAt": now,
+            "productionTracking.completionReview.leadRespondedBy": actorId,
+            "productionTracking.completionReview.leadNote": note,
+            "productionTracking.completionReview.ownerNotificationId": null,
+            "productionTracking.completionReview.ownerPromptedAt": null,
+          },
+        },
+        { new: true },
+      );
+      if (!updatedProject) {
+        return res.status(409).json({
+          message: "This completion check was answered elsewhere. Refresh and try again.",
+        });
+      }
+
+      leadNotification.isRead = true;
+      await leadNotification.save();
+      await logActivity(
+        project._id,
+        actorId,
+        "production_completion_not_ready",
+        `${getUserDisplayName(req.user)} confirmed Production is not yet complete. Revised check: ${revisedCompletionAt.toISOString()}.`,
+        { note, revisedCompletionAt },
+      );
+      return res.json({
+        message: "Feedback recorded. The next check has been scheduled.",
+        status: "not_ready",
+        nextCheckAt: revisedCompletionAt,
+      });
+    }
+
+    if (!ownerId) {
+      return res.status(409).json({
+        message: "No Production owner is assigned to complete this project.",
+      });
+    }
+
+    const claimedProject = await Project.findOneAndUpdate(
+      {
+        _id: project._id,
+        status: PRODUCTION_IN_PROGRESS_STATUS,
+        "productionTracking.completionReview.status": "awaiting_lead",
+        "productionTracking.completionReview.leadNotificationId":
+          leadNotification._id,
+      },
+      {
+        $set: {
+          "productionTracking.completionReview.status": "awaiting_owner",
+          "productionTracking.completionReview.leadDecision": "done",
+          "productionTracking.completionReview.leadRespondedAt": now,
+          "productionTracking.completionReview.leadRespondedBy": actorId,
+          "productionTracking.completionReview.leadNote": note,
+          "productionTracking.completionReview.nextCheckAt": null,
+        },
+      },
+      { new: true },
+    );
+    if (!claimedProject) {
+      return res.status(409).json({
+        message: "This completion check was answered elsewhere. Refresh and try again.",
+      });
+    }
+
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    const ownerNotification = await createNotification(
+      ownerId,
+      actorId,
+      project._id,
+      "REMINDER",
+      "Production ready to complete",
+      `${getUserDisplayName(req.user)} confirmed that #${projectRef} - ${projectName} is done. Review the project and complete Production.`,
+      {
+        inApp: true,
+        email: false,
+        push: false,
+        source: PRODUCTION_COMPLETION_REQUEST_SOURCE,
+        dedupeKey: `production-completion-owner:${project._id}:${review.cycleKey || notificationId}`,
+      },
+    );
+
+    if (!ownerNotification) {
+      await Project.updateOne(
+        {
+          _id: project._id,
+          "productionTracking.completionReview.status": "awaiting_owner",
+          "productionTracking.completionReview.leadNotificationId":
+            leadNotification._id,
+        },
+        {
+          $set: {
+            "productionTracking.completionReview.status": "awaiting_lead",
+            "productionTracking.completionReview.leadDecision": "",
+            "productionTracking.completionReview.leadRespondedAt": null,
+            "productionTracking.completionReview.leadRespondedBy": null,
+          },
+        },
+      );
+      return res.status(503).json({
+        message: "The Production owner could not be notified. Please try again.",
+      });
+    }
+
+    await Project.updateOne(
+      { _id: project._id },
+      {
+        $set: {
+          "productionTracking.completionReview.ownerNotificationId":
+            ownerNotification._id,
+          "productionTracking.completionReview.ownerPromptedAt": now,
+        },
+      },
+    );
+    leadNotification.isRead = true;
+    await leadNotification.save();
+    await logActivity(
+      project._id,
+      actorId,
+      "production_completion_confirmed_by_lead",
+      `${getUserDisplayName(req.user)} confirmed Production appears complete and prompted ${getUserDisplayName(project.productionOwnerId)} to complete the stage.`,
+      { productionOwnerId: ownerId },
+    );
+
+    return res.json({
+      message: `Completion request sent to ${getUserDisplayName(project.productionOwnerId)}.`,
+      status: "awaiting_owner",
+    });
+  } catch (error) {
+    console.error("Error responding to Production completion review:", error);
+    return res.status(500).json({
+      message: "The Production completion response could not be saved.",
+    });
+  }
+};
+
 // @desc    Add item to project
 // @route   POST /api/projects/:id/items
 // @access  Private
@@ -11879,6 +12115,50 @@ const updateProjectStatus = async (req, res) => {
             code: "PRODUCTION_NOT_STARTED",
             message: "Start Production before marking this job as complete.",
           });
+        }
+
+        if (
+          toText(req.body?.confirmationPhrase) !==
+          PRODUCTION_COMPLETION_CONFIRMATION_PHRASE
+        ) {
+          return res.status(400).json({
+            code: "PRODUCTION_CONFIRMATION_PHRASE_REQUIRED",
+            message:
+              "Type the exact confirmation phrase before completing Production.",
+          });
+        }
+
+        const completionRequestId = toObjectIdString(
+          req.body?.completionRequestId,
+        );
+        if (completionRequestId) {
+          if (!mongoose.Types.ObjectId.isValid(completionRequestId)) {
+            return res.status(400).json({
+              code: "PRODUCTION_COMPLETION_REQUEST_INVALID",
+              message: "The completion request is invalid.",
+            });
+          }
+          const completionRequest = await Notification.findOne({
+            _id: completionRequestId,
+            recipient: actorId,
+            project: project._id,
+            source: PRODUCTION_COMPLETION_REQUEST_SOURCE,
+            isRead: false,
+          });
+          const completionReview =
+            project?.productionTracking?.completionReview || {};
+          if (
+            !completionRequest ||
+            completionReview.status !== "awaiting_owner" ||
+            toObjectIdString(completionReview.ownerNotificationId) !==
+              completionRequestId
+          ) {
+            return res.status(409).json({
+              code: "PRODUCTION_COMPLETION_REQUEST_INVALID",
+              message:
+                "This completion request has already been handled or replaced.",
+            });
+          }
         }
       }
 
@@ -22245,6 +22525,7 @@ module.exports = {
   getMyProductionQueue,
   startProjectProduction,
   remindProductionOwner,
+  respondToProductionCompletionReview,
   getProjectById,
   addItemToProject,
   deleteItemFromProject,

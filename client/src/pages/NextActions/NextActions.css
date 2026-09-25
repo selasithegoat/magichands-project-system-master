@@ -316,9 +316,12 @@
 
 .next-actions-page .ui-toast {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 5rem);
-  right: 1.1rem;
+  right: 16px;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  left: 16px;
   z-index: 10001;
+  width: min(460px, calc(100vw - 32px));
+  margin-inline: auto;
 }
 
 @media (max-width: 900px) {

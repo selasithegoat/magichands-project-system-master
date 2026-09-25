@@ -1767,6 +1767,9 @@ const EngagedProjectActions = ({ user }) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             status: action.complete,
+            ...(action.complete === "Production Completed"
+              ? { confirmationPhrase: COMPLETE_PHRASE }
+              : {}),
           }),
         },
       );

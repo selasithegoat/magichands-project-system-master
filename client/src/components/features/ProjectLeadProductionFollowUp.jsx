@@ -103,6 +103,15 @@ const ProjectLeadProductionFollowUp = ({ project, user, onUpdate }) => {
     ? project?.productionTracking?.predictedStartAt
     : project?.productionTracking?.predictedCompletionAt;
   const expectedLabel = isQueued ? "Predicted start" : "Predicted completion";
+  const completionReview = project?.productionTracking?.completionReview || {};
+  const completionReviewMessage =
+    completionReview.status === "awaiting_lead"
+      ? "A predicted-time completion check is waiting in your notifications."
+      : completionReview.status === "awaiting_owner"
+        ? "You confirmed the work is done. Waiting for the Production owner to securely complete the stage."
+        : completionReview.status === "not_ready"
+          ? `Next completion check: ${formatDateTime(completionReview.nextCheckAt)}`
+          : "";
 
   const handleRemindOwner = async () => {
     if (!project?._id || !ownerId || sending || onCooldown) return;
@@ -157,9 +166,14 @@ const ProjectLeadProductionFollowUp = ({ project, user, onUpdate }) => {
       </div>
 
       <p className="production-follow-up-copy">
-        You will receive regular progress prompts while this project remains in
-        Production. Use the button below when the owner needs a direct nudge.
+        At the predicted completion time, you will be asked whether the work is
+        done. A positive response securely prompts the Production owner to
+        complete the stage. Use the button below for a direct progress nudge.
       </p>
+
+      {completionReviewMessage ? (
+        <p className="production-follow-up-notice">{completionReviewMessage}</p>
+      ) : null}
 
       <dl className="production-follow-up-details">
         <div>

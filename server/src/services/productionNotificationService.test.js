@@ -11,6 +11,7 @@ const {
   buildProductionLeadReminder,
   buildProductionNotificationKey,
   getLatestProductionStartAt,
+  getProductionCompletionLeadIds,
   resolveProductionAlertStage,
   resolveProductionLeadReminderStage,
   shouldCloseProductionNotifications,
@@ -287,6 +288,83 @@ test("lead reminders use production progress and completion checkpoints", () => 
     resolveProductionLeadReminderStage(
       project,
       new Date("2026-09-22T10:00:00.000Z"),
+    ),
+    "completion_due",
+  );
+});
+
+test("predicted completion drives the Lead completion check", () => {
+  const project = buildProject({
+    status: "Production In Progress",
+    productionTracking: {
+      productionDueAt: new Date("2026-09-22T15:00:00.000Z"),
+      predictedCompletionAt: new Date("2026-09-22T10:00:00.000Z"),
+      estimatedProductionMinutes: 240,
+      workStartedAt: new Date("2026-09-22T08:00:00.000Z"),
+      riskLevel: "on_track",
+    },
+  });
+
+  assert.equal(resolveProductionLeadReminderStage(project, NOW), "completion_due");
+});
+
+test("completion checks target the primary Lead with Assistant Lead fallback", () => {
+  const project = buildProject({
+    projectLeadId: "66f000000000000000000003",
+    assistantLeadId: "66f000000000000000000004",
+  });
+  assert.deepEqual(getProductionCompletionLeadIds(project), [project.projectLeadId]);
+
+  const fallbackProject = {
+    ...project,
+    projectLeadId: project.productionOwnerId,
+  };
+  assert.deepEqual(getProductionCompletionLeadIds(fallbackProject), [
+    project.assistantLeadId,
+  ]);
+});
+
+test("an unanswered completion check does not generate repeated Lead prompts", () => {
+  const project = buildProject({
+    status: "Production In Progress",
+    productionTracking: {
+      predictedCompletionAt: new Date("2026-09-22T09:30:00.000Z"),
+      estimatedProductionMinutes: 120,
+      workStartedAt: new Date("2026-09-22T08:00:00.000Z"),
+      riskLevel: "overdue",
+      completionReview: { status: "awaiting_lead" },
+    },
+  });
+
+  assert.equal(
+    resolveProductionLeadReminderStage(project, NOW),
+    "awaiting_completion_response",
+  );
+});
+
+test("not-ready feedback defers the next completion check until its revised time", () => {
+  const project = buildProject({
+    status: "Production In Progress",
+    productionTracking: {
+      predictedCompletionAt: new Date("2026-09-22T09:00:00.000Z"),
+      estimatedProductionMinutes: 120,
+      workStartedAt: new Date("2026-09-22T07:00:00.000Z"),
+      riskLevel: "on_track",
+      completionReview: {
+        status: "not_ready",
+        nextCheckAt: new Date("2026-09-22T10:30:00.000Z"),
+      },
+    },
+  });
+
+  assert.equal(
+    resolveProductionLeadReminderStage(project, NOW),
+    "awaiting_completion_response",
+  );
+  assert.equal(
+    resolveProductionLeadReminderStage(
+      project,
+      new Date("2026-09-22T10:30:00.000Z"),
     ),
     "completion_due",
   );

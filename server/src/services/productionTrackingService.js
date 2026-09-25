@@ -245,6 +245,9 @@ const completeProductionTracking = async (
         "productionTracking.riskLevel": "completed",
         "productionTracking.riskReasons": [],
         "productionTracking.lastCalculatedAt": completedAt,
+        "productionTracking.completionReview.status": "completed",
+        "productionTracking.completionReview.completedAt": completedAt,
+        "productionTracking.completionReview.completedBy": actorId || null,
       },
     },
   );
@@ -367,6 +370,7 @@ const syncProductionTrackingAfterProjectChange = async ({
           "productionTracking.completedBy": null,
           "productionTracking.actualProductionMinutes": null,
           "productionTracking.elapsedProductionMinutes": 0,
+          "productionTracking.completionReview": {},
         },
       },
     );
@@ -449,6 +453,7 @@ const startProductionTracking = async ({
           "productionTracking.completedBy": null,
           "productionTracking.actualProductionMinutes": null,
           "productionTracking.elapsedProductionMinutes": 0,
+          "productionTracking.completionReview": {},
         },
       },
     );

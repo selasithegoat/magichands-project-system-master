@@ -8,6 +8,7 @@ import DeliveryCalendarFab from "../features/DeliveryCalendarFab";
 import BillingDocumentsFab from "../features/BillingDocumentsFab";
 import MaterialRequestsFab from "../features/MaterialRequestsFab";
 import ProjectCommentsFab from "../features/ProjectCommentsFab";
+import ProductionCompletionPrompt from "../features/ProductionCompletionPrompt";
 import "./Layout.css";
 // Icons
 import XIcon from "../icons/XIcon";
@@ -43,7 +44,20 @@ const PRODUCTION_NOTIFICATION_SOURCE_PREFIX = "production_follow_up";
 const PRODUCTION_LEAD_NOTIFICATION_SOURCE_PREFIX =
   "production_lead_follow_up";
 const PRODUCTION_LEAD_MANUAL_SOURCE = "production_lead_manual_prompt";
+const PRODUCTION_COMPLETION_REQUEST_SOURCE =
+  "production_completion_request:ready";
 let notificationBootstrapUserId = "";
+
+const getProductionActionKind = (notification) => {
+  const source = String(notification?.source || "").trim().toLowerCase();
+  if (source === "production_lead_follow_up:completion_due") {
+    return "lead_completion_review";
+  }
+  if (source === PRODUCTION_COMPLETION_REQUEST_SOURCE) {
+    return "owner_completion_request";
+  }
+  return "";
+};
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -80,7 +94,8 @@ const getProductionNotificationToastType = (notification) => {
   const isProductionNotification =
     source.startsWith(PRODUCTION_NOTIFICATION_SOURCE_PREFIX) ||
     source.startsWith(PRODUCTION_LEAD_NOTIFICATION_SOURCE_PREFIX) ||
-    source === PRODUCTION_LEAD_MANUAL_SOURCE;
+    source === PRODUCTION_LEAD_MANUAL_SOURCE ||
+    source === PRODUCTION_COMPLETION_REQUEST_SOURCE;
   if (!isProductionNotification) return "";
   if (source.endsWith(":overdue") || source.endsWith(":at_risk")) {
     return "error";
@@ -185,6 +200,7 @@ const Layout = ({
   const [notifications, setNotifications] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [toasts, setToasts] = useState([]);
+  const [activeProductionPrompt, setActiveProductionPrompt] = useState(null);
   const lastIdsRef = useRef(new Set());
   const shownToastsRef = useRef(new Set()); // Track notification IDs already shown as toasts
   const [reminderQueue, setReminderQueue] = useState([]);
@@ -272,6 +288,16 @@ const Layout = ({
     return true;
   };
 
+  const openProductionAction = (notification) => {
+    if (notification?.isRead || !getProductionActionKind(notification)) {
+      return false;
+    }
+    setActiveProductionPrompt(notification);
+    setIsNotificationOpen(false);
+    setIsMobileMenuOpen(false);
+    return true;
+  };
+
   const showNativeNotification = (notification) => {
     if ("Notification" in window && Notification.permission === "granted") {
       const n = new Notification(notification.title, {
@@ -280,6 +306,10 @@ const Layout = ({
       });
       n.onclick = () => {
         window.focus();
+        if (openProductionAction(notification)) {
+          n.close();
+          return;
+        }
         if (handleChatMentionOpen(notification)) {
           n.close();
           return;
@@ -332,10 +362,12 @@ const Layout = ({
     }
 
     const id = Date.now() + Math.random();
+    const productionActionKind = getProductionActionKind(notification);
     const projectId = toEntityId(
       notification?.project?._id || notification?.project,
     );
     setToasts((prev) => [
+      ...prev,
       {
         id,
         title: notification.title,
@@ -346,12 +378,35 @@ const Layout = ({
         chatKind: isChatMentionNotification(notification) ? "public" : "",
         projectId,
         notification,
-        persistent,
-        acknowledgeOnDismiss,
+        persistent: persistent || Boolean(productionActionKind),
+        acknowledgeOnDismiss:
+          productionActionKind ? false : acknowledgeOnDismiss,
         missed,
+        kind: productionActionKind ? "production" : "",
+        actionLabel:
+          productionActionKind === "lead_completion_review"
+            ? "Answer check"
+            : productionActionKind === "owner_completion_request"
+              ? "Review & complete"
+              : "",
       },
+    ].slice(-3));
+  };
+
+  const addFeedbackToast = (message, type = "success") => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [
       ...prev,
-    ]);
+      {
+        id,
+        title: type === "success" ? "Action completed" : "Action needed",
+        message,
+        type,
+        persistent: false,
+        acknowledgeOnDismiss: false,
+        missed: false,
+      },
+    ].slice(-3));
   };
 
   const removeToast = (id) => {
@@ -767,9 +822,22 @@ const Layout = ({
         },
       );
       if (res.ok) {
-        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-        setNotificationCount(0);
-        setToasts([]);
+        setNotifications((prev) => {
+          const next = prev.map((notification) =>
+            !notification.isRead && getProductionActionKind(notification)
+              ? notification
+              : { ...notification, isRead: true },
+          );
+          setNotificationCount(next.filter((item) => !item.isRead).length);
+          return next;
+        });
+        setToasts((prev) =>
+          prev.filter(
+            (toast) =>
+              !toast.notification?.isRead &&
+              Boolean(getProductionActionKind(toast.notification)),
+          ),
+        );
         setReminderQueue([]);
         setActiveReminderAlert(null);
         setReminderActionError("");
@@ -790,10 +858,25 @@ const Layout = ({
         { method: "DELETE" },
       );
       if (res.ok) {
-        setNotifications([]);
-        lastIdsRef.current = new Set();
-        setNotificationCount(0);
-        setToasts([]);
+        setNotifications((prev) => {
+          const protectedActions = prev.filter(
+            (notification) =>
+              !notification.isRead &&
+              Boolean(getProductionActionKind(notification)),
+          );
+          lastIdsRef.current = new Set(
+            protectedActions.map((notification) => notification._id),
+          );
+          setNotificationCount(protectedActions.length);
+          return protectedActions;
+        });
+        setToasts((prev) =>
+          prev.filter(
+            (toast) =>
+              !toast.notification?.isRead &&
+              Boolean(getProductionActionKind(toast.notification)),
+          ),
+        );
         setReminderQueue([]);
         setActiveReminderAlert(null);
         setReminderActionError("");
@@ -806,6 +889,14 @@ const Layout = ({
   };
 
   const handleMarkSingleRead = async (notification) => {
+    if (notification?.isRead && getProductionActionKind(notification)) {
+      setIsNotificationOpen(false);
+      openProjectFromNotification(notification);
+      return;
+    }
+    if (openProductionAction(notification)) {
+      return;
+    }
     const id = notification._id;
     const projectId = notification.project?._id || notification.project;
     const type = notification.type;
@@ -857,6 +948,24 @@ const Layout = ({
     } catch (err) {
       console.error("Error marking single read:", err);
     }
+  };
+
+  const handleProductionPromptResolved = ({ notificationId, message }) => {
+    const resolvedId = String(notificationId || "");
+    setActiveProductionPrompt(null);
+    setNotifications((prev) =>
+      prev.map((item) =>
+        String(item?._id) === resolvedId ? { ...item, isRead: true } : item,
+      ),
+    );
+    setNotificationCount((prev) => Math.max(0, prev - 1));
+    setToasts((prev) =>
+      prev.filter(
+        (toast) => String(toast.notification?._id || "") !== resolvedId,
+      ),
+    );
+    addFeedbackToast(message || "Production response recorded.", "success");
+    void fetchNotifications(false);
   };
 
   const getInitials = () => {
@@ -940,6 +1049,11 @@ const Layout = ({
         onComplete={() => processReminderAlertAction("complete")}
         onNavigateProject={handleReminderNavigate}
         onClose={dismissReminderAlert}
+      />
+      <ProductionCompletionPrompt
+        notification={activeProductionPrompt}
+        onClose={() => setActiveProductionPrompt(null)}
+        onResolved={handleProductionPromptResolved}
       />
       {projectRouteChoiceDialog}
 
@@ -1178,6 +1292,13 @@ const Layout = ({
             type={toast.type}
             persistent={toast.persistent}
             missed={toast.missed}
+            kind={toast.kind}
+            actionLabel={toast.actionLabel}
+            onAction={() => {
+              if (toast.notification) {
+                openProductionAction(toast.notification);
+              }
+            }}
             onClose={() => {
               if (toast.acknowledgeOnDismiss && toast.notification?._id) {
                 void markNotificationReadSilently(toast.notification._id);
@@ -1186,6 +1307,12 @@ const Layout = ({
             }}
             duration={10000}
             onClick={() => {
+              if (
+                toast.notification &&
+                openProductionAction(toast.notification)
+              ) {
+                return;
+              }
               if (toast.acknowledgeOnDismiss && toast.notification?._id) {
                 void markNotificationReadSilently(toast.notification._id);
               }

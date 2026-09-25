@@ -12,6 +12,8 @@ const PRODUCTION_NOTIFICATION_SOURCE_PREFIX = "production_follow_up";
 const PRODUCTION_LEAD_NOTIFICATION_SOURCE_PREFIX =
   "production_lead_follow_up";
 const PRODUCTION_LEAD_MANUAL_SOURCE = "production_lead_manual_prompt";
+const PRODUCTION_COMPLETION_REQUEST_SOURCE =
+  "production_completion_request:ready";
 const MINUTE_MS = 60 * 1000;
 
 const toPositiveMinutes = (value, fallback) => {
@@ -118,6 +120,19 @@ const getProductionLeadIds = (project = {}) => {
   );
 };
 
+const getProductionCompletionLeadIds = (project = {}) => {
+  const ownerId = toId(project.productionOwnerId);
+  const primaryLeadId = toId(project.projectLeadId);
+  const assistantLeadId = toId(project.assistantLeadId);
+  const selectedLeadId =
+    primaryLeadId && primaryLeadId !== ownerId
+      ? primaryLeadId
+      : assistantLeadId && assistantLeadId !== ownerId
+        ? assistantLeadId
+        : "";
+  return selectedLeadId ? [selectedLeadId] : [];
+};
+
 const formatProductionDateTime = (value) => {
   const date = toValidDate(value);
   if (!date) return "an unset time";
@@ -131,6 +146,15 @@ const formatProductionDateTime = (value) => {
 };
 
 const getExpectedProductionCompletionAt = (project) => {
+  const review = project?.productionTracking?.completionReview || {};
+  if (review.status === "not_ready") {
+    const nextCheckAt = toValidDate(review.nextCheckAt);
+    if (nextCheckAt) return nextCheckAt;
+  }
+  const predictedCompletionAt = toValidDate(
+    project?.productionTracking?.predictedCompletionAt,
+  );
+  if (predictedCompletionAt) return predictedCompletionAt;
   const workStartedAt = toValidDate(
     project?.productionTracking?.workStartedAt,
   );
@@ -147,6 +171,31 @@ const resolveProductionLeadReminderStage = (
   const riskLevel = String(
     project?.productionTracking?.riskLevel || "",
   ).trim();
+
+  const completionReview =
+    project?.productionTracking?.completionReview || {};
+  const revisedCheckAt = toValidDate(completionReview.nextCheckAt);
+  if (
+    project?.status === PRODUCTION_IN_PROGRESS_STATUS &&
+    ["awaiting_lead", "awaiting_owner"].includes(completionReview.status)
+  ) {
+    return "awaiting_completion_response";
+  }
+  if (
+    project?.status === PRODUCTION_IN_PROGRESS_STATUS &&
+    completionReview.status === "not_ready" &&
+    revisedCheckAt &&
+    now.getTime() < revisedCheckAt.getTime()
+  ) {
+    return "awaiting_completion_response";
+  }
+
+  if (project?.status === PRODUCTION_IN_PROGRESS_STATUS) {
+    const expectedCompletionAt = getExpectedProductionCompletionAt(project);
+    if (expectedCompletionAt && now.getTime() >= expectedCompletionAt.getTime()) {
+      return "completion_due";
+    }
+  }
 
   if (riskLevel === "overdue") return "overdue";
   if (riskLevel === "at_risk") return "at_risk";
@@ -171,9 +220,6 @@ const resolveProductionLeadReminderStage = (
     );
     const expectedCompletionAt = getExpectedProductionCompletionAt(project);
     if (!workStartedAt || !expectedCompletionAt) return "awareness";
-    if (now.getTime() >= expectedCompletionAt.getTime()) {
-      return "completion_due";
-    }
     const halfwayAt = new Date(
       workStartedAt.getTime() +
         (expectedCompletionAt.getTime() - workStartedAt.getTime()) / 2,
@@ -187,7 +233,7 @@ const resolveProductionLeadReminderStage = (
 const getProductionLeadReminderCadenceMs = (stage) => {
   if (stage === "overdue") return LEAD_OVERDUE_CADENCE_MS;
   if (
-    ["at_risk", "start_follow_up", "completion_due"].includes(stage)
+    ["at_risk", "start_follow_up"].includes(stage)
   ) {
     return LEAD_REGULAR_CADENCE_MS;
   }
@@ -366,7 +412,7 @@ const buildProductionLeadReminder = (
     return {
       ...common,
       title: "Production completion check",
-      message: `#${reference}: ${name} has reached its expected production completion time. Please ask ${ownerName} to complete the stage if work is finished.`,
+      message: `#${reference}: ${name} has reached its predicted completion time. Confirm whether Production is done before ${ownerName} is asked to complete the stage.`,
     };
   }
   if (stage === "at_risk") {
@@ -426,6 +472,9 @@ const buildProductionLeadNotificationKey = (
     lifecycleAt?.getTime() || "lifecycle",
     dueAt?.getTime() || "no-deadline",
     getEstimatedProductionMinutes(project),
+    stage === "completion_due"
+      ? getExpectedProductionCompletionAt(project)?.getTime() || "no-check-time"
+      : "standard",
     stage,
     cadenceKey,
   ].join(":");
@@ -435,11 +484,14 @@ const processProductionLeadReminders = async (
   project,
   nowValue = new Date(),
 ) => {
-  const leadIds = getProductionLeadIds(project);
+  const stage = resolveProductionLeadReminderStage(project, nowValue);
+  const leadIds =
+    stage === "completion_due"
+      ? getProductionCompletionLeadIds(project)
+      : getProductionLeadIds(project);
   const ownerId = toId(project?.productionOwnerId);
   if (!project?._id || !ownerId || leadIds.length === 0) return [];
 
-  const stage = resolveProductionLeadReminderStage(project, nowValue);
   const reminder = buildProductionLeadReminder(project, stage, nowValue);
   if (!reminder) return [];
 
@@ -465,7 +517,33 @@ const processProductionLeadReminders = async (
         ),
       },
     );
-    if (notification) notifications.push(notification);
+    if (notification) {
+      notifications.push(notification);
+      if (stage === "completion_due") {
+        const expectedCompletionAt = getExpectedProductionCompletionAt(project);
+        const cycleKey = String(expectedCompletionAt?.getTime() || Date.now());
+        await Project.updateOne(
+          { _id: project._id, status: PRODUCTION_IN_PROGRESS_STATUS },
+          {
+            $set: {
+              "productionTracking.completionReview.status": "awaiting_lead",
+              "productionTracking.completionReview.cycleKey": cycleKey,
+              "productionTracking.completionReview.expectedCompletionAt":
+                expectedCompletionAt,
+              "productionTracking.completionReview.nextCheckAt": null,
+              "productionTracking.completionReview.leadNotificationId":
+                notification._id,
+              "productionTracking.completionReview.leadDecision": "",
+              "productionTracking.completionReview.leadRespondedAt": null,
+              "productionTracking.completionReview.leadRespondedBy": null,
+              "productionTracking.completionReview.leadNote": "",
+              "productionTracking.completionReview.ownerNotificationId": null,
+              "productionTracking.completionReview.ownerPromptedAt": null,
+            },
+          },
+        );
+      }
+    }
   }
   return notifications;
 };
@@ -826,6 +904,25 @@ const closeProductionNotifications = async (
     project._id,
     { nowValue },
   );
+  const completionResult = await Notification.updateMany(
+    {
+      project: project._id,
+      source: PRODUCTION_COMPLETION_REQUEST_SOURCE,
+      isRead: false,
+    },
+    { $set: { isRead: true } },
+  );
+  if (Number(completionResult?.modifiedCount || 0) > 0) {
+    broadcastNotificationChange({
+      path: "/api/notifications",
+      method: "PATCH",
+      source: "production_completion_service",
+      portal: PRODUCTION_COMPLETION_REQUEST_SOURCE,
+      recipientId: ownerId,
+      projectId: toId(project._id),
+      resolvedAt: nowValue,
+    });
+  }
   await Project.updateOne(
     { _id: project._id },
     {
@@ -836,7 +933,11 @@ const closeProductionNotifications = async (
       },
     },
   );
-  return modifiedCount + leadModifiedCount;
+  return (
+    modifiedCount +
+    leadModifiedCount +
+    Number(completionResult?.modifiedCount || 0)
+  );
 };
 
 const syncProductionNotificationsAfterProjectChange = async ({
@@ -952,6 +1053,7 @@ module.exports = {
   OVERDUE_CADENCE_MS,
   PRODUCTION_LEAD_MANUAL_SOURCE,
   PRODUCTION_LEAD_NOTIFICATION_SOURCE_PREFIX,
+  PRODUCTION_COMPLETION_REQUEST_SOURCE,
   PRODUCTION_NOTIFICATION_SOURCE_PREFIX,
   buildProductionAlert,
   buildProductionLeadNotificationKey,
@@ -959,6 +1061,7 @@ module.exports = {
   buildProductionNotificationKey,
   closeProductionNotifications,
   getLatestProductionStartAt,
+  getProductionCompletionLeadIds,
   getProductionLeadReminderCadenceMs,
   getProductionAlertCadenceMs,
   notifyProductionOwnership,

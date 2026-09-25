@@ -594,6 +594,55 @@ const ProductionNotificationStateSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ProductionCompletionReviewSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: [
+        "",
+        "awaiting_lead",
+        "awaiting_owner",
+        "not_ready",
+        "completed",
+      ],
+      default: "",
+    },
+    cycleKey: { type: String, trim: true, default: "" },
+    expectedCompletionAt: { type: Date, default: null },
+    nextCheckAt: { type: Date, default: null },
+    leadNotificationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Notification",
+      default: null,
+    },
+    leadDecision: {
+      type: String,
+      enum: ["", "done", "not_done"],
+      default: "",
+    },
+    leadRespondedAt: { type: Date, default: null },
+    leadRespondedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    leadNote: { type: String, trim: true, maxlength: 500, default: "" },
+    ownerNotificationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Notification",
+      default: null,
+    },
+    ownerPromptedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    completedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+  },
+  { _id: false },
+);
+
 const ProductionTrackingSchema = new mongoose.Schema(
   {
     startedAt: { type: Date, default: null },
@@ -656,6 +705,10 @@ const ProductionTrackingSchema = new mongoose.Schema(
     calculationVersion: { type: Number, min: 1, default: 1 },
     notificationState: {
       type: ProductionNotificationStateSchema,
+      default: () => ({}),
+    },
+    completionReview: {
+      type: ProductionCompletionReviewSchema,
       default: () => ({}),
     },
   },

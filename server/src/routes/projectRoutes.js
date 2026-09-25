@@ -18,6 +18,7 @@ const {
   getMyProductionQueue,
   startProjectProduction,
   remindProductionOwner,
+  respondToProductionCompletionReview,
   getProjectById,
   addItemToProject,
   deleteItemFromProject,
@@ -263,6 +264,12 @@ router.post(
   protect,
   enforceProjectNotOnHold,
   remindProductionOwner,
+);
+router.post(
+  "/:id/production/completion-review",
+  protect,
+  enforceProjectNotOnHold,
+  respondToProductionCompletionReview,
 );
 router.get("/dashboard-summary", protect, getDashboardSummary);
 router.get("/dashboard-counts", protect, getDashboardCounts);

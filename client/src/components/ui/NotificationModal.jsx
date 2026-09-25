@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
   normalizeDepartmentId,
@@ -16,6 +16,16 @@ import { formatProjectDisplayName, renderProjectName } from "../../utils/project
 
 const getNotificationTypeMeta = (notification = {}) => {
   const source = String(notification?.source || "").trim().toLowerCase();
+  if (
+    source === "production_lead_follow_up:completion_due" ||
+    source === "production_completion_request:ready"
+  ) {
+    return {
+      label: "Production action",
+      className: "production-action",
+      icon: <CheckCircleIcon width="16" height="16" color="currentColor" />,
+    };
+  }
   if (source.startsWith("chat_mention")) {
     return {
       label: "Chat",
@@ -71,6 +81,29 @@ const getNotificationTypeMeta = (notification = {}) => {
   }
 };
 
+const getNotificationActionLabel = (notification = {}) => {
+  const source = String(notification?.source || "").trim().toLowerCase();
+  if (source === "production_lead_follow_up:completion_due") {
+    return "Answer completion check";
+  }
+  if (source === "production_completion_request:ready") {
+    return "Review & complete";
+  }
+  return "";
+};
+
+const toEntityId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    if (value._id) return toEntityId(value._id);
+    if (value.id) return String(value.id);
+  }
+  return "";
+};
+
 const NotificationModal = ({
   isOpen,
   onClose,
@@ -80,18 +113,6 @@ const NotificationModal = ({
   onMarkRead,
   currentUser,
 }) => {
-  const toEntityId = (value) => {
-    if (!value) return "";
-    if (typeof value === "string" || typeof value === "number") {
-      return String(value);
-    }
-    if (typeof value === "object") {
-      if (value._id) return toEntityId(value._id);
-      if (value.id) return String(value.id);
-    }
-    return "";
-  };
-
   const getUserLabel = (user) => {
     if (!user || typeof user !== "object") return "";
     if (user.name) return user.name;
@@ -124,16 +145,13 @@ const NotificationModal = ({
   const isProduction = productionSubDepts.length > 0;
   const hasScopedTabs = isFrontDesk || isProduction;
   const [activeTab, setActiveTab] = useState(hasScopedTabs ? "mine" : "all");
+  const resolvedActiveTab = hasScopedTabs
+    ? activeTab === "team" || activeTab === "mine"
+      ? activeTab
+      : "mine"
+    : "all";
 
-  useEffect(() => {
-    if (!hasScopedTabs) {
-      setActiveTab("all");
-      return;
-    }
-    setActiveTab((prev) => (prev === "team" || prev === "mine" ? prev : "mine"));
-  }, [hasScopedTabs]);
-
-  const mineNotifications = useMemo(() => {
+  const mineNotifications = (() => {
     if (!userId && !isProduction) return [];
     return notifications.filter((n) => {
       let isAssignedLead = false;
@@ -157,18 +175,21 @@ const NotificationModal = ({
       const productionDeptSet = new Set(productionSubDepts);
       return projectDepartments.some((dept) => productionDeptSet.has(dept));
     });
-  }, [departments, isProduction, notifications, productionSubDepts, userId]);
+  })();
 
-  const teamNotifications = useMemo(() => notifications, [notifications]);
+  const teamNotifications = notifications;
 
-  const visibleNotifications = useMemo(() => {
+  const visibleNotifications = (() => {
     if (!isFrontDesk) return notifications;
-    return activeTab === "mine" ? mineNotifications : teamNotifications;
-  }, [activeTab, isFrontDesk, mineNotifications, notifications, teamNotifications]);
+    return resolvedActiveTab === "mine" ? mineNotifications : teamNotifications;
+  })();
 
   const unreadNotifications = visibleNotifications.filter((n) => !n.isRead);
   const readNotifications = visibleNotifications.filter((n) => n.isRead);
   const unreadCount = unreadNotifications.length;
+  const markableUnreadCount = unreadNotifications.filter(
+    (notification) => !getNotificationActionLabel(notification),
+  ).length;
   const totalCount = visibleNotifications.length;
 
   const mineCount = mineNotifications.length;
@@ -223,7 +244,7 @@ const NotificationModal = ({
             <button
               className="notif-mark-read"
               onClick={onMarkAllRead}
-              disabled={unreadCount === 0}
+              disabled={markableUnreadCount === 0}
             >
               Mark all read
             </button>
@@ -237,20 +258,20 @@ const NotificationModal = ({
           <div className="notif-tabs" role="tablist" aria-label="Notification view">
             <button
               type="button"
-              className={`notif-tab ${activeTab === "mine" ? "active" : ""}`}
+              className={`notif-tab ${resolvedActiveTab === "mine" ? "active" : ""}`}
               onClick={() => setActiveTab("mine")}
               role="tab"
-              aria-selected={activeTab === "mine"}
+              aria-selected={resolvedActiveTab === "mine"}
             >
               Mine
               <span className="notif-tab-count">{mineCount}</span>
             </button>
             <button
               type="button"
-              className={`notif-tab ${activeTab === "team" ? "active" : ""}`}
+              className={`notif-tab ${resolvedActiveTab === "team" ? "active" : ""}`}
               onClick={() => setActiveTab("team")}
               role="tab"
-              aria-selected={activeTab === "team"}
+              aria-selected={resolvedActiveTab === "team"}
             >
               Team/All
               <span className="notif-tab-count">{teamCount}</span>
@@ -275,7 +296,7 @@ const NotificationModal = ({
                     className="notif-item unread"
                     onClick={() =>
                       onMarkRead(n, {
-                        viewScope: hasScopedTabs ? activeTab : "all",
+                        viewScope: hasScopedTabs ? resolvedActiveTab : "all",
                       })
                     }
                   >
@@ -293,6 +314,21 @@ const NotificationModal = ({
                       </div>
                       <p className="notif-item-desc">{n.message}</p>
                       {renderMeta(n)}
+                      {getNotificationActionLabel(n) ? (
+                        <button
+                          type="button"
+                          className="notif-inline-action"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onMarkRead(n, {
+                              viewScope: hasScopedTabs ? resolvedActiveTab : "all",
+                            });
+                          }}
+                        >
+                          {getNotificationActionLabel(n)}
+                          <span aria-hidden="true">→</span>
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -314,7 +350,7 @@ const NotificationModal = ({
                     className="notif-item"
                     onClick={() =>
                       onMarkRead(n, {
-                        viewScope: hasScopedTabs ? activeTab : "all",
+                        viewScope: hasScopedTabs ? resolvedActiveTab : "all",
                       })
                     }
                   >

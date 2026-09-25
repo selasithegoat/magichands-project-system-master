@@ -1044,7 +1044,12 @@ const EngagedProjects = ({ user }) => {
       const res = await fetch(`/api/projects/${project._id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: action.complete }),
+        body: JSON.stringify({
+          status: action.complete,
+          ...(action.complete === "Production Completed"
+            ? { confirmationPhrase: COMPLETE_PHRASE }
+            : {}),
+        }),
       });
 
       if (res.ok) {

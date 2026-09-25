@@ -1,5 +1,10 @@
 const Notification = require("../models/Notification");
 
+const ACTIONABLE_NOTIFICATION_SOURCES = [
+  "production_lead_follow_up:completion_due",
+  "production_completion_request:ready",
+];
+
 const parseSourceList = (value) =>
   String(value || "")
     .split(",")
@@ -66,6 +71,12 @@ const markAsRead = async (req, res) => {
       return res.status(404).json({ message: "Notification not found" });
     }
 
+    if (ACTIONABLE_NOTIFICATION_SOURCES.includes(notification.source)) {
+      return res.status(409).json({
+        message: "Complete the required action before resolving this notification.",
+      });
+    }
+
     notification.isRead = true;
     await notification.save();
 
@@ -86,6 +97,9 @@ const markAllAsRead = async (req, res) => {
       source: req.query.source,
       excludeSource: req.query.excludeSource,
     });
+    filter.$nor = [
+      { source: { $in: ACTIONABLE_NOTIFICATION_SOURCES }, isRead: false },
+    ];
 
     await Notification.updateMany(filter, { $set: { isRead: true } });
 
@@ -106,6 +120,9 @@ const clearNotifications = async (req, res) => {
       source: req.query.source,
       excludeSource: req.query.excludeSource,
     });
+    filter.$nor = [
+      { source: { $in: ACTIONABLE_NOTIFICATION_SOURCES }, isRead: false },
+    ];
 
     await Notification.deleteMany(filter);
     res.json({ message: "Notifications cleared" });
