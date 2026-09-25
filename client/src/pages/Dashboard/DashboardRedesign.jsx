@@ -19,6 +19,7 @@ import ThreeDotsIcon from "../../components/icons/ThreeDotsIcon";
 import XIcon from "../../components/icons/XIcon";
 import FabButton from "../../components/ui/FabButton";
 import Toast from "../../components/ui/Toast";
+import ProductionCompletionPrompt from "../../components/features/ProductionCompletionPrompt";
 import UserAvatar from "../../components/ui/UserAvatar";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import usePersistedState from "../../hooks/usePersistedState";
@@ -577,6 +578,8 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     projectId: "",
     action: "",
   });
+  const [productionCompletionTarget, setProductionCompletionTarget] =
+    useState(null);
   const [toast, setToast] = useState(null);
   const [projectViewMode, setProjectViewMode] = usePersistedState(
     "client-dashboard-project-view-mode",
@@ -740,43 +743,32 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const handleProductionAction = async (project, action) => {
     const projectId = toEntityId(project?._id);
     if (!projectId || !["start", "complete"].includes(action)) return;
-    if (
-      action === "complete" &&
-      !window.confirm(
-        "Mark Production as complete and move this project to its next stage?",
-      )
-    ) {
+    if (action === "complete") {
+      setProductionCompletionTarget(project);
       return;
     }
 
     setProductionAction({ projectId, action });
     try {
       const response = await fetch(
-        action === "start"
-          ? `/api/projects/${projectId}/production/start`
-          : `/api/projects/${projectId}/status`,
+        `/api/projects/${projectId}/production/start`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          ...(action === "complete"
-            ? { body: JSON.stringify({ status: "Production Completed" }) }
-            : {}),
         },
       );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(
           payload.message ||
-            `Production could not be ${action === "start" ? "started" : "completed"}.`,
+            "Production could not be started.",
         );
       }
 
       setToast({
         message:
-          action === "start"
-            ? "Production started. Actual time is now being tracked."
-            : "Production completed and moved to the next stage.",
+          "Production started. Actual time is now being tracked.",
         type: "success",
       });
       await Promise.all([
@@ -796,6 +788,23 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     } finally {
       setProductionAction({ projectId: "", action: "" });
     }
+  };
+
+  const handleProductionCompleted = async () => {
+    setProductionCompletionTarget(null);
+    setToast({
+      message: "Production completed and moved to the next stage.",
+      type: "success",
+    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["projects", "production", "my-queue"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["projects", "dashboard-summary"],
+      }),
+    ]);
+    if (onProjectChange) onProjectChange();
   };
 
   const handleUpdateStatusClick = async (project) => {
@@ -1542,6 +1551,18 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                               ? "Complete Production"
                               : "Start Production"}
                         </button>
+                        {!productionInProgress ? (
+                          <button
+                            type="button"
+                            disabled={actionPending}
+                            onClick={() =>
+                              handleProductionAction(project, "complete")
+                            }
+                            title="Complete Production without starting the timer"
+                          >
+                            Complete now
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => handleDetailsClick(project)}
@@ -2070,6 +2091,12 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
       )}
 
       <FabButton onClick={onCreateProject} />
+
+      <ProductionCompletionPrompt
+        directProject={productionCompletionTarget}
+        onClose={() => setProductionCompletionTarget(null)}
+        onResolved={handleProductionCompleted}
+      />
 
       {toast && (
         <div className="ui-toast-container">

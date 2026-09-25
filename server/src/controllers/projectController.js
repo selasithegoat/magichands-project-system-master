@@ -12002,7 +12002,7 @@ const updateProjectStatus = async (req, res) => {
       },
       {
         dept: "Production",
-        from: PRODUCTION_IN_PROGRESS_STATUS,
+        from: [PENDING_PRODUCTION_STATUS, PRODUCTION_IN_PROGRESS_STATUS],
         to: "Production Completed",
       },
       {
@@ -12051,9 +12051,15 @@ const updateProjectStatus = async (req, res) => {
         isQuoteMockupOnlyProject(project) &&
         project.status === "Pending Quote Submission" &&
         isQuoteMockupApproved(project);
-      if (project.status !== deptAction.from && !allowQuoteMockupCompletionFromSubmission) {
+      const allowedFromStatuses = Array.isArray(deptAction.from)
+        ? deptAction.from
+        : [deptAction.from];
+      if (
+        !allowedFromStatuses.includes(project.status) &&
+        !allowQuoteMockupCompletionFromSubmission
+      ) {
         return res.status(400).json({
-          message: `Status must be '${deptAction.from}' before completing this stage.`,
+          message: `Status must be ${allowedFromStatuses.map((status) => `'${status}'`).join(" or ")} before completing this stage.`,
         });
       }
     }
@@ -12107,16 +12113,6 @@ const updateProjectStatus = async (req, res) => {
               "Only the Production owner who acknowledged this project can complete production.",
           });
         }
-        if (
-          project.status !== PRODUCTION_IN_PROGRESS_STATUS ||
-          !project?.productionTracking?.workStartedAt
-        ) {
-          return res.status(400).json({
-            code: "PRODUCTION_NOT_STARTED",
-            message: "Start Production before marking this job as complete.",
-          });
-        }
-
         if (
           toText(req.body?.confirmationPhrase) !==
           PRODUCTION_COMPLETION_CONFIRMATION_PHRASE

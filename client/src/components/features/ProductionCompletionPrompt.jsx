@@ -22,11 +22,18 @@ const toLocalDateTimeInput = (value) => {
   return local.toISOString().slice(0, 16);
 };
 
-const ProductionCompletionPrompt = ({ notification, onClose, onResolved }) => {
+const ProductionCompletionPrompt = ({
+  notification,
+  directProject = null,
+  onClose,
+  onResolved,
+}) => {
   const source = String(notification?.source || "").toLowerCase();
   const isLeadReview = source === "production_lead_follow_up:completion_due";
-  const isOwnerRequest = source === "production_completion_request:ready";
-  const project = notification?.project;
+  const isDirectCompletion = Boolean(directProject && !notification);
+  const isOwnerRequest =
+    source === "production_completion_request:ready" || isDirectCompletion;
+  const project = notification?.project || directProject;
   const projectId = toEntityId(project?._id || project);
   const projectName = formatProjectDisplayName(project?.details, null, "Production project");
   const projectReference = String(project?.orderId || projectId.slice(-6).toUpperCase());
@@ -46,14 +53,16 @@ const ProductionCompletionPrompt = ({ notification, onClose, onResolved }) => {
     setConfirmationPhrase("");
     setSubmitting(false);
     setError("");
-  }, [isLeadReview, notification?._id]);
+  }, [isLeadReview, isDirectCompletion, notification?._id, projectId]);
 
   const revisedTimeIsValid = useMemo(() => {
     const parsed = new Date(revisedCompletionAt);
     return !Number.isNaN(parsed.getTime()) && parsed.getTime() > Date.now();
   }, [revisedCompletionAt]);
 
-  if (!notification || (!isLeadReview && !isOwnerRequest)) return null;
+  if ((!notification && !directProject) || (!isLeadReview && !isOwnerRequest)) {
+    return null;
+  }
 
   const submitLeadDecision = async (decision) => {
     if (!projectId || submitting) return;
@@ -67,7 +76,7 @@ const ProductionCompletionPrompt = ({ notification, onClose, onResolved }) => {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            notificationId: notification._id,
+            notificationId: notification?._id,
             decision,
             note,
             ...(decision === "not_done"
@@ -79,7 +88,7 @@ const ProductionCompletionPrompt = ({ notification, onClose, onResolved }) => {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "Feedback could not be saved.");
       onResolved?.({
-        notificationId: notification._id,
+        notificationId: notification?._id,
         message: data.message || "Production feedback recorded.",
       });
     } catch (requestError) {
@@ -101,13 +110,15 @@ const ProductionCompletionPrompt = ({ notification, onClose, onResolved }) => {
         body: JSON.stringify({
           status: "Production Completed",
           confirmationPhrase: confirmationPhrase.trim(),
-          completionRequestId: notification._id,
+          ...(notification?._id
+            ? { completionRequestId: notification._id }
+            : {}),
         }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "Production could not be completed.");
       onResolved?.({
-        notificationId: notification._id,
+        notificationId: notification?._id,
         message: "Production completed successfully.",
       });
     } catch (requestError) {
@@ -236,8 +247,9 @@ const ProductionCompletionPrompt = ({ notification, onClose, onResolved }) => {
         {isOwnerRequest ? (
           <div className="production-prompt-form">
             <p className="production-prompt-copy">
-              The Project Lead confirmed that the work appears complete. Review the
-              project, then type the phrase below to securely complete Production.
+              {isDirectCompletion
+                ? "Review the project, then type the phrase below to securely complete Production. Starting the production timer first is optional."
+                : "The Project Lead confirmed that the work appears complete. Review the project, then type the phrase below to securely complete Production."}
             </p>
             <div className="production-prompt-phrase">{COMPLETE_PHRASE}</div>
             <label>
