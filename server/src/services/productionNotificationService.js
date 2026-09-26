@@ -912,6 +912,14 @@ const closeProductionNotifications = async (
     },
     { $set: { isRead: true, resolvedAt: nowValue } },
   );
+  await Notification.updateMany(
+    {
+      project: project._id,
+      source: { $regex: "^production_action_escalation:" },
+      isRead: false,
+    },
+    { $set: { isRead: true, resolvedAt: nowValue } },
+  );
   if (Number(completionResult?.modifiedCount || 0) > 0) {
     broadcastNotificationChange({
       path: "/api/notifications",

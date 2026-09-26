@@ -3,6 +3,7 @@ const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { sendEmail } = require("./emailService");
 const { broadcastNotificationChange } = require("./realtimeHub");
+const { addProductionWorkingHours } = require("./productionActionWorkingTime");
 
 const NOTIFICATION_DEDUPE_WINDOW_MS = Number.isFinite(
   Number.parseInt(process.env.NOTIFICATION_DEDUPE_WINDOW_MS, 10),
@@ -42,6 +43,7 @@ const createNotification = async (
         : sourceKey === "production_completion_request:ready"
           ? "production_completion_request"
           : "";
+    const actionStartedAt = productionActionType ? new Date() : null;
 
     if (!recipientKey || !senderKey) return null;
 
@@ -112,7 +114,11 @@ const createNotification = async (
                 priority: "urgent",
                 actionType: productionActionType,
                 actionUrl: deliveryOptions?.actionUrl || "/client",
-                createdAt: new Date(),
+                followUpStartedAt: actionStartedAt,
+                reminderSentAt: null,
+                escalatedAt: null,
+                nextReminderAt: addProductionWorkingHours(actionStartedAt, 2),
+                createdAt: actionStartedAt,
               },
             },
             { new: true },
@@ -148,6 +154,10 @@ const createNotification = async (
               (productionActionType && projectKey
                 ? "/client"
                 : ""),
+            followUpStartedAt: actionStartedAt,
+            nextReminderAt: actionStartedAt
+              ? addProductionWorkingHours(actionStartedAt, 2)
+              : null,
             ...(dedupeKey ? { dedupeKey } : {}),
           });
           createdNewNotification = true;
@@ -185,7 +195,7 @@ const createNotification = async (
           : pushOverride,
     };
 
-    if (settings.email && recipient.email) {
+    if (settings.email && recipient.email && (!inAppEnabled || createdNewNotification)) {
       await sendEmail(recipient.email, title, message);
     }
 

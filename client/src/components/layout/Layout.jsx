@@ -217,6 +217,7 @@ const Layout = ({
   const [activeProductionPrompt, setActiveProductionPrompt] = useState(null);
   const lastIdsRef = useRef(new Set());
   const shownToastsRef = useRef(new Set()); // Track notification IDs already shown as toasts
+  const seenActionReminderIdsRef = useRef(new Set());
   const [reminderQueue, setReminderQueue] = useState([]);
   const [activeReminderAlert, setActiveReminderAlert] = useState(null);
   const [reminderActionLoading, setReminderActionLoading] = useState(false);
@@ -358,13 +359,15 @@ const Layout = ({
       showNative = true,
       acknowledgeOnDismiss = false,
       missed = false,
+      force = false,
+      reminder = false,
     } = {},
   ) => {
     // Prevent duplicate toasts
-    if (shownToastsRef.current.has(notification._id)) {
+    if (!force && shownToastsRef.current.has(notification._id)) {
       return;
     }
-    shownToastsRef.current.add(notification._id);
+    if (!force) shownToastsRef.current.add(notification._id);
 
     // Check user preferences for Push/Toasts
     const allowPush = user?.notificationSettings?.push ?? true;
@@ -390,18 +393,23 @@ const Layout = ({
       notification?.project?._id || notification?.project,
     );
     setToasts((prev) => [
-      ...prev,
+      ...(reminder
+        ? prev.filter((toast) => toast.notification?._id !== notification._id)
+        : prev),
       {
         id,
-        title: notification.title,
-        message: notification.message,
+        title: reminder ? `Still waiting: ${notification.title}` : notification.title,
+        message: reminder
+          ? `${notification.message} This action still needs your response.`
+          : notification.message,
         type:
           getProductionNotificationToastType(notification) ||
           (notification.type === "ASSIGNMENT" ? "warning" : "info"),
         chatKind: isChatMentionNotification(notification) ? "public" : "",
         projectId,
         notification,
-        persistent: persistent || isPendingActionNotification(notification),
+        persistent:
+          !reminder && (persistent || isPendingActionNotification(notification)),
         acknowledgeOnDismiss:
           isPendingActionNotification(notification) ? false : acknowledgeOnDismiss,
         missed,
@@ -687,6 +695,18 @@ const Layout = ({
         );
         syncReminderQueueFromNotifications(data);
 
+        data.forEach((notification) => {
+          if (!isPendingActionNotification(notification) || !notification.reminderSentAt) {
+            return;
+          }
+          const reminderKey = `${notification._id}:${notification.reminderSentAt}`;
+          if (seenActionReminderIdsRef.current.has(reminderKey)) return;
+          seenActionReminderIdsRef.current.add(reminderKey);
+          if (!isInitial) {
+            addToast(notification, { force: true, reminder: true });
+          }
+        });
+
         // On login, replay the latest unread Production alert per project.
         // Other existing unread notifications remain available in the notification list.
         if (isInitial) {
@@ -740,6 +760,7 @@ const Layout = ({
     if (shouldReplayMissedProduction) {
       notificationBootstrapUserId = currentUserId;
       shownToastsRef.current = new Set();
+      seenActionReminderIdsRef.current = new Set();
       lastIdsRef.current = new Set();
       queuedReminderNotificationIdsRef.current = new Set();
       handledReminderNotificationIdsRef.current = new Set();

@@ -341,7 +341,13 @@ const NotificationModal = ({
                       <p className="notif-item-desc">{n.message}</p>
                       {isPendingActionNotification(n) && (
                         <span className="notif-action-state">
-                          {n.seenAt ? "Seen · action still required" : "Action required"}
+                          {n.escalatedAt
+                            ? "Escalated to Admin · action still required"
+                            : n.reminderSentAt
+                              ? "Reminder sent · action still required"
+                              : n.seenAt
+                                ? "Seen · action still required"
+                                : "Action required"}
                         </span>
                       )}
                       {renderMeta(n)}

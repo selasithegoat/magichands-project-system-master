@@ -10892,6 +10892,13 @@ const respondToProductionCompletionReview = async (req, res) => {
         },
         { $set: { isRead: true, resolvedAt: now } },
       );
+      await Notification.updateMany(
+        {
+          source: `production_action_escalation:${leadNotification._id}`,
+          isRead: false,
+        },
+        { $set: { isRead: true, resolvedAt: now } },
+      );
       await logActivity(
         project._id,
         actorId,
@@ -10997,6 +11004,13 @@ const respondToProductionCompletionReview = async (req, res) => {
         recipient: actorId,
         project: project._id,
         source: "production_lead_follow_up:completion_due",
+        isRead: false,
+      },
+      { $set: { isRead: true, resolvedAt: now } },
+    );
+    await Notification.updateMany(
+      {
+        source: `production_action_escalation:${leadNotification._id}`,
         isRead: false,
       },
       { $set: { isRead: true, resolvedAt: now } },
