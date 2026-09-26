@@ -27,7 +27,11 @@ import ProjectRevisionHistory, {
   ProjectRevisionStamp,
 } from "@client/components/features/ProjectRevisionHistory";
 import { buildFileKey } from "@client/utils/referenceAttachments";
-import { getDepartmentLabel } from "@client/constants/departments";
+import {
+  getDepartmentLabel,
+  normalizeDepartmentId,
+  PRODUCTION_SUB_DEPARTMENTS,
+} from "@client/constants/departments";
 import {
   getQuoteRequirementSummary,
   getQuoteStatusDisplay,
@@ -561,6 +565,19 @@ const buildProjectItemMap = (items = []) =>
       item,
     ]),
   );
+const buildBatchAllocationTotals = (batches = [], excludeBatchId = "") =>
+  (Array.isArray(batches) ? batches : []).reduce((totals, batch) => {
+    if (!batch || batch.status === "cancelled") return totals;
+    if (excludeBatchId && String(batch.batchId || "") === excludeBatchId) {
+      return totals;
+    }
+    (Array.isArray(batch.items) ? batch.items : []).forEach((entry) => {
+      const itemId = String(entry?.itemId || entry?._id || "");
+      if (!itemId) return;
+      totals[itemId] = (totals[itemId] || 0) + (Number(entry?.qty) || 0);
+    });
+    return totals;
+  }, {});
 const buildBatchItemSummary = (batch, itemMap) => {
   const entries = (Array.isArray(batch?.items) ? batch.items : [])
     .map((entry) => {
@@ -919,6 +936,13 @@ const ProjectDetails = ({ user }) => {
   const [batchPackagingQty, setBatchPackagingQty] = useState({});
   const [batchDeliveryQty, setBatchDeliveryQty] = useState({});
   const [batchStatusUpdatingId, setBatchStatusUpdatingId] = useState("");
+  const [batchFormOpen, setBatchFormOpen] = useState(false);
+  const [batchEditingId, setBatchEditingId] = useState("");
+  const [batchLabel, setBatchLabel] = useState("");
+  const [batchProductionSubDepartment, setBatchProductionSubDepartment] =
+    useState("");
+  const [batchItemAllocations, setBatchItemAllocations] = useState({});
+  const [batchSaving, setBatchSaving] = useState(false);
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -970,9 +994,26 @@ const ProjectDetails = ({ user }) => {
     () => (Array.isArray(project?.batches) ? project.batches : []),
     [project?.batches],
   );
-  const batchItemMap = useMemo(
-    () => buildProjectItemMap(project?.items || []),
+  const projectItems = useMemo(
+    () => (Array.isArray(project?.items) ? project.items : []),
     [project?.items],
+  );
+  const projectProductionSubDepartments = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (Array.isArray(project?.departments) ? project.departments : [])
+            .map(normalizeDepartmentId)
+            .filter((department) =>
+              PRODUCTION_SUB_DEPARTMENTS.includes(department),
+            ),
+        ),
+      ),
+    [project?.departments],
+  );
+  const batchItemMap = useMemo(
+    () => buildProjectItemMap(projectItems),
+    [projectItems],
   );
   const batchProgress = useMemo(
     () => (project ? buildBatchProgress(project) : null),
@@ -1134,6 +1175,148 @@ const ProjectDetails = ({ user }) => {
       overrideButtonText: "Continue with Override",
       overrideReason: "",
     });
+  };
+
+  const resetBatchForm = () => {
+    setBatchFormOpen(false);
+    setBatchEditingId("");
+    setBatchLabel("");
+    setBatchProductionSubDepartment("");
+    setBatchItemAllocations({});
+  };
+
+  const getBatchItemAvailableQty = (item, excludeBatchId = batchEditingId) => {
+    const itemId = String(item?._id || "");
+    const totalQty = Number(item?.qty) || 0;
+    if (!itemId || totalQty <= 0) return 0;
+    const allocated = buildBatchAllocationTotals(
+      batches,
+      excludeBatchId,
+    );
+    return Math.max(totalQty - (allocated[itemId] || 0), 0);
+  };
+
+  const openNewBatchForm = () => {
+    if (!ensureProjectIsEditable()) return;
+    if (projectProductionSubDepartments.length === 0) {
+      toast.error(
+        "Engage at least one production subdepartment before creating a batch.",
+      );
+      return;
+    }
+    if (projectItems.length === 0) {
+      toast.error("Add project items before creating a batch.");
+      return;
+    }
+    setBatchEditingId("");
+    setBatchLabel(`Batch ${batches.length + 1}`);
+    setBatchProductionSubDepartment(
+      projectProductionSubDepartments.length === 1
+        ? projectProductionSubDepartments[0]
+        : "",
+    );
+    setBatchItemAllocations({});
+    setBatchFormOpen(true);
+  };
+
+  const openEditBatchForm = (batch) => {
+    if (!batch || !ensureProjectIsEditable()) return;
+    const batchId = String(batch.batchId || "");
+    if (!batchId) return;
+    setBatchEditingId(batchId);
+    setBatchLabel(String(batch.label || ""));
+    const currentDepartment = normalizeDepartmentId(
+      batch.productionSubDepartment,
+    );
+    setBatchProductionSubDepartment(
+      projectProductionSubDepartments.includes(currentDepartment)
+        ? currentDepartment
+        : projectProductionSubDepartments[0] || "",
+    );
+    setBatchItemAllocations(
+      (Array.isArray(batch.items) ? batch.items : []).reduce(
+        (allocations, entry) => {
+          const itemId = String(entry?.itemId || entry?._id || "");
+          if (itemId) allocations[itemId] = Number(entry?.qty) || 0;
+          return allocations;
+        },
+        {},
+      ),
+    );
+    setBatchFormOpen(true);
+  };
+
+  const handleBatchItemAllocationChange = (item, value) => {
+    const itemId = String(item?._id || "");
+    if (!itemId) return;
+    if (value === "") {
+      setBatchItemAllocations((previous) => ({
+        ...previous,
+        [itemId]: "",
+      }));
+      return;
+    }
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return;
+    const availableQty = getBatchItemAvailableQty(item);
+    setBatchItemAllocations((previous) => ({
+      ...previous,
+      [itemId]: Math.max(0, Math.min(numericValue, availableQty)),
+    }));
+  };
+
+  const handleSaveBatch = async () => {
+    if (!project || !ensureProjectIsEditable()) return;
+    const items = Object.entries(batchItemAllocations)
+      .map(([itemId, qty]) => ({ itemId, qty: Number(qty) }))
+      .filter(
+        (entry) =>
+          entry.itemId && Number.isFinite(entry.qty) && entry.qty > 0,
+      );
+    if (items.length === 0) {
+      toast.error("Assign at least one item quantity to this batch.");
+      return;
+    }
+    if (
+      !projectProductionSubDepartments.includes(
+        batchProductionSubDepartment,
+      )
+    ) {
+      toast.error("Select the production subdepartment responsible for this batch.");
+      return;
+    }
+
+    const editing = Boolean(batchEditingId);
+    const endpoint = editing
+      ? `/api/projects/${id}/batches/${batchEditingId}?source=admin`
+      : `/api/projects/${id}/batches?source=admin`;
+    setBatchSaving(true);
+    try {
+      const response = await fetch(endpoint, {
+        method: editing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          label: batchLabel.trim(),
+          productionSubDepartment: batchProductionSubDepartment,
+          items,
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.message || "Failed to save batch.");
+        return;
+      }
+      const updated = await response.json();
+      setProject(updated);
+      resetBatchForm();
+      toast.success(editing ? "Batch updated." : "Batch created.");
+    } catch (error) {
+      console.error("Batch save error:", error);
+      toast.error("Network error while saving the batch.");
+    } finally {
+      setBatchSaving(false);
+    }
   };
 
   const handleBatchStatusUpdate = async (batch) => {
@@ -4701,10 +4884,121 @@ const ProjectDetails = ({ user }) => {
           <div className="detail-card">
             <div className="detail-card-header">
               <h3 className="card-title">Batch Management</h3>
-              <span className="batch-admin-count">
-                {batches.length} {batches.length === 1 ? "batch" : "batches"}
-              </span>
+              <div className="batch-admin-header-actions">
+                <span className="batch-admin-count">
+                  {batches.length} {batches.length === 1 ? "batch" : "batches"}
+                </span>
+                {!batchFormOpen && (
+                  <button
+                    type="button"
+                    className="batch-admin-create-btn"
+                    onClick={openNewBatchForm}
+                  >
+                    Create Batch
+                  </button>
+                )}
+              </div>
             </div>
+            {batchFormOpen && (
+              <div className="batch-admin-form">
+                <div className="batch-admin-form-heading">
+                  <div>
+                    <h4>{batchEditingId ? "Edit Batch" : "Create Batch"}</h4>
+                    <p>
+                      Admins can assign quantities to any production
+                      subdepartment engaged on this project.
+                    </p>
+                  </div>
+                </div>
+                <div className="batch-admin-form-grid">
+                  <label className="batch-admin-field">
+                    <span>Batch Label</span>
+                    <input
+                      type="text"
+                      value={batchLabel}
+                      onChange={(event) => setBatchLabel(event.target.value)}
+                      placeholder={`Batch ${batches.length + 1}`}
+                      disabled={batchSaving}
+                    />
+                  </label>
+                  <label className="batch-admin-field">
+                    <span>Responsible Production Subdepartment</span>
+                    <select
+                      value={batchProductionSubDepartment}
+                      onChange={(event) =>
+                        setBatchProductionSubDepartment(event.target.value)
+                      }
+                      disabled={batchSaving}
+                    >
+                      <option value="">Select subdepartment</option>
+                      {projectProductionSubDepartments.map((department) => (
+                        <option key={department} value={department}>
+                          {getDepartmentLabel(department)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="batch-admin-allocation-list">
+                  {projectItems.map((item) => {
+                    const itemId = String(item?._id || "");
+                    const availableQty = getBatchItemAvailableQty(item);
+                    const currentQty = batchItemAllocations[itemId] ?? "";
+                    return (
+                      <div key={itemId} className="batch-admin-allocation-row">
+                        <div>
+                          <strong>{item?.description || "Item"}</strong>
+                          {item?.breakdown && <span>{item.breakdown}</span>}
+                        </div>
+                        <span className="batch-admin-available">
+                          {availableQty} available
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={availableQty}
+                          value={currentQty}
+                          onChange={(event) =>
+                            handleBatchItemAllocationChange(
+                              item,
+                              event.target.value,
+                            )
+                          }
+                          disabled={batchSaving || !itemId}
+                          aria-label={`Quantity for ${item?.description || "item"}`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="batch-admin-form-actions">
+                  <button
+                    type="button"
+                    className="batch-admin-cancel-btn"
+                    onClick={resetBatchForm}
+                    disabled={batchSaving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="batch-admin-create-btn"
+                    onClick={handleSaveBatch}
+                    disabled={
+                      batchSaving ||
+                      !batchProductionSubDepartment ||
+                      projectItems.length === 0
+                    }
+                  >
+                    {batchSaving
+                      ? "Saving..."
+                      : batchEditingId
+                        ? "Save Batch"
+                        : "Create Batch"}
+                  </button>
+                </div>
+              </div>
+            )}
             {showBatchProgress && (
               <div className="batch-admin-progress">
                 <div className="batch-admin-progress-header">Batch Progress</div>
@@ -4822,11 +5116,30 @@ const ProjectDetails = ({ user }) => {
                           <h4>{batch?.label || "Batch"}</h4>
                           <p>{summary}</p>
                         </div>
-                        <span className={`batch-admin-status ${currentStatus}`}>
-                          {getBatchStatusLabel(currentStatus)}
-                        </span>
+                        <div className="batch-admin-item-actions">
+                          {currentStatus !== "cancelled" && (
+                            <button
+                              type="button"
+                              className="batch-admin-edit-btn"
+                              onClick={() => openEditBatchForm(batch)}
+                              disabled={batchSaving || isUpdating}
+                            >
+                              Edit Batch
+                            </button>
+                          )}
+                          <span className={`batch-admin-status ${currentStatus}`}>
+                            {getBatchStatusLabel(currentStatus)}
+                          </span>
+                        </div>
                       </div>
                       <div className="batch-admin-meta">
+                        {batch?.productionSubDepartment && (
+                          <span>
+                            Production: {getDepartmentLabel(
+                              batch.productionSubDepartment,
+                            )}
+                          </span>
+                        )}
                         {batch?.createdAt && (
                           <span>Created {formatLastUpdated(batch.createdAt)}</span>
                         )}

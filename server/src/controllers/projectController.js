@@ -1244,7 +1244,8 @@ const ensureProjectMutationAccess = (req, res, project, action = "default") => {
     req.user?.role === "admin" &&
     isUserAssignedProjectLead(req.user, project) &&
     isAdminPortalMutation &&
-    action !== "revision"
+    action !== "revision" &&
+    action !== "batch"
   ) {
     res.status(403).json({
       message:
@@ -1252,7 +1253,12 @@ const ensureProjectMutationAccess = (req, res, project, action = "default") => {
     });
     return false;
   }
-  const engagedActionTypes = new Set(["acknowledge", "status", "mockup"]);
+  const engagedActionTypes = new Set([
+    "acknowledge",
+    "status",
+    "mockup",
+    "batch",
+  ]);
   const isEngagedPortalMutation = isEngagedPortalRequest(req);
   if (
     isProductionTrainee(req.user) &&
@@ -22038,7 +22044,7 @@ const completeOrderMeeting = async (req, res) => {
 const createProjectBatch = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
-    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
+    if (!ensureProjectMutationAccess(req, res, project, "batch")) return;
 
     const isAdmin = isAdminUser(req.user);
     if (!isAdmin && !isProductionUser(req.user)) {
@@ -22053,7 +22059,7 @@ const createProjectBatch = async (req, res) => {
       return res.status(400).json({ message: validation.message });
     }
 
-    if (!canCreateBatchAtCurrentStatus(project)) {
+    if (!isAdmin && !canCreateBatchAtCurrentStatus(project)) {
       return res.status(400).json({
         message:
           "Batches can only be created while production is pending or when existing batches do not cover the full project quantity.",
@@ -22117,7 +22123,7 @@ const createProjectBatch = async (req, res) => {
 const updateProjectBatch = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
-    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
+    if (!ensureProjectMutationAccess(req, res, project, "batch")) return;
 
     const isAdmin = isAdminUser(req.user);
     if (!isAdmin && !isProductionUser(req.user)) {
@@ -22224,7 +22230,7 @@ const updateProjectBatch = async (req, res) => {
 const updateProjectBatchStatus = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
-    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
+    if (!ensureProjectMutationAccess(req, res, project, "batch")) return;
 
     const batchId = String(req.params.batchId || "");
     const batches = Array.isArray(project.batches) ? project.batches : [];
