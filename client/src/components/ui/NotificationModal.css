@@ -15,8 +15,8 @@
 }
 
 .notif-modal-content {
-  width: 420px;
-  max-height: min(80vh, 640px);
+  width: 520px;
+  max-height: min(80vh, 1000px);
   background: linear-gradient(135deg, var(--bg-card) 0%, var(--surface-alt) 100%);
   border-radius: 20px;
   box-shadow: var(--shadow-lg);
