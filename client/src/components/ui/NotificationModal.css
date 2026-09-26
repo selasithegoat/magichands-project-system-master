@@ -7,9 +7,9 @@
   background-color: var(--overlay);
   z-index: 1000;
   display: flex;
-  justify-content: flex-end; /* Align to right side */
+  justify-content: flex-end;
   align-items: flex-start;
-  padding-top: 70px; /* Below header */
+  padding-top: 70px;
   padding-right: 24px;
   backdrop-filter: blur(2px);
 }
@@ -102,6 +102,7 @@
 .notif-tabs {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
   padding: 10px 18px;
   border-bottom: 1px solid var(--border-color);
@@ -253,6 +254,20 @@
 
 .notif-item.unread::before {
   background: var(--primary-color);
+}
+.notif-item.requires-action {
+  border-color: rgba(24, 184, 93, 0.48);
+  background: linear-gradient(135deg, rgba(32, 201, 107, 0.1), var(--bg-card) 55%);
+}
+.notif-item.requires-action::before {
+  background: #20c96b;
+}
+.notif-action-state {
+  display: inline-block;
+  margin-top: 2px;
+  color: #11904b;
+  font-size: 0.7rem;
+  font-weight: 800;
 }
 
 .notif-item:hover {

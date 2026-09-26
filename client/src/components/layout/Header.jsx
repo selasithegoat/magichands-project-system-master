@@ -28,6 +28,8 @@ const Header = ({
   onToggleMobileMenu,
   onToggleNotification, // New prop
   notificationCount = 0, // New prop
+  pendingActionCount = 0,
+  unseenActionCount = 0,
   engagedCount = 0, // [New] Department engagement count
   theme = "light",
   onToggleTheme,
@@ -239,7 +241,13 @@ const Header = ({
               </svg>
             )}
           </button>
-          <button className="icon-btn" onClick={onToggleNotification}>
+          <button
+            className={`icon-btn notification-trigger ${pendingActionCount > 0 ? "has-actions" : ""} ${unseenActionCount > 0 ? "has-new-actions" : ""}`}
+            onClick={onToggleNotification}
+            type="button"
+            aria-label={`Open notifications: ${pendingActionCount} action required, ${notificationCount} unread`}
+            title={`${pendingActionCount} action required · ${notificationCount} unread`}
+          >
             <svg
               width="20"
               height="20"
@@ -253,7 +261,16 @@ const Header = ({
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
-            {notificationCount > 0 && <span className="notif-dot"></span>}
+            {notificationCount > 0 && (
+              <span className="notif-unread-badge">
+                {notificationCount > 99 ? "99+" : notificationCount}
+              </span>
+            )}
+            {pendingActionCount > 0 && (
+              <span className="notif-action-badge" aria-hidden="true">
+                {pendingActionCount > 9 ? "9+" : pendingActionCount}
+              </span>
+            )}
           </button>
           <div
             className={`user-profile-mini ${avatarUrl ? "has-image" : ""}`}

@@ -139,6 +139,49 @@
   border-radius: 50%;
   border: 2px solid var(--bg-card);
 }
+.notification-trigger.has-actions {
+  color: #159447;
+  border-color: rgba(23, 177, 83, 0.48);
+  background: rgba(32, 201, 107, 0.12);
+}
+.notification-trigger.has-new-actions {
+  animation: notification-attention-pulse 2.4s ease-in-out infinite;
+}
+@keyframes notification-attention-pulse {
+  50% {
+    box-shadow: 0 0 0 6px rgba(32, 201, 107, 0.15);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notification-trigger.has-new-actions {
+    animation: none;
+  }
+}
+.notif-unread-badge,
+.notif-action-badge {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  color: #fff;
+  border: 2px solid var(--bg-card);
+}
+.notif-unread-badge {
+  top: -8px;
+  right: -8px;
+  background: #181b1c;
+}
+.notif-action-badge {
+  right: -8px;
+  bottom: -8px;
+  background: #18b85d;
+}
 .user-profile-mini {
   width: 34px;
   height: 34px;

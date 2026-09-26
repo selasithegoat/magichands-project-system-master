@@ -36,6 +36,12 @@ const createNotification = async (
     const allowSelf = Boolean(deliveryOptions?.allowSelf);
     const sourceKey = String(deliveryOptions?.source || "").trim();
     const dedupeKey = String(deliveryOptions?.dedupeKey || "").trim();
+    const productionActionType =
+      sourceKey === "production_lead_follow_up:completion_due"
+        ? "production_completion_review"
+        : sourceKey === "production_completion_request:ready"
+          ? "production_completion_request"
+          : "";
 
     if (!recipientKey || !senderKey) return null;
 
@@ -66,20 +72,55 @@ const createNotification = async (
     if (inAppEnabled) {
       // Guard against duplicate notifications from overlapping triggers
       const dedupeStart = new Date(Date.now() - NOTIFICATION_DEDUPE_WINDOW_MS);
-      const existing = await Notification.findOne(
-        dedupeKey
-          ? { recipient: recipientKey, dedupeKey }
-          : {
+      const activeAction =
+        productionActionType && projectKey
+          ? await Notification.findOne({
               recipient: recipientKey,
               project: projectKey,
-              title,
-              message,
               source: sourceKey,
-              createdAt: { $gte: dedupeStart },
-            },
-      ).lean();
+              isRead: false,
+            })
+              .sort({ createdAt: -1 })
+              .lean()
+          : null;
+      const existing =
+        activeAction ||
+        (await Notification.findOne(
+          dedupeKey
+            ? { recipient: recipientKey, dedupeKey }
+            : {
+                recipient: recipientKey,
+                project: projectKey,
+                title,
+                message,
+                source: sourceKey,
+                createdAt: { $gte: dedupeStart },
+              },
+        ).lean());
       if (existing) {
-        notification = existing;
+        if (productionActionType && existing.isRead) {
+          notification = await Notification.findOneAndUpdate(
+            { _id: existing._id },
+            {
+              $set: {
+                isRead: false,
+                seenAt: null,
+                resolvedAt: null,
+                title,
+                message,
+                requiresAction: true,
+                priority: "urgent",
+                actionType: productionActionType,
+                actionUrl: deliveryOptions?.actionUrl || "/client",
+                createdAt: new Date(),
+              },
+            },
+            { new: true },
+          ).lean();
+          createdNewNotification = true;
+        } else {
+          notification = existing;
+        }
       } else {
         try {
           notification = await Notification.create({
@@ -91,6 +132,22 @@ const createNotification = async (
             title,
             message,
             source: sourceKey,
+            requiresAction: Boolean(
+              deliveryOptions?.requiresAction ?? productionActionType,
+            ),
+            priority:
+              deliveryOptions?.priority ||
+              (productionActionType
+                ? "urgent"
+                : ["ASSIGNMENT", "REMINDER", "REVISION"].includes(type)
+                  ? "important"
+                  : "informational"),
+            actionType: deliveryOptions?.actionType || productionActionType,
+            actionUrl:
+              deliveryOptions?.actionUrl ||
+              (productionActionType && projectKey
+                ? "/client"
+                : ""),
             ...(dedupeKey ? { dedupeKey } : {}),
           });
           createdNewNotification = true;

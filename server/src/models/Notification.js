@@ -46,6 +46,17 @@ const NotificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    seenAt: { type: Date, default: null },
+    resolvedAt: { type: Date, default: null },
+    requiresAction: { type: Boolean, default: false },
+    priority: {
+      type: String,
+      enum: ["informational", "important", "urgent"],
+      default: "informational",
+    },
+    actionType: { type: String, trim: true, default: "" },
+    actionUrl: { type: String, trim: true, default: "" },
+    nextReminderAt: { type: Date, default: null },
     source: {
       type: String,
       trim: true,
@@ -63,6 +74,7 @@ const NotificationSchema = new mongoose.Schema(
 // Indexes
 NotificationSchema.index({ recipient: 1, createdAt: -1 }); // Optimize fetching user notifications
 NotificationSchema.index({ recipient: 1, isRead: 1 }); // Optimize unread count checks
+NotificationSchema.index({ recipient: 1, requiresAction: 1, isRead: 1 });
 NotificationSchema.index(
   { recipient: 1, dedupeKey: 1 },
   {

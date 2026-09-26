@@ -612,7 +612,7 @@ const resolveProductionNotifications = async (
       source: { $regex: `^${PRODUCTION_NOTIFICATION_SOURCE_PREFIX}:` },
       isRead: false,
     },
-    { $set: { isRead: true } },
+    { $set: { isRead: true, resolvedAt: nowValue } },
   );
   const modifiedCount = Number(result?.modifiedCount || 0);
   if (modifiedCount > 0) {
@@ -652,7 +652,7 @@ const resolveProductionLeadNotifications = async (
   };
   const recipientIds = await Notification.distinct("recipient", query);
   const result = await Notification.updateMany(query, {
-    $set: { isRead: true },
+    $set: { isRead: true, resolvedAt: nowValue },
   });
   const modifiedCount = Number(result?.modifiedCount || 0);
 
@@ -694,7 +694,7 @@ const resolveProductionStartedNotifications = async (
       },
       isRead: false,
     },
-    { $set: { isRead: true } },
+    { $set: { isRead: true, resolvedAt: nowValue } },
   );
   const modifiedCount = Number(result?.modifiedCount || 0);
   if (modifiedCount > 0) {
@@ -910,7 +910,7 @@ const closeProductionNotifications = async (
       source: PRODUCTION_COMPLETION_REQUEST_SOURCE,
       isRead: false,
     },
-    { $set: { isRead: true } },
+    { $set: { isRead: true, resolvedAt: nowValue } },
   );
   if (Number(completionResult?.modifiedCount || 0) > 0) {
     broadcastNotificationChange({

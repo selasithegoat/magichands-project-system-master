@@ -5,6 +5,7 @@ const { ipKeyGenerator } = rateLimit;
 const {
   getNotifications,
   markAsRead,
+  markAsSeen,
   markAllAsRead,
   clearNotifications,
 } = require("../controllers/notificationController");
@@ -45,5 +46,6 @@ router.get("/", notificationReadLimiter, getNotifications);
 router.delete("/", clearNotifications);
 router.patch("/read-all", markAllAsRead);
 router.patch("/:id/read", markAsRead);
+router.patch("/:id/seen", markAsSeen);
 
 module.exports = router;

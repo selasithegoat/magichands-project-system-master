@@ -13,6 +13,10 @@ import SystemIcon from "../icons/SystemIcon";
 import ReminderBellIcon from "../icons/ReminderBellIcon";
 import UsersIcon from "../icons/UsersIcon";
 import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
+import {
+  getNotificationActionLabel,
+  isPendingActionNotification,
+} from "../../utils/notificationActions";
 
 const getNotificationTypeMeta = (notification = {}) => {
   const source = String(notification?.source || "").trim().toLowerCase();
@@ -81,17 +85,6 @@ const getNotificationTypeMeta = (notification = {}) => {
   }
 };
 
-const getNotificationActionLabel = (notification = {}) => {
-  const source = String(notification?.source || "").trim().toLowerCase();
-  if (source === "production_lead_follow_up:completion_due") {
-    return "Answer completion check";
-  }
-  if (source === "production_completion_request:ready") {
-    return "Review & complete";
-  }
-  return "";
-};
-
 const toEntityId = (value) => {
   if (!value) return "";
   if (typeof value === "string" || typeof value === "number") {
@@ -145,6 +138,7 @@ const NotificationModal = ({
   const isProduction = productionSubDepts.length > 0;
   const hasScopedTabs = isFrontDesk || isProduction;
   const [activeTab, setActiveTab] = useState(hasScopedTabs ? "mine" : "all");
+  const [attentionTab, setAttentionTab] = useState("actions");
   const resolvedActiveTab = hasScopedTabs
     ? activeTab === "team" || activeTab === "mine"
       ? activeTab
@@ -179,16 +173,25 @@ const NotificationModal = ({
 
   const teamNotifications = notifications;
 
-  const visibleNotifications = (() => {
+  const scopedNotifications = (() => {
     if (!isFrontDesk) return notifications;
     return resolvedActiveTab === "mine" ? mineNotifications : teamNotifications;
   })();
+  const pendingActionCount = scopedNotifications.filter(
+    isPendingActionNotification,
+  ).length;
+  const visibleNotifications =
+    attentionTab === "actions"
+      ? scopedNotifications.filter(isPendingActionNotification)
+      : scopedNotifications;
 
   const unreadNotifications = visibleNotifications.filter((n) => !n.isRead);
   const readNotifications = visibleNotifications.filter((n) => n.isRead);
-  const unreadCount = unreadNotifications.length;
+  const unreadCount = visibleNotifications.filter(
+    (notification) => !notification.isRead && !notification.seenAt,
+  ).length;
   const markableUnreadCount = unreadNotifications.filter(
-    (notification) => !getNotificationActionLabel(notification),
+    (notification) => !isPendingActionNotification(notification),
   ).length;
   const totalCount = visibleNotifications.length;
 
@@ -254,6 +257,29 @@ const NotificationModal = ({
           </div>
         </div>
 
+        <div className="notif-tabs" role="tablist" aria-label="Notification attention">
+          <button
+            type="button"
+            className={`notif-tab ${attentionTab === "actions" ? "active" : ""}`}
+            onClick={() => setAttentionTab("actions")}
+            role="tab"
+            aria-selected={attentionTab === "actions"}
+          >
+            Action Required
+            <span className="notif-tab-count">{pendingActionCount}</span>
+          </button>
+          <button
+            type="button"
+            className={`notif-tab ${attentionTab === "all" ? "active" : ""}`}
+            onClick={() => setAttentionTab("all")}
+            role="tab"
+            aria-selected={attentionTab === "all"}
+          >
+            All Notifications
+            <span className="notif-tab-count">{notifications.length}</span>
+          </button>
+        </div>
+
         {hasScopedTabs && (
           <div className="notif-tabs" role="tablist" aria-label="Notification view">
             <button
@@ -285,7 +311,7 @@ const NotificationModal = ({
               <div className="notif-section-header">
                 <span className="section-dot red"></span>
                 <span className="section-label">
-                  UNREAD ({unreadNotifications.length})
+                  {attentionTab === "actions" ? "PENDING ACTION" : "OPEN"} ({unreadNotifications.length})
                 </span>
               </div>
               {unreadNotifications.map((n) => {
@@ -293,7 +319,7 @@ const NotificationModal = ({
                 return (
                   <div
                     key={n._id}
-                    className="notif-item unread"
+                    className={`notif-item unread ${isPendingActionNotification(n) ? "requires-action" : ""} ${n.seenAt ? "seen" : ""}`}
                     onClick={() =>
                       onMarkRead(n, {
                         viewScope: hasScopedTabs ? resolvedActiveTab : "all",
@@ -313,8 +339,13 @@ const NotificationModal = ({
                         <span className="notif-time">{formatTime(n.createdAt)}</span>
                       </div>
                       <p className="notif-item-desc">{n.message}</p>
+                      {isPendingActionNotification(n) && (
+                        <span className="notif-action-state">
+                          {n.seenAt ? "Seen · action still required" : "Action required"}
+                        </span>
+                      )}
                       {renderMeta(n)}
-                      {getNotificationActionLabel(n) ? (
+                      {isPendingActionNotification(n) ? (
                         <button
                           type="button"
                           className="notif-inline-action"
@@ -377,7 +408,11 @@ const NotificationModal = ({
 
           {totalCount === 0 && (
             <div className="notif-empty">
-              <p>No notifications in this view.</p>
+              <p>
+                {attentionTab === "actions"
+                  ? "No actions need your attention right now."
+                  : "No notifications in this view."}
+              </p>
             </div>
           )}
         </div>

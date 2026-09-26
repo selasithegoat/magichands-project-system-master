@@ -35,6 +35,11 @@ import {
 import { formatProjectDisplayName } from "../../utils/projectName";
 import useAdaptivePolling from "../../hooks/useAdaptivePolling";
 import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
+import {
+  dedupePendingProjectActions,
+  isPendingActionNotification,
+  markNotificationSeen,
+} from "../../utils/notificationActions";
 
 const NOTIFICATION_POLL_INTERVAL_MS = 15000;
 const HIDDEN_NOTIFICATION_POLL_INTERVAL_MS = 60000;
@@ -198,7 +203,16 @@ const Layout = ({
   // [New] Notifications & Toasts State
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [notificationCount, setNotificationCount] = useState(0);
+  const notificationCount = notifications.filter(
+    (notification) => !notification.isRead && !notification.seenAt,
+  ).length;
+  const pendingActionCount = notifications.filter(
+    isPendingActionNotification,
+  ).length;
+  const unseenActionCount = notifications.filter(
+    (notification) =>
+      isPendingActionNotification(notification) && !notification.seenAt,
+  ).length;
   const [toasts, setToasts] = useState([]);
   const [activeProductionPrompt, setActiveProductionPrompt] = useState(null);
   const lastIdsRef = useRef(new Set());
@@ -292,6 +306,15 @@ const Layout = ({
     if (notification?.isRead || !getProductionActionKind(notification)) {
       return false;
     }
+    if (!notification.seenAt) {
+      const seenAt = new Date().toISOString();
+      setNotifications((previous) =>
+        previous.map((item) =>
+          item._id === notification._id ? { ...item, seenAt } : item,
+        ),
+      );
+      void markNotificationSeen(notification._id);
+    }
     setActiveProductionPrompt(notification);
     setIsNotificationOpen(false);
     setIsMobileMenuOpen(false);
@@ -378,9 +401,9 @@ const Layout = ({
         chatKind: isChatMentionNotification(notification) ? "public" : "",
         projectId,
         notification,
-        persistent: persistent || Boolean(productionActionKind),
+        persistent: persistent || isPendingActionNotification(notification),
         acknowledgeOnDismiss:
-          productionActionKind ? false : acknowledgeOnDismiss,
+          isPendingActionNotification(notification) ? false : acknowledgeOnDismiss,
         missed,
         kind: productionActionKind ? "production" : "",
         actionLabel:
@@ -502,7 +525,6 @@ const Layout = ({
           item._id === notificationId ? { ...item, isRead: true } : item,
         ),
       );
-      setNotificationCount((prev) => Math.max(0, prev - 1));
       setToasts((prev) =>
         prev.filter(
           (toast) =>
@@ -636,19 +658,26 @@ const Layout = ({
     { replayMissedProduction = false } = {},
   ) => {
     try {
-      const res = await fetch(
-        `/api/notifications?excludeSource=${encodeURIComponent(
-          EXCLUDED_NOTIFICATION_SOURCE,
-        )}`,
-      );
+      const [res, pendingRes] = await Promise.all([
+        fetch(
+          `/api/notifications?excludeSource=${encodeURIComponent(
+            EXCLUDED_NOTIFICATION_SOURCE,
+          )}`,
+        ),
+        fetch("/api/notifications?pendingActions=true"),
+      ]);
       if (res.ok) {
-        const data = await res.json();
+        const recent = await res.json();
+        const pending = pendingRes.ok ? await pendingRes.json() : [];
+        const data = dedupePendingProjectActions(
+          Array.from(
+            new Map([...pending, ...recent].map((item) => [item._id, item])).values(),
+          ).sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)),
+        );
         setNotifications(data);
-        const unreadCount = data.filter((n) => !n.isRead).length;
         const unreadNotificationIds = new Set(
           data.filter((n) => !n.isRead).map((n) => toEntityId(n._id)),
         );
-        setNotificationCount(unreadCount);
         setToasts((prev) =>
           prev.filter(
             (toast) =>
@@ -824,18 +853,16 @@ const Layout = ({
       if (res.ok) {
         setNotifications((prev) => {
           const next = prev.map((notification) =>
-            !notification.isRead && getProductionActionKind(notification)
+            isPendingActionNotification(notification)
               ? notification
               : { ...notification, isRead: true },
           );
-          setNotificationCount(next.filter((item) => !item.isRead).length);
           return next;
         });
         setToasts((prev) =>
           prev.filter(
             (toast) =>
-              !toast.notification?.isRead &&
-              Boolean(getProductionActionKind(toast.notification)),
+              isPendingActionNotification(toast.notification),
           ),
         );
         setReminderQueue([]);
@@ -861,20 +888,17 @@ const Layout = ({
         setNotifications((prev) => {
           const protectedActions = prev.filter(
             (notification) =>
-              !notification.isRead &&
-              Boolean(getProductionActionKind(notification)),
+              isPendingActionNotification(notification),
           );
           lastIdsRef.current = new Set(
             protectedActions.map((notification) => notification._id),
           );
-          setNotificationCount(protectedActions.length);
           return protectedActions;
         });
         setToasts((prev) =>
           prev.filter(
             (toast) =>
-              !toast.notification?.isRead &&
-              Boolean(getProductionActionKind(toast.notification)),
+              isPendingActionNotification(toast.notification),
           ),
         );
         setReminderQueue([]);
@@ -897,6 +921,22 @@ const Layout = ({
     if (openProductionAction(notification)) {
       return;
     }
+    if (isPendingActionNotification(notification)) {
+      const seenAt = new Date().toISOString();
+      setNotifications((previous) =>
+        previous.map((item) =>
+          item._id === notification._id ? { ...item, seenAt } : item,
+        ),
+      );
+      void markNotificationSeen(notification._id);
+      setIsNotificationOpen(false);
+      if (notification.actionUrl?.startsWith("/")) {
+        navigate(notification.actionUrl);
+      } else {
+        openProjectFromNotification(notification);
+      }
+      return;
+    }
     const id = notification._id;
     const projectId = notification.project?._id || notification.project;
     const type = notification.type;
@@ -909,7 +949,6 @@ const Layout = ({
         setNotifications((prev) =>
           prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
         );
-        setNotificationCount((prev) => Math.max(0, prev - 1));
         setToasts((prev) =>
           prev.filter(
             (toast) => toEntityId(toast.notification?._id) !== String(id),
@@ -958,7 +997,6 @@ const Layout = ({
         String(item?._id) === resolvedId ? { ...item, isRead: true } : item,
       ),
     );
-    setNotificationCount((prev) => Math.max(0, prev - 1));
     setToasts((prev) =>
       prev.filter(
         (toast) => String(toast.notification?._id || "") !== resolvedId,
@@ -1024,6 +1062,8 @@ const Layout = ({
         onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
         onToggleNotification={() => setIsNotificationOpen(!isNotificationOpen)} // Toggle
         notificationCount={notificationCount}
+        pendingActionCount={pendingActionCount}
+        unseenActionCount={unseenActionCount}
         engagedCount={engagedCount}
         theme={theme}
         onToggleTheme={onToggleTheme}
