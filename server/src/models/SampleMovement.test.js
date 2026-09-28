@@ -70,3 +70,20 @@ test("item return and production quantities cannot exceed released quantity", ()
   assert.ok(error.errors["items.0.quantityReturned"]);
   assert.ok(error.errors["items.0.productionQuantityApplied"]);
 });
+
+test("sample item quantities must be whole numbers", () => {
+  const movement = buildMovement({
+    items: [
+      {
+        description: "Printed sample",
+        quantity: 1.5,
+        quantityReturned: 0.5,
+        productionQuantityApplied: 0.5,
+      },
+    ],
+  });
+  const error = movement.validateSync();
+  assert.ok(error.errors["items.0.quantity"]);
+  assert.ok(error.errors["items.0.quantityReturned"]);
+  assert.ok(error.errors["items.0.productionQuantityApplied"]);
+});

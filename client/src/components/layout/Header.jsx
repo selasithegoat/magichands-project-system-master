@@ -22,6 +22,7 @@ const Header = ({
   onNavigateProfile,
   onNavigateNewOrders, // [New]
   onNavigateEndOfDay, // [New]
+  onNavigateSampleCustody,
   onNavigateEngagedProjects, // [New] Production Team
   onNavigateInventory, // [New] Stores Team
   onNavigateHelp,
@@ -150,6 +151,20 @@ const Header = ({
                 }}
               >
                 New Orders
+              </Link>
+              <Link
+                to="#"
+                className={`nav-item ${
+                  activeView === "sample-custody" ? "active" : ""
+                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (typeof onNavigateSampleCustody === "function") {
+                    onNavigateSampleCustody();
+                  }
+                }}
+              >
+                Samples
               </Link>
               <Link
                 to="#"

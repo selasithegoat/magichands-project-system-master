@@ -123,11 +123,25 @@ const readItems = (value, existingItems = []) => {
   });
 
   const invalidIndex = items.findIndex(
-    (item) => !item.description || !Number.isFinite(item.quantity) || item.quantity <= 0,
+    (item) =>
+      !item.description ||
+      !Number.isInteger(item.quantity) ||
+      item.quantity <= 0,
   );
   if (invalidIndex >= 0) {
     return {
-      error: `Sample item ${invalidIndex + 1} needs a description and quantity greater than zero.`,
+      error: `Sample item ${invalidIndex + 1} needs a description and a whole-number quantity of at least 1.`,
+    };
+  }
+
+  const invalidProductionIndex = items.findIndex(
+    (item) =>
+      !Number.isInteger(item.productionQuantityApplied) ||
+      item.productionQuantityApplied > item.quantity,
+  );
+  if (invalidProductionIndex >= 0) {
+    return {
+      error: `Sample item ${invalidProductionIndex + 1} needs a whole-number production quantity within its sample quantity.`,
     };
   }
 
@@ -354,13 +368,52 @@ const getSampleMovements = async (req, res) => {
     const disposition = toText(req.query.disposition, 80).toLowerCase();
     const handoverMethod = toText(req.query.handoverMethod, 80).toLowerCase();
     const attention = toText(req.query.attention, 80).toLowerCase();
+    const scope = toText(req.query.scope, 80).toLowerCase();
     const search = toText(req.query.search, 120);
     const now = new Date();
+    const monthStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
 
     if (SAMPLE_MOVEMENT_STATUSES.includes(status)) filter.status = status;
     if (SAMPLE_DISPOSITIONS.includes(disposition)) filter.disposition = disposition;
     if (SAMPLE_HANDOVER_METHODS.includes(handoverMethod)) {
       filter.handoverMethod = handoverMethod;
+    }
+    if (scope === "with_clients") {
+      filter.status = {
+        $in: [
+          "dispatched",
+          "in_client_custody",
+          "partially_returned",
+          "ownership_transfer_pending",
+        ],
+      };
+    } else if (scope === "active") {
+      filter.status = {
+        $in: [
+          "awaiting_authorization",
+          "changes_requested",
+          "authorized",
+          "dispatched",
+          "in_client_custody",
+          "partially_returned",
+          "ownership_transfer_pending",
+        ],
+      };
+    } else if (scope === "closed") {
+      filter.status = {
+        $in: [
+          "authorization_rejected",
+          "returned",
+          "client_owned",
+          "lost_unrecoverable",
+          "cancelled",
+        ],
+      };
+    } else if (scope === "returned_this_month") {
+      filter.status = "returned";
+      filter["returnSummary.completedAt"] = { $gte: monthStart };
     }
     if (attention === "overdue") {
       filter.status = { $in: Array.from(RETURNABLE_CUSTODY_STATUSES) };
@@ -592,8 +645,8 @@ const recordSampleReturn = async (req, res) => {
     for (const returnedItem of returns) {
       const item = movement.items.id(toObjectIdOrNull(returnedItem.itemId || returnedItem._id));
       const quantity = Number(returnedItem.quantityReturned ?? returnedItem.quantity);
-      if (!item || !Number.isFinite(quantity) || quantity <= 0) {
-        return res.status(400).json({ message: "Each returned item needs a valid item ID and quantity." });
+      if (!item || !Number.isInteger(quantity) || quantity <= 0) {
+        return res.status(400).json({ message: "Each returned item needs a valid item ID and a whole-number quantity." });
       }
       if (Number(item.quantityReturned || 0) + quantity > Number(item.quantity)) {
         return res.status(400).json({ message: `Returned quantity exceeds the released quantity for ${item.description}.` });
@@ -654,6 +707,9 @@ const requestOwnershipTransfer = async (req, res) => {
       const quantityApplied = Math.max(0, Number(treatment.productionQuantityApplied) || 0);
       if (!item || !SAMPLE_PRODUCTION_TREATMENTS.includes(productionTreatment)) {
         return res.status(400).json({ message: "Ownership request contains an invalid item treatment." });
+      }
+      if (!Number.isInteger(quantityApplied)) {
+        return res.status(400).json({ message: "Production quantities must be whole numbers." });
       }
       const outstanding = Number(item.quantity) - Number(item.quantityReturned || 0);
       if (quantityApplied > outstanding) {

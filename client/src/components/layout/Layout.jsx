@@ -180,6 +180,7 @@ const Layout = ({
   onNavigateProfile,
   onNavigateNewOrders, // [New]
   onNavigateEndOfDay, // [New]
+  onNavigateSampleCustody,
   onNavigateEngagedProjects, // [New] Production Team
   onNavigateInventory, // [New] Stores Team
   onNavigateHelp,
@@ -1077,6 +1078,7 @@ const Layout = ({
         onNavigateProfile={onNavigateProfile}
         onNavigateNewOrders={onNavigateNewOrders} // Pass prop
         onNavigateEndOfDay={onNavigateEndOfDay} // Pass prop
+        onNavigateSampleCustody={onNavigateSampleCustody}
         onNavigateEngagedProjects={onNavigateEngagedProjects} // [New]
         onNavigateInventory={onNavigateInventory} // [New]
         onNavigateHelp={onNavigateHelp}
@@ -1285,6 +1287,20 @@ const Layout = ({
                   >
                     <ClipboardListIcon />
                     New Orders
+                  </Link>
+                  <Link
+                    to="#"
+                    className={`drawer-item ${
+                      activeView === "sample-custody" ? "active" : ""
+                    }`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setIsMobileMenuOpen(false);
+                      if (onNavigateSampleCustody) onNavigateSampleCustody();
+                    }}
+                  >
+                    <PackageIcon width={20} height={20} />
+                    Sample Custody
                   </Link>
                   <Link
                     to="#"

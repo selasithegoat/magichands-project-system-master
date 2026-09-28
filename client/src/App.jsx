@@ -43,6 +43,9 @@ const BillingDocuments = lazy(
 const EndOfDayUpdate = lazy(
   () => import("./pages/EndOfDayUpdate/EndOfDayUpdate"),
 );
+const SampleCustody = lazy(
+  () => import("./pages/SampleCustody/SampleCustody"),
+);
 const DepartmentUpdates = lazy(
   () => import("./pages/EndOfDayUpdate/DepartmentUpdates"),
 );
@@ -82,6 +85,17 @@ const MyActivities = lazy(() => import("./pages/MyActivities/MyActivities"));
 
 const APP_SPLASH_DURATION_MS = 1600;
 const THEME_STORAGE_KEY = "mh-client-theme";
+
+const isFrontDeskPortalUser = (user) =>
+  (Array.isArray(user?.department)
+    ? user.department
+    : user?.department
+      ? [user.department]
+      : []
+  ).some(
+    (department) =>
+      String(department || "").trim().toLowerCase() === "front desk",
+  );
 
 const ClientLayoutContext = React.createContext(null);
 
@@ -154,6 +168,7 @@ const ProtectedLayout = ({
       onNavigateProfile={() => navigateTo("/profile")}
       onNavigateNewOrders={() => navigateTo("/new-orders")}
       onNavigateEndOfDay={() => navigateTo("/end-of-day")}
+      onNavigateSampleCustody={() => navigateTo("/sample-custody")}
       onNavigateEngagedProjects={() => navigateTo("/engaged-projects")}
       onNavigateInventory={() => {
         window.location.href = buildPortalUrl("inventory");
@@ -737,6 +752,25 @@ function App() {
             >
               <EndOfDayUpdate user={user} />
             </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/sample-custody"
+          element={
+            isFrontDeskPortalUser(user) ? (
+              <ProtectedLayout
+                activeView="sample-custody"
+                user={user}
+                navigate={navigate}
+                projectCount={projectCount}
+                engagedCount={engagedCount}
+                onSignOut={handleRequestLogout}
+              >
+                <SampleCustody user={user} />
+              </ProtectedLayout>
+            ) : (
+              <Navigate to={user ? "/client" : "/login"} replace />
+            )
           }
         />
         <Route

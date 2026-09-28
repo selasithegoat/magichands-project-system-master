@@ -66,7 +66,15 @@ const FileAttachmentSchema = new mongoose.Schema(
 const SampleMovementItemSchema = new mongoose.Schema(
   {
     description: { type: String, required: true, trim: true, maxlength: 500 },
-    quantity: { type: Number, required: true, min: 0.001 },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1,
+      validate: {
+        validator: Number.isInteger,
+        message: "Sample quantity must be a whole number.",
+      },
+    },
     unit: { type: String, trim: true, default: "unit", maxlength: 60 },
     identifyingMarks: { type: String, trim: true, default: "", maxlength: 500 },
     outboundCondition: { type: String, trim: true, default: "", maxlength: 120 },
@@ -87,23 +95,35 @@ const SampleMovementItemSchema = new mongoose.Schema(
       type: Number,
       min: 0,
       default: 0,
-      validate: {
-        validator(value) {
-          return Number(value || 0) <= Number(this.quantity || 0);
+      validate: [
+        {
+          validator: Number.isInteger,
+          message: "Production quantity applied must be a whole number.",
         },
-        message: "Production quantity applied cannot exceed sample quantity.",
-      },
+        {
+          validator(value) {
+            return Number(value || 0) <= Number(this.quantity || 0);
+          },
+          message: "Production quantity applied cannot exceed sample quantity.",
+        },
+      ],
     },
     quantityReturned: {
       type: Number,
       min: 0,
       default: 0,
-      validate: {
-        validator(value) {
-          return Number(value || 0) <= Number(this.quantity || 0);
+      validate: [
+        {
+          validator: Number.isInteger,
+          message: "Returned quantity must be a whole number.",
         },
-        message: "Returned quantity cannot exceed sample quantity.",
-      },
+        {
+          validator(value) {
+            return Number(value || 0) <= Number(this.quantity || 0);
+          },
+          message: "Returned quantity cannot exceed sample quantity.",
+        },
+      ],
     },
     returnCondition: { type: String, trim: true, default: "", maxlength: 120 },
     returnConditionNotes: {
