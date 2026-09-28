@@ -13,7 +13,8 @@
     "extract:inventory:souvenir-price-list": "python scripts/extract-souvenir-price-list.py",
     "import:inventory:souvenir-price-list": "node scripts/import-souvenir-price-list.js",
     "retract:inventory:souvenir-import": "node scripts/retract-souvenir-inventory-import.js",
-    "test": "node --test tests/projectRevisionService.test.js"
+    "test": "node --test tests/projectRevisionService.test.js",
+    "test:sample-movements": "node --test src/utils/sampleMovementLifecycle.test.js src/utils/sampleMovementReference.test.js src/models/SampleMovement.test.js"
   },
   "keywords": [],
   "author": "",
