@@ -48,6 +48,7 @@ const inventoryRoutes = require("./routes/inventoryRoutes");
 const billingDocumentRoutes = require("./routes/billingDocumentRoutes");
 const billingReceiptRoutes = require("./routes/billingReceiptRoutes");
 const materialRequestRoutes = require("./routes/materialRequestRoutes");
+const sampleMovementRoutes = require("./routes/sampleMovementRoutes");
 const helpRoutes = require("./routes/helpRoutes");
 const systemRoutes = require("./routes/systemRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
@@ -403,6 +404,7 @@ const realtimePaths = [
   "/api/admin",
   "/api/inventory",
   "/api/material-requests",
+  "/api/sample-movements",
   "/api/billing-documents",
   "/api/billing-receipts",
 ];
@@ -463,6 +465,7 @@ app.use("/api/ops/wallboard", opsWallboardRoutes);
 app.use("/api/portal", portalRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/material-requests", materialRequestRoutes);
+app.use("/api/sample-movements", sampleMovementRoutes);
 app.use("/api/billing-documents", billingDocumentRoutes);
 app.use("/api/billing-receipts", billingReceiptRoutes);
 app.use("/api/help", helpRoutes);

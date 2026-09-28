@@ -69,7 +69,9 @@ const TRANSITIONS = Object.freeze({
   ]),
   dispatched: Object.freeze([
     "in_client_custody",
+    "partially_returned",
     "ownership_transfer_pending",
+    "returned",
     "client_owned",
     "lost_unrecoverable",
   ]),
@@ -85,6 +87,7 @@ const TRANSITIONS = Object.freeze({
     "lost_unrecoverable",
   ]),
   ownership_transfer_pending: Object.freeze([
+    "dispatched",
     "in_client_custody",
     "partially_returned",
     "client_owned",
