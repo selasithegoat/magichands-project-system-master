@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import ConfirmationModal from "../../components/ui/ConfirmationModal";
+import usePersistedState from "../../hooks/usePersistedState";
+import useUnsavedChangesGuard from "../../hooks/useUnsavedChangesGuard";
 import {
   SAMPLE_PRODUCTION_TREATMENTS,
   SAMPLE_STATUS_TONES,
@@ -8,6 +11,15 @@ import {
   getProjectLabel,
   requestSampleMovement,
 } from "../../utils/sampleMovementApi";
+import SampleWaybill from "./SampleWaybill";
+
+const DOCUMENT_TYPE_LABELS = {
+  custody_note: "Custody note / waybill",
+  signed_custody_note: "Signed custody note",
+  ownership_transfer_addendum: "Ownership transfer addendum",
+  client_confirmation: "Client confirmation",
+  supporting_document: "Supporting document",
+};
 
 const ACTION_META = {
   submit: {
@@ -87,9 +99,29 @@ const initialActionForm = (movement) => ({
 
 const ActionDialog = ({ action, movement, onClose, onCompleted }) => {
   const meta = ACTION_META[action];
-  const [form, setForm] = useState(() => initialActionForm(movement));
+  const initialForm = useMemo(() => initialActionForm(movement), [movement]);
+  const [form, setForm, clearSavedForm] = usePersistedState(
+    `sample-custody-action:${movement._id}:${action}`,
+    initialForm,
+  );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [closeMode, setCloseMode] = useState("");
+  const hasUnsavedProgress = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(initialForm),
+    [form, initialForm],
+  );
+
+  useUnsavedChangesGuard(hasUnsavedProgress && !saving);
+
+  const requestClose = () => {
+    if (saving) return;
+    if (!hasUnsavedProgress) {
+      onClose();
+      return;
+    }
+    setCloseMode("keep");
+  };
 
   const setField = (field, value) =>
     setForm((current) => ({ ...current, [field]: value }));
@@ -113,6 +145,13 @@ const ActionDialog = ({ action, movement, onClose, onCompleted }) => {
   const submit = async () => {
     setError("");
     let payload = { note: form.note };
+    if (
+      action === "submit" &&
+      (movement.items || []).some((item) => !(item.photos || []).length)
+    ) {
+      setError("Upload at least one outbound photo for every sample item before submitting to Admin.");
+      return;
+    }
     if (action === "cancel" && !form.reason.trim()) {
       setError("Enter a cancellation reason.");
       return;
@@ -199,6 +238,7 @@ const ActionDialog = ({ action, movement, onClose, onCompleted }) => {
         `/${movement._id}/${meta.endpoint}`,
         { method: "POST", body: JSON.stringify(payload) },
       );
+      clearSavedForm();
       onCompleted(updated, `${meta.title} completed.`);
     } catch (requestError) {
       setError(requestError.message);
@@ -213,13 +253,12 @@ const ActionDialog = ({ action, movement, onClose, onCompleted }) => {
       role="presentation"
       onMouseDown={(event) => {
         event.stopPropagation();
-        onClose();
       }}
     >
       <section className="sample-action-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <header className="sample-modal-header">
           <div><span className="sample-eyebrow">{movement.reference}</span><h2>{meta.title}</h2></div>
-          <button type="button" className="sample-icon-button" onClick={onClose} aria-label="Close">×</button>
+          <button type="button" className="sample-icon-button" onClick={requestClose} aria-label="Close">×</button>
         </header>
         <div className="sample-action-body">
           <p className="sample-action-description">{meta.description}</p>
@@ -281,17 +320,228 @@ const ActionDialog = ({ action, movement, onClose, onCompleted }) => {
           )}
         </div>
         <footer className="sample-modal-footer">
-          <button type="button" className="sample-secondary-button" onClick={onClose}>Back</button>
+          {hasUnsavedProgress && <button type="button" className="sample-discard-draft" onClick={() => setCloseMode("discard")}>Discard entries</button>}
+          <button type="button" className="sample-secondary-button" onClick={requestClose}>Close for now</button>
           <button type="button" className={`sample-primary-button ${action === "cancel" ? "danger" : ""}`} disabled={saving} onClick={submit}>{saving ? "Processing…" : meta.confirm}</button>
         </footer>
       </section>
+      <ConfirmationModal
+        isOpen={Boolean(closeMode)}
+        title={closeMode === "discard" ? "Discard these entries?" : "Close and continue later?"}
+        message={closeMode === "discard" ? "The information entered in this action will be removed from this device." : "Your entries are saved locally and will be restored when you reopen this action."}
+        confirmText={closeMode === "discard" ? "Discard entries" : "Close and keep entries"}
+        cancelText="Keep editing"
+        onCancel={() => setCloseMode("")}
+        onConfirm={() => {
+          if (closeMode === "discard") clearSavedForm();
+          setCloseMode("");
+          onClose();
+        }}
+      />
+    </div>
+  );
+};
+
+const EvidenceDialog = ({ movement, onClose, onCompleted, onProgress }) => {
+  const [kind, setKind] = useState("photo");
+  const [itemId, setItemId] = useState(movement.items?.[0]?._id || "");
+  const [photoType, setPhotoType] = useState("outbound");
+  const [documentType, setDocumentType] = useState("signed_custody_note");
+  const [photoFiles, setPhotoFiles] = useState([]);
+  const [documentFiles, setDocumentFiles] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmClose, setConfirmClose] = useState(false);
+  const activeFiles = kind === "photo" ? photoFiles : documentFiles;
+  const totalFiles = photoFiles.length + documentFiles.length;
+  const hasUnsavedSelection =
+    totalFiles > 0 ||
+    kind !== "photo" ||
+    itemId !== (movement.items?.[0]?._id || "") ||
+    photoType !== "outbound" ||
+    documentType !== "signed_custody_note";
+
+  useUnsavedChangesGuard(hasUnsavedSelection && !saving);
+
+  const requestClose = () => {
+    if (saving) return;
+    if (hasUnsavedSelection) {
+      setConfirmClose(true);
+      return;
+    }
+    onClose();
+  };
+
+  const addSelectedFiles = (event, evidenceKind) => {
+    const input = event.target;
+    const selectedFiles = Array.from(input.files || []);
+    const isPhoto = evidenceKind === "photo";
+    const currentFiles = isPhoto ? photoFiles : documentFiles;
+    const maximumFiles = isPhoto ? 8 : 6;
+    const identifyFile = (file) =>
+      `${file.name}-${file.size}-${file.lastModified}-${file.type}`;
+    const knownFiles = new Set(currentFiles.map(identifyFile));
+    const newFiles = selectedFiles.filter((file) => {
+      const identity = identifyFile(file);
+      if (knownFiles.has(identity)) return false;
+      knownFiles.add(identity);
+      return true;
+    });
+    const combinedFiles = [...currentFiles, ...newFiles];
+
+    if (isPhoto) setPhotoFiles(combinedFiles.slice(0, maximumFiles));
+    else setDocumentFiles(combinedFiles.slice(0, maximumFiles));
+
+    if (combinedFiles.length > maximumFiles) {
+      setError(`A maximum of ${maximumFiles} ${isPhoto ? "photos" : "documents"} can be uploaded at once. Your first ${maximumFiles} selections were kept.`);
+    } else if (selectedFiles.length > 0 && newFiles.length === 0) {
+      setError("The selected file is already in the upload list.");
+    } else {
+      setError("");
+    }
+
+    input.value = "";
+  };
+
+  const submit = async () => {
+    if (!totalFiles) {
+      setError("Select at least one photo or document to upload.");
+      return;
+    }
+    if (photoFiles.length && !itemId) {
+      setError("Select the sample item shown in the photos.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    let updatedMovement = movement;
+    const completedKinds = [];
+    try {
+      if (photoFiles.length) {
+        const photoData = new FormData();
+        photoFiles.forEach((file) => photoData.append("samplePhotos", file));
+        photoData.append("photoType", photoType);
+        updatedMovement = await requestSampleMovement(
+          `/${movement._id}/items/${itemId}/photos`,
+          { method: "POST", body: photoData },
+        );
+        completedKinds.push("photos");
+        setPhotoFiles([]);
+      }
+
+      if (documentFiles.length) {
+        const documentData = new FormData();
+        documentFiles.forEach((file) => documentData.append("sampleDocuments", file));
+        documentData.append("type", documentType);
+        documentData.append("documentNumber", movement.reference);
+        documentData.append(
+          "status",
+          documentType === "signed_custody_note" ? "signed" : "issued",
+        );
+        updatedMovement = await requestSampleMovement(`/${movement._id}/documents`, {
+          method: "POST",
+          body: documentData,
+        });
+        completedKinds.push("documents");
+        setDocumentFiles([]);
+      }
+
+      const message =
+        completedKinds.length === 2
+          ? "Sample photos and custody documents uploaded."
+          : completedKinds[0] === "photos"
+            ? "Sample photos uploaded."
+            : "Custody documents uploaded.";
+      onCompleted(updatedMovement, message);
+    } catch (requestError) {
+      if (completedKinds.length) {
+        onProgress?.(
+          updatedMovement,
+          "Some evidence was uploaded. The remaining files are still selected.",
+        );
+        setError(`${requestError.message} Retry to upload the remaining files.`);
+      } else {
+        setError(requestError.message);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sample-modal-backdrop elevated" role="presentation" onMouseDown={(event) => event.stopPropagation()}>
+      <section className="sample-action-dialog sample-evidence-dialog" role="dialog" aria-modal="true" aria-labelledby="sample-evidence-title" onMouseDown={(event) => event.stopPropagation()}>
+        <header className="sample-modal-header">
+          <div><span className="sample-eyebrow">{movement.reference}</span><h2 id="sample-evidence-title">Add evidence</h2></div>
+          <button type="button" className="sample-icon-button" onClick={requestClose} aria-label="Close">×</button>
+        </header>
+        <div className="sample-action-body">
+          <div className="sample-evidence-kind" role="tablist" aria-label="Evidence type">
+            <button type="button" role="tab" aria-selected={kind === "photo"} className={kind === "photo" ? "active" : ""} onClick={() => setKind("photo")}>Sample photos {photoFiles.length > 0 && <span>{photoFiles.length}</span>}</button>
+            <button type="button" role="tab" aria-selected={kind === "document"} className={kind === "document" ? "active" : ""} onClick={() => setKind("document")}>Custody document {documentFiles.length > 0 && <span>{documentFiles.length}</span>}</button>
+          </div>
+          {error && <div className="sample-form-error" role="alert">{error}</div>}
+          {kind === "photo" ? (
+            <div className="sample-action-grid">
+              <label className="sample-field sample-field-wide"><span>Sample item *</span><select value={itemId} onChange={(event) => setItemId(event.target.value)}>{(movement.items || []).map((item) => <option key={item._id} value={item._id}>{item.description}</option>)}</select></label>
+              <label className="sample-field sample-field-wide"><span>Photo stage</span><select value={photoType} onChange={(event) => setPhotoType(event.target.value)}><option value="outbound">Before handover</option><option value="return">On return</option></select></label>
+              <label className="sample-file-drop sample-field-wide"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={(event) => addSelectedFiles(event, "photo")} /><strong>{photoFiles.length ? "Add more sample photos" : "Select sample photos"}</strong><span>JPG, PNG, WEBP or GIF · up to 8 files</span></label>
+            </div>
+          ) : (
+            <div className="sample-action-grid">
+              <label className="sample-field sample-field-wide"><span>Document type *</span><select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>{Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <label className="sample-file-drop sample-field-wide"><input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" multiple onChange={(event) => addSelectedFiles(event, "document")} /><strong>{documentFiles.length ? "Add more documents" : "Select scanned or electronic documents"}</strong><span>PDF, Word or image · up to 6 files</span></label>
+            </div>
+          )}
+          {activeFiles.length > 0 && (
+            <div className="sample-selected-files">
+              <strong>{activeFiles.length} file{activeFiles.length === 1 ? "" : "s"} selected</strong>
+              {activeFiles.map((file, index) => (
+                <div key={`${file.name}-${file.size}-${file.lastModified}`}>
+                  <span title={file.name}>{file.name}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${file.name}`}
+                    onClick={() => {
+                      const removeAtIndex = (selectedFiles) =>
+                        selectedFiles.filter((_, fileIndex) => fileIndex !== index);
+                      if (kind === "photo") setPhotoFiles(removeAtIndex);
+                      else setDocumentFiles(removeAtIndex);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <footer className="sample-modal-footer"><button type="button" className="sample-secondary-button" onClick={requestClose}>Cancel</button><button type="button" className="sample-primary-button" disabled={saving} onClick={submit}>{saving ? "Uploading…" : `Upload evidence${totalFiles ? ` (${totalFiles})` : ""}`}</button></footer>
+      </section>
+      <ConfirmationModal
+        isOpen={confirmClose}
+        title="Discard selected evidence?"
+        message="For security, browsers cannot restore selected files after this window closes. Keep editing to preserve the current selection."
+        confirmText="Discard selection"
+        cancelText="Keep editing"
+        onCancel={() => setConfirmClose(false)}
+        onConfirm={() => {
+          setConfirmClose(false);
+          onClose();
+        }}
+      />
     </div>
   );
 };
 
 const SampleMovementDetails = ({ movement, loading, error, onClose, onEdit, onChanged }) => {
   const [action, setAction] = useState("");
+  const [showEvidence, setShowEvidence] = useState(false);
+  const [showWaybill, setShowWaybill] = useState(false);
   const projectId = movement?.project?._id || movement?.project;
+  const missingPhotoCount = (movement?.items || []).filter(
+    (item) => !(item.photos || []).length,
+  ).length;
   const actions = useMemo(() => {
     if (!movement) return [];
     if (["draft", "changes_requested"].includes(movement.status)) {
@@ -328,17 +578,27 @@ const SampleMovementDetails = ({ movement, loading, error, onClose, onEdit, onCh
               </div>
             </header>
 
-            {actions.length > 0 && (
-              <div className="sample-detail-actions">
+            <div className="sample-detail-actions">
+                <button type="button" className="sample-secondary-button" onClick={() => setShowWaybill(true)}>Preview waybill</button>
+                <button type="button" className="sample-secondary-button" onClick={() => setShowEvidence(true)}>Add evidence</button>
+              {actions.length > 0 && (
+                <>
                 {actions.map((item) => (
                   <button key={item} type="button" className={item === "cancel" ? "danger-link" : item === "edit" ? "sample-secondary-button" : "sample-primary-button"} onClick={() => item === "edit" ? onEdit(movement) : setAction(item)}>
                     {item === "edit" ? "Edit draft" : item === "submit" ? "Submit to Admin" : item === "release" ? "Record release" : item === "receipt" ? "Confirm receipt" : item === "return" ? "Record return" : item === "ownership" ? "Request ownership" : "Cancel"}
                   </button>
                 ))}
-              </div>
-            )}
+                </>
+              )}
+            </div>
 
             <div className="sample-detail-content">
+              {missingPhotoCount > 0 && (
+                <div className="sample-evidence-alert" role="status">
+                  <div><strong>Outbound evidence incomplete</strong><p>{missingPhotoCount} sample item{missingPhotoCount === 1 ? " needs" : "s need"} a photo before this record can be submitted.</p></div>
+                  <button type="button" onClick={() => setShowEvidence(true)}>Upload photos</button>
+                </div>
+              )}
               <section className="sample-detail-card">
                 <h3>Project and client</h3>
                 <dl className="sample-detail-list">
@@ -367,9 +627,30 @@ const SampleMovementDetails = ({ movement, loading, error, onClose, onEdit, onCh
                     <article key={item._id}>
                       <div><strong>{item.description}</strong><span>{item.identifyingMarks || item.outboundCondition || "No identifier"}</span></div>
                       <dl><div><dt>Released</dt><dd>{item.quantity} {item.unit}</dd></div><div><dt>Returned</dt><dd>{item.quantityReturned || 0} {item.unit}</dd></div><div><dt>Production</dt><dd>{item.productionTreatment?.replace(/_/g, " ")}</dd></div></dl>
+                      {((item.photos || []).length > 0 || (item.returnPhotos || []).length > 0) && (
+                        <div className="sample-photo-strip">
+                          {[...(item.photos || []), ...(item.returnPhotos || [])].map((photo) => <a key={photo._id} href={photo.fileUrl} target="_blank" rel="noreferrer"><img src={photo.fileUrl} alt={`${item.description} evidence`} /><span>{(item.returnPhotos || []).some((entry) => entry._id === photo._id) ? "Return" : "Outbound"}</span></a>)}
+                        </div>
+                      )}
+                      {!(item.photos || []).length && <p className="sample-photo-required">Outbound photo required before submission</p>}
                     </article>
                   ))}
                 </div>
+              </section>
+
+              <section className="sample-detail-card">
+                <div className="sample-card-heading"><h3>Waybill and documents</h3><span>{movement.documents?.length || 0}</span></div>
+                {(movement.documents || []).length ? (
+                  <div className="sample-document-list">
+                    {[...(movement.documents || [])].reverse().map((document) => (
+                      <a key={document._id} href={document.file?.fileUrl} target="_blank" rel="noreferrer">
+                        <span className="sample-document-icon">{document.file?.mimeType?.includes("pdf") ? "PDF" : "FILE"}</span>
+                        <span><strong>{DOCUMENT_TYPE_LABELS[document.type] || document.type?.replace(/_/g, " ")}</strong><small>{document.file?.originalName || document.documentNumber} · {formatSampleDate(document.issuedAt)}</small></span>
+                        <em className={`sample-document-status ${document.status}`}>{document.status}</em>
+                      </a>
+                    ))}
+                  </div>
+                ) : <div className="sample-document-empty"><p>No signed waybill or supporting document uploaded yet.</p><button type="button" onClick={() => setShowEvidence(true)}>Upload document</button></div>}
               </section>
 
               {movement.release?.releasedAt && (
@@ -389,6 +670,8 @@ const SampleMovementDetails = ({ movement, loading, error, onClose, onEdit, onCh
         )}
       </aside>
       {action && movement && <ActionDialog action={action} movement={movement} onClose={() => setAction("")} onCompleted={(updated, message) => { setAction(""); onChanged(updated, message); }} />}
+      {showEvidence && movement && <EvidenceDialog movement={movement} onClose={() => setShowEvidence(false)} onProgress={onChanged} onCompleted={(updated, message) => { setShowEvidence(false); onChanged(updated, message); }} />}
+      {showWaybill && movement && <SampleWaybill movement={movement} onClose={() => setShowWaybill(false)} />}
     </div>
   );
 };

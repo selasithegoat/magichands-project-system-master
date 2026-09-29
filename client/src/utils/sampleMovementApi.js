@@ -67,11 +67,13 @@ export const getProjectLabel = (project) => {
 };
 
 export const requestSampleMovement = async (path = "", options = {}) => {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
   const response = await fetch(`/api/sample-movements${path}`, {
     credentials: "include",
     ...options,
     headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.body && !isFormData ? { "Content-Type": "application/json" } : {}),
       ...(options.headers || {}),
     },
   });

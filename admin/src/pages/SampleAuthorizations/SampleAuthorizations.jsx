@@ -1,6 +1,9 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import usePersistedState from "@client/hooks/usePersistedState";
+import useUnsavedChangesGuard from "@client/hooks/useUnsavedChangesGuard";
+import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 import "./SampleAuthorizations.css";
 
 const STATUS_LABELS = {
@@ -17,6 +20,14 @@ const STATUS_LABELS = {
   client_owned: "Client-owned",
   lost_unrecoverable: "Lost / unrecoverable",
   cancelled: "Cancelled",
+};
+
+const DOCUMENT_TYPE_LABELS = {
+  custody_note: "Custody note / waybill",
+  signed_custody_note: "Signed custody note",
+  ownership_transfer_addendum: "Ownership transfer addendum",
+  client_confirmation: "Client confirmation",
+  supporting_document: "Supporting document",
 };
 
 const QUEUES = [
@@ -129,9 +140,25 @@ const statusTone = (status) => {
 
 const DecisionDialog = ({ movement, decision, onClose, onCompleted }) => {
   const meta = DECISIONS[decision];
-  const [note, setNote] = useState("");
+  const [note, setNote, clearSavedNote] = usePersistedState(
+    `sample-authorization-decision:${movement._id}:${decision}`,
+    "",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [confirmClose, setConfirmClose] = useState(false);
+  const hasUnsavedNote = note.length > 0;
+
+  useUnsavedChangesGuard(hasUnsavedNote && !saving);
+
+  const requestClose = () => {
+    if (saving) return;
+    if (hasUnsavedNote) {
+      setConfirmClose(true);
+      return;
+    }
+    onClose();
+  };
 
   const submit = async () => {
     if (meta.noteRequired && !note.trim()) {
@@ -145,6 +172,7 @@ const DecisionDialog = ({ movement, decision, onClose, onCompleted }) => {
         `/${movement._id}/${meta.endpoint}`,
         { method: "POST", body: JSON.stringify({ note: note.trim() }) },
       );
+      clearSavedNote();
       onCompleted(updated, `${meta.title} recorded.`);
     } catch (requestError) {
       setError(requestError.message);
@@ -154,7 +182,7 @@ const DecisionDialog = ({ movement, decision, onClose, onCompleted }) => {
   };
 
   return (
-    <div className="sample-auth-modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className="sample-auth-modal-backdrop" role="presentation" onMouseDown={(event) => event.stopPropagation()}>
       <section
         className="sample-auth-decision-dialog"
         role="dialog"
@@ -170,7 +198,7 @@ const DecisionDialog = ({ movement, decision, onClose, onCompleted }) => {
             <span>{movement.reference}</span>
             <h2 id="sample-auth-decision-title">{meta.title}</h2>
           </div>
-          <button type="button" className="sample-auth-icon-button" onClick={onClose} aria-label="Close decision dialog">×</button>
+          <button type="button" className="sample-auth-icon-button" onClick={requestClose} aria-label="Close decision dialog">×</button>
         </header>
         <div className="sample-auth-decision-body">
           <p>{meta.description}</p>
@@ -184,6 +212,7 @@ const DecisionDialog = ({ movement, decision, onClose, onCompleted }) => {
               placeholder={meta.noteRequired ? "State the reason and any next action required…" : "Add any instruction for Front Desk…"}
               autoFocus
             />
+            <small className="sample-auth-autosave-note">Decision note saved automatically on this device.</small>
           </label>
           <div className="sample-auth-decision-context">
             <span>Client</span><strong>{movement.client?.name || "—"}</strong>
@@ -191,12 +220,21 @@ const DecisionDialog = ({ movement, decision, onClose, onCompleted }) => {
           </div>
         </div>
         <footer>
-          <button type="button" className="sample-auth-button secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="sample-auth-button secondary" onClick={requestClose}>Close for now</button>
           <button type="button" className={`sample-auth-button ${meta.tone}`} disabled={saving} onClick={submit}>
             {saving ? "Recording…" : meta.confirm}
           </button>
         </footer>
       </section>
+      <ConfirmationModal
+        isOpen={confirmClose}
+        title="Close and continue later?"
+        message="Your decision note is saved locally and will be restored when you reopen this request."
+        confirmText="Close and keep note"
+        cancelText="Keep editing"
+        onClose={() => setConfirmClose(false)}
+        onConfirm={onClose}
+      />
     </div>
   );
 };
@@ -296,10 +334,37 @@ const DetailPanel = ({ movement, loading, error, onClose, onDecision }) => {
                         <div><dt>Production treatment</dt><dd>{String(item.productionTreatment || "not_applicable").replace(/_/g, " ")}</dd></div>
                         <div><dt>Applied</dt><dd>{item.productionQuantityApplied || 0}</dd></div>
                       </dl>
+                      {((item.photos || []).length > 0 || (item.returnPhotos || []).length > 0) && (
+                        <div className="sample-auth-photo-strip">
+                          {[...(item.photos || []), ...(item.returnPhotos || [])].map((photo) => (
+                            <a key={photo._id} href={photo.fileUrl} target="_blank" rel="noreferrer">
+                              <img src={photo.fileUrl} alt={`${item.description} evidence`} />
+                              <span>{(item.returnPhotos || []).some((entry) => entry._id === photo._id) ? "Return" : "Outbound"}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       {item.outboundConditionNotes && <p>{item.outboundConditionNotes}</p>}
                     </article>
                   ))}
                 </div>
+              </section>
+
+              <section className="sample-auth-review-card">
+                <div className="sample-auth-card-title"><h3>Waybill and evidence</h3><span>{movement.documents?.length || 0} documents</span></div>
+                {(movement.documents || []).length ? (
+                  <div className="sample-auth-documents">
+                    {[...(movement.documents || [])].reverse().map((document) => (
+                      <a key={document._id} href={document.file?.fileUrl} target="_blank" rel="noreferrer">
+                        <span className="sample-auth-document-icon">{document.file?.mimeType?.includes("pdf") ? "PDF" : "FILE"}</span>
+                        <span><strong>{DOCUMENT_TYPE_LABELS[document.type] || String(document.type || "").replace(/_/g, " ")}</strong><small>{document.file?.originalName || document.documentNumber} · {formatDate(document.issuedAt)}</small></span>
+                        <em className={document.status === "signed" ? "signed" : ""}>{document.status}</em>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="sample-auth-evidence-warning"><strong>No custody document uploaded</strong><span>Front Desk should upload the signed waybill after handover.</span></div>
+                )}
               </section>
 
               {movement.authorization?.decisionNote && (

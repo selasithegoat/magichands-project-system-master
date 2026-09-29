@@ -225,6 +225,12 @@ const getSampleMovementSubmissionErrors = (movement, { now = new Date() } = {}) 
     if (!(Number(item?.quantity) > 0)) {
       addError(`items.${index}.quantity`, "Sample quantity must be greater than zero.");
     }
+    if (!Array.isArray(item?.photos) || item.photos.length === 0) {
+      addError(
+        `items.${index}.photos`,
+        "Upload at least one outbound photo for each sample item.",
+      );
+    }
   });
 
   if (requiresSampleReturn(movement?.disposition)) {

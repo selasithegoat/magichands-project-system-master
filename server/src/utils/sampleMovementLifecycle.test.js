@@ -17,7 +17,7 @@ const completeMovement = (overrides = {}) => ({
   handoverMethod: "pickup",
   disposition: "returnable",
   expectedReturnAt: "2026-10-20T12:00:00.000Z",
-  items: [{ description: "Branded sample", quantity: 2 }],
+  items: [{ description: "Branded sample", quantity: 2, photos: [{ fileUrl: "/uploads/sample.jpg" }] }],
   ...overrides,
 });
 
@@ -116,4 +116,13 @@ test("returnable samples require a future return date before submission", () => 
     ),
     true,
   );
+});
+
+test("each sample item requires outbound photo evidence before submission", () => {
+  const errors = getSampleMovementSubmissionErrors(
+    completeMovement({
+      items: [{ description: "Branded sample", quantity: 1, photos: [] }],
+    }),
+  );
+  assert.equal(errors.some((error) => error.field === "items.0.photos"), true);
 });

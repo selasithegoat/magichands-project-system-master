@@ -1,6 +1,13 @@
 const mongoose = require("mongoose");
+const crypto = require("crypto");
+const fs = require("fs");
 const Project = require("../models/Project");
 const SampleMovement = require("../models/SampleMovement");
+const {
+  SAMPLE_DOCUMENT_STATUSES,
+  SAMPLE_DOCUMENT_TYPES,
+} = require("../models/SampleMovement");
+const upload = require("../middleware/upload");
 const {
   SAMPLE_DISPOSITIONS,
   SAMPLE_HANDOVER_METHODS,
@@ -275,6 +282,142 @@ const findMovement = async (req, res) => {
 const respondWithMovement = async (res, id, statusCode = 200) =>
   res.status(statusCode).json(await getSampleMovementById(id));
 
+const toFileAttachment = (file, userId) => ({
+  fileUrl: `/uploads/${String(file.filename || "").replace(/\\/g, "/")}`,
+  originalName: toText(file.originalname, 500),
+  mimeType: toText(file.mimetype, 200),
+  size: Math.max(0, Number(file.size) || 0),
+  uploadedAt: new Date(),
+  uploadedBy: userId,
+});
+
+const hashUploadedFile = async (file) => {
+  const filePath = file?.path || (file?.filename ? `${upload.uploadDir}/${file.filename}` : "");
+  if (!filePath) return "";
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+    stream.on("error", reject);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
+};
+
+const uploadSampleItemPhotos = async (req, res) => {
+  if (!requireOperator(req, res)) {
+    await upload.cleanupRequestFiles(req);
+    return;
+  }
+  let persisted = false;
+  try {
+    const movement = await findMovement(req, res);
+    if (!movement) {
+      await upload.cleanupRequestFiles(req);
+      return;
+    }
+    const item = movement.items.id(toObjectIdOrNull(req.params.itemId));
+    if (!item) {
+      await upload.cleanupRequestFiles(req);
+      return res.status(404).json({ message: "Sample item not found." });
+    }
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (files.length === 0) {
+      return res.status(400).json({ message: "Select at least one sample photo." });
+    }
+    const photoType = toText(req.body.photoType, 30).toLowerCase();
+    const destination = photoType === "return" ? "returnPhotos" : "photos";
+    item[destination].push(
+      ...files.map((file) => toFileAttachment(file, req.user._id)),
+    );
+    appendCustodyEvent(movement, {
+      type: "document_added",
+      actor: req.user,
+      fromStatus: movement.status,
+      toStatus: movement.status,
+      note: `${files.length} ${photoType === "return" ? "return" : "outbound"} sample photo${files.length === 1 ? "" : "s"} added for ${item.description}.`,
+    });
+    movement.updatedBy = req.user._id;
+    await movement.save();
+    persisted = true;
+    return respondWithMovement(res, movement._id);
+  } catch (error) {
+    if (!persisted) await upload.cleanupRequestFiles(req);
+    return sendControllerError(res, error, "Failed to upload sample photos.");
+  }
+};
+
+const uploadSampleDocuments = async (req, res) => {
+  if (!requireOperator(req, res)) {
+    await upload.cleanupRequestFiles(req);
+    return;
+  }
+  let persisted = false;
+  try {
+    const movement = await findMovement(req, res);
+    if (!movement) {
+      await upload.cleanupRequestFiles(req);
+      return;
+    }
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (files.length === 0) {
+      return res.status(400).json({ message: "Select at least one custody document." });
+    }
+    const type = toText(req.body.type, 80).toLowerCase();
+    if (!SAMPLE_DOCUMENT_TYPES.includes(type)) {
+      await upload.cleanupRequestFiles(req);
+      return res.status(400).json({ message: "Select a valid custody document type." });
+    }
+    const requestedStatus = toText(req.body.status, 40).toLowerCase();
+    const status = SAMPLE_DOCUMENT_STATUSES.includes(requestedStatus)
+      ? requestedStatus
+      : type === "signed_custody_note"
+        ? "signed"
+        : "issued";
+    const documentNumber =
+      toText(req.body.documentNumber, 120) || movement.reference;
+    const signedAt =
+      status === "signed"
+        ? toDateOrNull(req.body.signedAt) || new Date()
+        : null;
+
+    const hashes = await Promise.all(files.map(hashUploadedFile));
+    let nextVersion =
+      Math.max(
+        0,
+        ...movement.documents
+          .filter((document) => document.type === type)
+          .map((document) => Number(document.version) || 0),
+      ) + 1;
+    files.forEach((file, index) => {
+      movement.documents.push({
+        type,
+        status,
+        documentNumber,
+        version: nextVersion,
+        file: toFileAttachment(file, req.user._id),
+        sha256: hashes[index],
+        issuedAt: new Date(),
+        signedAt,
+      });
+      nextVersion += 1;
+    });
+    appendCustodyEvent(movement, {
+      type: "document_added",
+      actor: req.user,
+      fromStatus: movement.status,
+      toStatus: movement.status,
+      note: `${files.length} ${type.replace(/_/g, " ")} document${files.length === 1 ? "" : "s"} added.`,
+    });
+    movement.updatedBy = req.user._id;
+    await movement.save();
+    persisted = true;
+    return respondWithMovement(res, movement._id);
+  } catch (error) {
+    if (!persisted) await upload.cleanupRequestFiles(req);
+    return sendControllerError(res, error, "Failed to upload custody documents.");
+  }
+};
+
 const createSampleMovement = async (req, res) => {
   if (!requireOperator(req, res)) return;
   try {
@@ -543,6 +686,14 @@ const decideAuthorization = (decision) => async (req, res) => {
     const note = toText(req.body.note || req.body.decisionNote, 2000);
     if (decision !== "authorized" && !note) {
       return res.status(400).json({ message: "A decision reason is required." });
+    }
+    if (
+      decision === "authorized" &&
+      movement.items.some((item) => !Array.isArray(item.photos) || item.photos.length === 0)
+    ) {
+      return res.status(422).json({
+        message: "Every sample item needs an outbound photo before release can be authorized.",
+      });
     }
     const statusByDecision = {
       authorized: "authorized",
@@ -833,4 +984,6 @@ module.exports = {
   requestSampleMovementChanges: decideAuthorization("changes_requested"),
   submitSampleMovement,
   updateSampleMovement,
+  uploadSampleDocuments,
+  uploadSampleItemPhotos,
 };

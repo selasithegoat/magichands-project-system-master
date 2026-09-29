@@ -1,6 +1,10 @@
 const express = require("express");
 const { protect } = require("../middleware/authMiddleware");
-const { requireSampleMovementAccess } = require("../utils/sampleMovementAccess");
+const {
+  canOperateSampleMovements,
+  requireSampleMovementAccess,
+} = require("../utils/sampleMovementAccess");
+const upload = require("../middleware/upload");
 const {
   approveOwnershipTransfer,
   authorizeSampleMovement,
@@ -17,15 +21,60 @@ const {
   requestSampleMovementChanges,
   submitSampleMovement,
   updateSampleMovement,
+  uploadSampleDocuments,
+  uploadSampleItemPhotos,
 } = require("../controllers/sampleMovementController");
 
 const router = express.Router();
+
+const requireSampleMovementOperator = (req, res, next) => {
+  if (canOperateSampleMovements(req.user)) return next();
+  return res.status(403).json({
+    message: "Only Front Desk can upload sample custody evidence.",
+  });
+};
+
+const handleUpload = (fieldName, maxCount) => (req, res, next) => {
+  upload.array(fieldName, maxCount)(req, res, (error) => {
+    if (error) {
+      if (error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          message: `File too large. Maximum size is ${upload.maxFileSizeMb}MB.`,
+        });
+      }
+      return res.status(400).json({ message: error.message });
+    }
+
+    Promise.resolve(upload.scanRequestFiles(req))
+      .then(() => next())
+      .catch(async (scanError) => {
+        await upload.cleanupRequestFiles(req);
+        return res.status(400).json({
+          message:
+            scanError?.message ||
+            "Uploaded file failed security checks. Please select another file.",
+        });
+      });
+  });
+};
 
 router.use(protect);
 router.use(requireSampleMovementAccess);
 
 router.route("/").get(getSampleMovements).post(createSampleMovement);
 router.route("/:id").get(getSampleMovement).patch(updateSampleMovement);
+router.post(
+  "/:id/items/:itemId/photos",
+  requireSampleMovementOperator,
+  handleUpload("samplePhotos", 8),
+  uploadSampleItemPhotos,
+);
+router.post(
+  "/:id/documents",
+  requireSampleMovementOperator,
+  handleUpload("sampleDocuments", 6),
+  uploadSampleDocuments,
+);
 router.post("/:id/submit", submitSampleMovement);
 router.post("/:id/authorize", authorizeSampleMovement);
 router.post("/:id/request-changes", requestSampleMovementChanges);

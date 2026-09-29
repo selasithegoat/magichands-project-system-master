@@ -165,6 +165,14 @@ const FILE_POLICY_BY_FIELD = {
     extensions: IMAGE_EXTENSIONS,
     mimeTypes: IMAGE_MIME_TYPES,
   },
+  samplePhotos: {
+    extensions: IMAGE_EXTENSIONS,
+    mimeTypes: IMAGE_MIME_TYPES,
+  },
+  sampleDocuments: {
+    extensions: new Set([...IMAGE_EXTENSIONS, ...DOCUMENT_EXTENSIONS]),
+    mimeTypes: new Set([...IMAGE_MIME_TYPES, ...DOCUMENT_MIME_TYPES]),
+  },
   mockup: {
     extensions: new Set([...IMAGE_EXTENSIONS, ".pdf", ...CORELDRAW_EXTENSIONS]),
     mimeTypes: new Set([
@@ -429,6 +437,11 @@ const getChatThreadId = (req) => {
 };
 
 const getCategory = (file) => {
+  if (
+    file.fieldname === "samplePhotos" ||
+    file.fieldname === "sampleDocuments"
+  )
+    return "sample-custody";
   if (
     file.fieldname === "mockup" ||
     file.fieldname === "clientMockup" ||

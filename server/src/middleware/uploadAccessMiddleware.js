@@ -5,6 +5,8 @@ const ChatAttachmentIndex = require("../models/ChatAttachmentIndex");
 const ChatThread = require("../models/ChatThread");
 const User = require("../models/User");
 const ProjectCreationDraft = require("../models/ProjectCreationDraft");
+const SampleMovement = require("../models/SampleMovement");
+const { canAccessSampleMovements } = require("../utils/sampleMovementAccess");
 
 const PROJECT_ACCESS_FIELDS =
   "createdBy projectLeadId assistantLeadId departments orderId details.projectName";
@@ -371,6 +373,21 @@ const findChatThreadForFileUrl = async (relativePath) => {
   return ChatThread.findById(threadId).select("type participants").lean();
 };
 
+const findSampleMovementForFileUrl = async (relativePath) => {
+  const candidateUrls = buildCandidateFileUrls(relativePath);
+  if (candidateUrls.length === 0) return null;
+
+  return SampleMovement.findOne({
+    $or: [
+      { "documents.file.fileUrl": { $in: candidateUrls } },
+      { "items.photos.fileUrl": { $in: candidateUrls } },
+      { "items.returnPhotos.fileUrl": { $in: candidateUrls } },
+    ],
+  })
+    .select("_id")
+    .lean();
+};
+
 const enforceUploadAccess = async (req, res, next) => {
   try {
     const relativePath = normalizeUploadPath(req.path);
@@ -421,6 +438,16 @@ const enforceUploadAccess = async (req, res, next) => {
           .json({ message: "Not authorized to access this file." });
       }
 
+      return next();
+    }
+
+    if (category === "sample-custody") {
+      const movement = await findSampleMovementForFileUrl(relativePath);
+      if (!movement || !canAccessSampleMovements(req.user)) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to access this sample custody file." });
+      }
       return next();
     }
 

@@ -1,4 +1,7 @@
 import React, { useMemo, useState } from "react";
+import ConfirmationModal from "../../components/ui/ConfirmationModal";
+import usePersistedState from "../../hooks/usePersistedState";
+import useUnsavedChangesGuard from "../../hooks/useUnsavedChangesGuard";
 import {
   SAMPLE_PRODUCTION_TREATMENTS,
   getProjectLabel,
@@ -56,18 +59,60 @@ const getInitialForm = (movement) => ({
 });
 
 const SampleMovementForm = ({ movement = null, projects = [], onClose, onSaved }) => {
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState(() => getInitialForm(movement));
-  const [projectSearch, setProjectSearch] = useState(() =>
+  const editing = Boolean(movement?._id);
+  const persistenceScope = editing ? `edit:${movement._id}` : "new";
+  const initialForm = useMemo(() => getInitialForm(movement), [movement]);
+  const initialProjectSearch = useMemo(() =>
     movement?.project && typeof movement.project === "object"
       ? getProjectLabel(movement.project)
       : "",
+  [movement]);
+  const [step, setStep, clearSavedStep] = usePersistedState(
+    `sample-custody-form-step:${persistenceScope}`,
+    0,
+    { sanitize: (value) => Math.min(FORM_STEPS.length - 1, Math.max(0, Number(value) || 0)) },
+  );
+  const [form, setForm, clearSavedForm] = usePersistedState(
+    `sample-custody-form-data:${persistenceScope}`,
+    initialForm,
+  );
+  const [projectSearch, setProjectSearch, clearSavedProjectSearch] = usePersistedState(
+    `sample-custody-form-project-search:${persistenceScope}`,
+    initialProjectSearch,
   );
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [activeProjectIndex, setActiveProjectIndex] = useState(-1);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const editing = Boolean(movement?._id);
+  const [closeMode, setCloseMode] = useState("");
+  const hasUnsavedProgress = useMemo(
+    () =>
+      step > 0 ||
+      projectSearch !== initialProjectSearch ||
+      JSON.stringify(form) !== JSON.stringify(initialForm),
+    [form, initialForm, initialProjectSearch, projectSearch, step],
+  );
+
+  useUnsavedChangesGuard(hasUnsavedProgress && !saving);
+
+  const clearLocalDraft = () => {
+    clearSavedStep();
+    clearSavedForm();
+    clearSavedProjectSearch();
+  };
+
+  const requestClose = () => {
+    if (saving) return;
+    if (!hasUnsavedProgress) {
+      onClose();
+      return;
+    }
+    setCloseMode("keep");
+  };
+
+  const requestDiscard = () => {
+    if (!saving) setCloseMode("discard");
+  };
 
   const filteredProjects = useMemo(() => {
     const query = projectSearch.trim().toLowerCase();
@@ -234,6 +279,7 @@ const SampleMovementForm = ({ movement = null, projects = [], onClose, onSaved }
           body: JSON.stringify(payload),
         },
       );
+      clearLocalDraft();
       onSaved?.(saved, editing ? "Sample draft updated." : "Sample draft created.");
     } catch (requestError) {
       setError(requestError.message);
@@ -243,7 +289,7 @@ const SampleMovementForm = ({ movement = null, projects = [], onClose, onSaved }
   };
 
   return (
-    <div className="sample-modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className="sample-modal-backdrop" role="presentation" onMouseDown={(event) => event.stopPropagation()}>
       <section
         className="sample-form-modal"
         role="dialog"
@@ -256,7 +302,7 @@ const SampleMovementForm = ({ movement = null, projects = [], onClose, onSaved }
             <span className="sample-eyebrow">Sample custody</span>
             <h2 id="sample-form-title">{editing ? "Edit sample draft" : "New sample movement"}</h2>
           </div>
-          <button type="button" className="sample-icon-button" onClick={onClose} aria-label="Close form">
+          <button type="button" className="sample-icon-button" onClick={requestClose} aria-label="Close form">
             ×
           </button>
         </header>
@@ -271,6 +317,7 @@ const SampleMovementForm = ({ movement = null, projects = [], onClose, onSaved }
         </ol>
 
         <div className="sample-modal-body">
+          <div className="sample-local-draft-note" role="status"><span>✓</span><p><strong>Progress is saved automatically</strong><small>You can close this form and continue later on this device.</small></p></div>
           {error && <div className="sample-form-error" role="alert">{error}</div>}
 
           {step === 0 && (
@@ -519,8 +566,9 @@ const SampleMovementForm = ({ movement = null, projects = [], onClose, onSaved }
         </div>
 
         <footer className="sample-modal-footer">
-          <button type="button" className="sample-secondary-button" onClick={step === 0 ? onClose : () => { setError(""); setStep((current) => current - 1); }}>
-            {step === 0 ? "Cancel" : "Back"}
+          {hasUnsavedProgress && <button type="button" className="sample-discard-draft" onClick={requestDiscard}>Discard draft</button>}
+          <button type="button" className="sample-secondary-button" onClick={step === 0 ? requestClose : () => { setError(""); setStep((current) => current - 1); }}>
+            {step === 0 ? "Close for now" : "Back"}
           </button>
           {step < FORM_STEPS.length - 1 ? (
             <button type="button" className="sample-primary-button" onClick={nextStep}>Continue</button>
@@ -531,6 +579,19 @@ const SampleMovementForm = ({ movement = null, projects = [], onClose, onSaved }
           )}
         </footer>
       </section>
+      <ConfirmationModal
+        isOpen={Boolean(closeMode)}
+        title={closeMode === "discard" ? "Discard this draft?" : "Close and continue later?"}
+        message={closeMode === "discard" ? "All information entered in this unsaved sample movement will be removed from this device." : "Your progress is saved locally and will be restored the next time you open this form."}
+        confirmText={closeMode === "discard" ? "Discard draft" : "Close and keep draft"}
+        cancelText="Keep editing"
+        onCancel={() => setCloseMode("")}
+        onConfirm={() => {
+          if (closeMode === "discard") clearLocalDraft();
+          setCloseMode("");
+          onClose();
+        }}
+      />
     </div>
   );
 };
