@@ -8,6 +8,7 @@ import {
   ClientsIcon,
   TeamsIcon,
   ReportsIcon,
+  ShieldCheckIcon,
   LogoutIcon,
 } from "../../icons/Icons";
 import ConfirmationModal from "../ConfirmationModal/ConfirmationModal";
@@ -103,6 +104,13 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
           >
             <ReportsIcon className="nav-icon" />
             Billing Documents
+          </NavLink>
+          <NavLink
+            to="/sample-authorizations"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <ShieldCheckIcon className="nav-icon" />
+            Sample Authorizations
           </NavLink>
           <NavLink
             to="/cancelled-orders"

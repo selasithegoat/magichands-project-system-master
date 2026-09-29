@@ -49,6 +49,9 @@ const MinimalQuoteForm = lazy(
 const BillingDocuments = lazy(
   () => import("@client/pages/BillingDocuments/BillingDocuments"),
 );
+const SampleAuthorizations = lazy(
+  () => import("./pages/SampleAuthorizations/SampleAuthorizations"),
+);
 const ChatDock = lazy(() => import("@client/components/chat/ChatDock"));
 import DashboardLayout from "./layouts/DashboardLayout/DashboardLayout";
 import useInactivityLogout from "./hooks/useInactivityLogout";
@@ -333,6 +336,14 @@ function App() {
                 <AdminFrontDeskScope>
                   <BillingDocuments user={user} requestSource="admin" />
                 </AdminFrontDeskScope>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sample-authorizations"
+            element={
+              <ProtectedRoute>
+                <SampleAuthorizations />
               </ProtectedRoute>
             }
           />
