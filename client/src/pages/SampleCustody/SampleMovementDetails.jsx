@@ -21,6 +21,13 @@ const DOCUMENT_TYPE_LABELS = {
   supporting_document: "Supporting document",
 };
 
+const toDateTimeLocalValue = (value) => {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+};
+
 const ACTION_META = {
   submit: {
     title: "Submit for authorization",
@@ -58,11 +65,28 @@ const ACTION_META = {
     endpoint: "cancel",
     confirm: "Cancel record",
   },
+  retrieval_date: {
+    title: "Change retrieval date",
+    description:
+      "Set the revised date agreed for retrieving the sample. Existing reminders will be replaced using this date.",
+    endpoint: "retrieval-date",
+    method: "PATCH",
+    confirm: "Update retrieval date",
+  },
+  delete: {
+    title: "Delete custody record",
+    description:
+      "This removes the record from the custody register and stops its reminders. Its audit data is retained securely.",
+    endpoint: "",
+    method: "DELETE",
+    confirm: "Delete record",
+  },
 };
 
 const initialActionForm = (movement) => ({
   note: "",
   reason: "",
+  expectedReturnAt: toDateTimeLocalValue(movement?.expectedReturnAt),
   recipientName: movement?.release?.recipientName || movement?.client?.contactPerson || "",
   recipientRole: movement?.release?.recipientRole || movement?.client?.contactRole || "",
   courierName: movement?.release?.courierName || "",
@@ -97,7 +121,7 @@ const initialActionForm = (movement) => ({
     })),
 });
 
-const ActionDialog = ({ action, movement, onClose, onCompleted }) => {
+const ActionDialog = ({ action, movement, onClose, onCompleted, onDeleted }) => {
   const meta = ACTION_META[action];
   const initialForm = useMemo(() => initialActionForm(movement), [movement]);
   const [form, setForm, clearSavedForm] = usePersistedState(
@@ -155,6 +179,17 @@ const ActionDialog = ({ action, movement, onClose, onCompleted }) => {
     if (action === "cancel" && !form.reason.trim()) {
       setError("Enter a cancellation reason.");
       return;
+    }
+    if (action === "retrieval_date") {
+      const retrievalDate = new Date(form.expectedReturnAt);
+      if (!form.expectedReturnAt || Number.isNaN(retrievalDate.getTime())) {
+        setError("Enter a valid retrieval date and time.");
+        return;
+      }
+      if (!form.reason.trim()) {
+        setError("Enter a reason for changing the retrieval date.");
+        return;
+      }
     }
     if ((action === "release" || action === "receipt") && !form.recipientName.trim()) {
       setError("Recipient name is required.");
@@ -230,16 +265,27 @@ const ActionDialog = ({ action, movement, onClose, onCompleted }) => {
       };
     } else if (action === "cancel") {
       payload = { reason: form.reason };
+    } else if (action === "retrieval_date") {
+      payload = {
+        expectedReturnAt: new Date(form.expectedReturnAt).toISOString(),
+        reason: form.reason,
+      };
+    } else if (action === "delete") {
+      payload = { reason: form.reason };
     }
 
     setSaving(true);
     try {
       const updated = await requestSampleMovement(
-        `/${movement._id}/${meta.endpoint}`,
-        { method: "POST", body: JSON.stringify(payload) },
+        `/${movement._id}${meta.endpoint ? `/${meta.endpoint}` : ""}`,
+        { method: meta.method || "POST", body: JSON.stringify(payload) },
       );
       clearSavedForm();
-      onCompleted(updated, `${meta.title} completed.`);
+      if (action === "delete") {
+        onDeleted(updated.message || `${movement.reference} was deleted.`);
+      } else {
+        onCompleted(updated, `${meta.title} completed.`);
+      }
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -318,11 +364,20 @@ const ActionDialog = ({ action, movement, onClose, onCompleted }) => {
           {action === "cancel" && (
             <label className="sample-field"><span>Cancellation reason *</span><textarea rows="4" value={form.reason} onChange={(event) => setField("reason", event.target.value)} /></label>
           )}
+          {action === "retrieval_date" && (
+            <div className="sample-action-grid">
+              <label className="sample-field sample-field-wide"><span>New retrieval date and time *</span><input type="datetime-local" value={form.expectedReturnAt} onChange={(event) => setField("expectedReturnAt", event.target.value)} /></label>
+              <label className="sample-field sample-field-wide"><span>Reason for change *</span><textarea rows="3" value={form.reason} onChange={(event) => setField("reason", event.target.value)} placeholder="For example: client requested an extension" /></label>
+            </div>
+          )}
+          {action === "delete" && (
+            <label className="sample-field"><span>Reason for deletion (optional)</span><textarea rows="4" value={form.reason} onChange={(event) => setField("reason", event.target.value)} placeholder="Explain why this custody record should be removed" /></label>
+          )}
         </div>
         <footer className="sample-modal-footer">
           {hasUnsavedProgress && <button type="button" className="sample-discard-draft" onClick={() => setCloseMode("discard")}>Discard entries</button>}
           <button type="button" className="sample-secondary-button" onClick={requestClose}>Close for now</button>
-          <button type="button" className={`sample-primary-button ${action === "cancel" ? "danger" : ""}`} disabled={saving} onClick={submit}>{saving ? "Processing…" : meta.confirm}</button>
+          <button type="button" className={`sample-primary-button ${["cancel", "delete"].includes(action) ? "danger" : ""}`} disabled={saving} onClick={submit}>{saving ? "Processing…" : meta.confirm}</button>
         </footer>
       </section>
       <ConfirmationModal
@@ -534,7 +589,7 @@ const EvidenceDialog = ({ movement, onClose, onCompleted, onProgress }) => {
   );
 };
 
-const SampleMovementDetails = ({ movement, loading, error, onClose, onEdit, onChanged }) => {
+const SampleMovementDetails = ({ movement, loading, error, onClose, onEdit, onChanged, onDeleted }) => {
   const [action, setAction] = useState("");
   const [showEvidence, setShowEvidence] = useState(false);
   const [showWaybill, setShowWaybill] = useState(false);
@@ -549,10 +604,11 @@ const SampleMovementDetails = ({ movement, loading, error, onClose, onEdit, onCh
     }
     if (movement.status === "awaiting_authorization") return ["cancel"];
     if (movement.status === "authorized") return ["release"];
-    if (movement.status === "dispatched") return ["receipt", "return", "ownership"];
+    if (movement.status === "dispatched") return ["receipt", "return", "ownership", "retrieval_date"];
     if (["in_client_custody", "partially_returned"].includes(movement.status)) {
-      return ["return", "ownership"];
+      return ["return", "ownership", "retrieval_date"];
     }
+    if (movement.status === "ownership_transfer_pending") return ["retrieval_date"];
     return [];
   }, [movement]);
 
@@ -585,11 +641,12 @@ const SampleMovementDetails = ({ movement, loading, error, onClose, onEdit, onCh
                 <>
                 {actions.map((item) => (
                   <button key={item} type="button" className={item === "cancel" ? "danger-link" : item === "edit" ? "sample-secondary-button" : "sample-primary-button"} onClick={() => item === "edit" ? onEdit(movement) : setAction(item)}>
-                    {item === "edit" ? "Edit draft" : item === "submit" ? "Submit to Admin" : item === "release" ? "Record release" : item === "receipt" ? "Confirm receipt" : item === "return" ? "Record return" : item === "ownership" ? "Request ownership" : "Cancel"}
+                    {item === "edit" ? "Edit draft" : item === "submit" ? "Submit to Admin" : item === "release" ? "Record release" : item === "receipt" ? "Confirm receipt" : item === "return" ? "Record return" : item === "ownership" ? "Request ownership" : item === "retrieval_date" ? "Change retrieval date" : "Cancel"}
                   </button>
                 ))}
                 </>
               )}
+              <button type="button" className="danger-link sample-delete-action" onClick={() => setAction("delete")}>Delete record</button>
             </div>
 
             <div className="sample-detail-content">
@@ -669,7 +726,7 @@ const SampleMovementDetails = ({ movement, loading, error, onClose, onEdit, onCh
           </>
         )}
       </aside>
-      {action && movement && <ActionDialog action={action} movement={movement} onClose={() => setAction("")} onCompleted={(updated, message) => { setAction(""); onChanged(updated, message); }} />}
+      {action && movement && <ActionDialog action={action} movement={movement} onClose={() => setAction("")} onCompleted={(updated, message) => { setAction(""); onChanged(updated, message); }} onDeleted={(message) => { setAction(""); onDeleted(message); }} />}
       {showEvidence && movement && <EvidenceDialog movement={movement} onClose={() => setShowEvidence(false)} onProgress={onChanged} onCompleted={(updated, message) => { setShowEvidence(false); onChanged(updated, message); }} />}
       {showWaybill && movement && <SampleWaybill movement={movement} onClose={() => setShowWaybill(false)} />}
     </div>

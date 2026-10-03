@@ -182,6 +182,12 @@ const SampleCustody = () => {
     await invalidateRecords();
   };
 
+  const handleDeleted = async (message) => {
+    closeDetails();
+    setFeedback({ type: "success", message });
+    await invalidateRecords();
+  };
+
   const closeDetails = () => {
     setSelectedId("");
     if (!searchParams.has("movement")) return;
@@ -314,6 +320,7 @@ const SampleCustody = () => {
           onClose={closeDetails}
           onEdit={(movement) => setFormMovement(movement)}
           onChanged={handleChanged}
+          onDeleted={handleDeleted}
         />
       )}
     </div>

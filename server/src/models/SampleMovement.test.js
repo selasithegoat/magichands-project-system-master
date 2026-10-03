@@ -87,3 +87,31 @@ test("sample item quantities must be whole numbers", () => {
   assert.ok(error.errors["items.0.quantityReturned"]);
   assert.ok(error.errors["items.0.productionQuantityApplied"]);
 });
+
+test("retrieval date changes and soft deletion retain audit metadata", () => {
+  const deletedBy = objectId();
+  const movement = buildMovement({
+    deletedAt: new Date("2026-10-03T10:00:00.000Z"),
+    deletedBy,
+    deletionReason: "Duplicate custody record",
+    custodyEvents: [
+      {
+        type: "retrieval_date_changed",
+        actor: deletedBy,
+        actorName: "Front Desk User",
+        note: "Client requested an extension",
+      },
+      {
+        type: "deleted",
+        actor: deletedBy,
+        actorName: "Front Desk User",
+        note: "Duplicate custody record",
+      },
+    ],
+  });
+
+  assert.equal(movement.validateSync(), undefined);
+  assert.equal(movement.deletionReason, "Duplicate custody record");
+  assert.equal(movement.custodyEvents[0].type, "retrieval_date_changed");
+  assert.equal(movement.custodyEvents[1].type, "deleted");
+});

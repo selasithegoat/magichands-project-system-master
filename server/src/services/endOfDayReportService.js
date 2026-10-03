@@ -248,6 +248,7 @@ const loadEndOfDayReportData = async ({ now = new Date() } = {}) => {
       .lean(),
     DepartmentUpdateBoard.findOne({ boardKey: DEPARTMENT_BOARD_KEY }).lean(),
     SampleMovement.find({
+      deletedAt: null,
       status: {
         $in: [
           "dispatched",

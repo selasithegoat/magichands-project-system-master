@@ -45,8 +45,10 @@ const SAMPLE_CUSTODY_EVENT_TYPES = Object.freeze([
   "marked_lost",
   "cancelled",
   "document_added",
+  "retrieval_date_changed",
   "retrieval_reminder_sent",
   "retrieval_overdue_escalated",
+  "deleted",
 ]);
 
 const FileAttachmentSchema = new mongoose.Schema(
@@ -350,6 +352,13 @@ const SampleMovementSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    deletedAt: { type: Date, default: null, index: true },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    deletionReason: { type: String, trim: true, default: "", maxlength: 2000 },
   },
   { timestamps: true, optimisticConcurrency: true },
 );

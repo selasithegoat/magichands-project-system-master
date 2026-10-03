@@ -140,6 +140,7 @@ const runSampleRetrievalReminderSweep = async (nowValue = new Date()) => {
   if (Number.isNaN(now.getTime())) throw new TypeError("Invalid reminder sweep date.");
 
   const movements = await SampleMovement.find({
+    deletedAt: null,
     status: { $in: RETURNABLE_CUSTODY_STATUSES },
     disposition: { $in: ["returnable", "decision_pending"] },
     expectedReturnAt: {

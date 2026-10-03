@@ -43,6 +43,7 @@ const RETURNABLE_CUSTODY_STATUSES = new Set([
   "partially_returned",
   "ownership_transfer_pending",
 ]);
+const ACTIVE_RECORD_FILTER = Object.freeze({ deletedAt: null });
 
 const toText = (value, maxLength = 2000) =>
   String(value === null || value === undefined ? "" : value)
@@ -293,7 +294,10 @@ const findMovement = async (req, res) => {
     res.status(400).json({ message: "Invalid sample movement ID." });
     return null;
   }
-  const movement = await SampleMovement.findById(req.params.id);
+  const movement = await SampleMovement.findOne({
+    _id: req.params.id,
+    ...ACTIVE_RECORD_FILTER,
+  });
   if (!movement) {
     res.status(404).json({ message: "Sample movement not found." });
     return null;
@@ -488,6 +492,7 @@ const getSampleMovementSummary = async (now = new Date()) => {
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
   );
   const custodyFilter = {
+    ...ACTIVE_RECORD_FILTER,
     status: { $in: Array.from(RETURNABLE_CUSTODY_STATUSES) },
     disposition: { $in: ["returnable", "decision_pending"] },
   };
@@ -500,9 +505,16 @@ const getSampleMovementSummary = async (now = new Date()) => {
     ownershipTransferPending,
     returnedThisMonth,
   ] = await Promise.all([
-    SampleMovement.countDocuments({ status: "awaiting_authorization" }),
-    SampleMovement.countDocuments({ status: "authorized" }),
     SampleMovement.countDocuments({
+      ...ACTIVE_RECORD_FILTER,
+      status: "awaiting_authorization",
+    }),
+    SampleMovement.countDocuments({
+      ...ACTIVE_RECORD_FILTER,
+      status: "authorized",
+    }),
+    SampleMovement.countDocuments({
+      ...ACTIVE_RECORD_FILTER,
       status: {
         $in: [
           "dispatched",
@@ -520,8 +532,12 @@ const getSampleMovementSummary = async (now = new Date()) => {
       ...custodyFilter,
       expectedReturnAt: { $lt: now },
     }),
-    SampleMovement.countDocuments({ status: "ownership_transfer_pending" }),
     SampleMovement.countDocuments({
+      ...ACTIVE_RECORD_FILTER,
+      status: "ownership_transfer_pending",
+    }),
+    SampleMovement.countDocuments({
+      ...ACTIVE_RECORD_FILTER,
       status: "returned",
       "returnSummary.completedAt": { $gte: monthStart },
     }),
@@ -545,7 +561,7 @@ const getSampleMovements = async (req, res) => {
       200,
       Math.max(1, Number.parseInt(req.query.limit, 10) || 50),
     );
-    const filter = {};
+    const filter = { ...ACTIVE_RECORD_FILTER };
     const status = toText(req.query.status, 80).toLowerCase();
     const disposition = toText(req.query.disposition, 80).toLowerCase();
     const handoverMethod = toText(req.query.handoverMethod, 80).toLowerCase();
@@ -670,6 +686,7 @@ const getSampleRetrievalUpdates = async (req, res) => {
     const dueSoonAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     const movements = await populateSampleMovementQuery(
       SampleMovement.find({
+        ...ACTIVE_RECORD_FILTER,
         status: { $in: Array.from(RETURNABLE_CUSTODY_STATUSES) },
         disposition: { $in: ["returnable", "decision_pending"] },
         expectedReturnAt: { $ne: null, $lte: dueSoonAt },
@@ -771,6 +788,117 @@ const updateSampleMovement = async (req, res) => {
     return respondWithMovement(res, movement._id);
   } catch (error) {
     return sendControllerError(res, error, "Failed to update sample movement.");
+  }
+};
+
+const updateSampleRetrievalDate = async (req, res) => {
+  if (!requireOperator(req, res)) return;
+  try {
+    const movement = await findMovement(req, res);
+    if (!movement) return;
+    if (!RETURNABLE_CUSTODY_STATUSES.has(movement.status)) {
+      return res.status(409).json({
+        message:
+          "The retrieval date can only be changed after the sample has been released and before custody is closed.",
+      });
+    }
+    if (!["returnable", "decision_pending"].includes(movement.disposition)) {
+      return res.status(409).json({
+        message: "This sample no longer requires retrieval.",
+      });
+    }
+
+    const expectedReturnAt = toDateOrNull(req.body.expectedReturnAt);
+    if (!expectedReturnAt) {
+      return res.status(400).json({
+        message: "Enter a valid retrieval date and time.",
+      });
+    }
+    const releasedAt = toDateOrNull(movement.release?.releasedAt);
+    if (releasedAt && expectedReturnAt.getTime() <= releasedAt.getTime()) {
+      return res.status(400).json({
+        message: "The retrieval date must be later than the sample release date.",
+      });
+    }
+    const reason = toText(req.body.reason || req.body.note, 2000);
+    if (!reason) {
+      return res.status(400).json({
+        message: "Enter a reason for changing the retrieval date.",
+      });
+    }
+
+    const previousExpectedReturnAt = movement.expectedReturnAt;
+    if (
+      previousExpectedReturnAt &&
+      new Date(previousExpectedReturnAt).getTime() === expectedReturnAt.getTime()
+    ) {
+      return res.status(400).json({
+        message: "Choose a different retrieval date and time.",
+      });
+    }
+
+    movement.expectedReturnAt = expectedReturnAt;
+    movement.updatedBy = req.user._id;
+    movement.retrievalReminders ||= {};
+    movement.retrievalReminders.dueSoonSentAt = null;
+    movement.retrievalReminders.dueTodaySentAt = null;
+    movement.retrievalReminders.overdueSentAt = null;
+    movement.retrievalReminders.adminEscalatedAt = null;
+    movement.retrievalReminders.lastEvaluatedAt = null;
+    appendCustodyEvent(movement, {
+      type: "retrieval_date_changed",
+      actor: req.user,
+      fromStatus: movement.status,
+      toStatus: movement.status,
+      note: reason,
+      details: {
+        previousExpectedReturnAt,
+        expectedReturnAt,
+      },
+    });
+    await movement.save();
+    await resolveSampleRetrievalNotifications(movement._id);
+    return respondWithMovement(res, movement._id);
+  } catch (error) {
+    return sendControllerError(
+      res,
+      error,
+      "Failed to update the sample retrieval date.",
+    );
+  }
+};
+
+const deleteSampleMovement = async (req, res) => {
+  if (!requireOperator(req, res)) return;
+  try {
+    const movement = await findMovement(req, res);
+    if (!movement) return;
+    const reason =
+      toText(req.body.reason || req.body.note, 2000) ||
+      "Custody record deleted by Front Desk.";
+
+    appendCustodyEvent(movement, {
+      type: "deleted",
+      actor: req.user,
+      fromStatus: movement.status,
+      toStatus: movement.status,
+      note: reason,
+      details: { reference: movement.reference },
+    });
+    movement.deletedAt = new Date();
+    movement.deletedBy = req.user._id;
+    movement.deletionReason = reason;
+    movement.updatedBy = req.user._id;
+    await movement.save();
+    await resolveSampleRetrievalNotifications(movement._id);
+
+    return res.json({
+      message: `${movement.reference} was deleted from the custody register.`,
+      id: movement._id,
+      reference: movement.reference,
+    });
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to delete sample movement.");
   }
 };
 
@@ -1207,6 +1335,7 @@ module.exports = {
   cancelSampleMovement,
   confirmSampleReceipt,
   createSampleMovement,
+  deleteSampleMovement,
   getSampleMovement,
   getSampleMovements,
   getSampleRetrievalUpdates,
@@ -1217,6 +1346,7 @@ module.exports = {
   requestOwnershipTransfer,
   requestSampleMovementChanges: decideAuthorization("changes_requested"),
   submitSampleMovement,
+  updateSampleRetrievalDate,
   updateSampleMovement,
   uploadSampleDocuments,
   uploadSampleItemPhotos,

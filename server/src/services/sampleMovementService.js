@@ -88,6 +88,7 @@ const populateSampleMovementQuery = (query) =>
     .populate("frontDeskOwner", "firstName lastName employeeId department")
     .populate("createdBy", "firstName lastName employeeId")
     .populate("updatedBy", "firstName lastName employeeId")
+    .populate("deletedBy", "firstName lastName employeeId")
     .populate("authorization.submittedBy", "firstName lastName employeeId")
     .populate("authorization.decidedBy", "firstName lastName employeeId")
     .populate("ownershipTransfer.requestedBy", "firstName lastName employeeId")
@@ -95,7 +96,7 @@ const populateSampleMovementQuery = (query) =>
 
 const getSampleMovementById = async (id) => {
   const movement = await populateSampleMovementQuery(
-    SampleMovement.findById(id),
+    SampleMovement.findOne({ _id: id, deletedAt: null }),
   ).lean();
   return movement
     ? {

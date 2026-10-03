@@ -11,6 +11,7 @@ const {
   cancelSampleMovement,
   confirmSampleReceipt,
   createSampleMovement,
+  deleteSampleMovement,
   getSampleMovement,
   getSampleMovements,
   getSampleRetrievalUpdates,
@@ -21,6 +22,7 @@ const {
   requestOwnershipTransfer,
   requestSampleMovementChanges,
   submitSampleMovement,
+  updateSampleRetrievalDate,
   updateSampleMovement,
   uploadSampleDocuments,
   uploadSampleItemPhotos,
@@ -64,7 +66,12 @@ router.use(requireSampleMovementAccess);
 
 router.route("/").get(getSampleMovements).post(createSampleMovement);
 router.get("/retrieval-updates", getSampleRetrievalUpdates);
-router.route("/:id").get(getSampleMovement).patch(updateSampleMovement);
+router
+  .route("/:id")
+  .get(getSampleMovement)
+  .patch(updateSampleMovement)
+  .delete(deleteSampleMovement);
+router.patch("/:id/retrieval-date", updateSampleRetrievalDate);
 router.post(
   "/:id/items/:itemId/photos",
   requireSampleMovementOperator,
