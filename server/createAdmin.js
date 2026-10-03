@@ -1,10 +1,13 @@
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
+const path = require("path");
 // Adjust paths as this script is in server root
 const User = require("./src/models/User");
 const connectDB = require("./src/config/db");
 
-dotenv.config();
+dotenv.config({
+  path: path.resolve(__dirname, process.env.DOTENV_FILE || ".env"),
+});
 
 const createAdmin = async () => {
   try {
@@ -32,7 +35,7 @@ const createAdmin = async () => {
         password: adminPassword,
         email: adminEmail,
         role: "admin",
-        department: "Management",
+        department: ["Administration"],
         employeeType: "Staff",
         contact: "0000000000",
       });
