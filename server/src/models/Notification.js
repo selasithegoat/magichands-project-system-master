@@ -16,6 +16,11 @@ const NotificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Project",
     },
+    sampleMovement: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SampleMovement",
+      default: null,
+    },
     reminder: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Reminder",
@@ -79,6 +84,7 @@ NotificationSchema.index({ recipient: 1, createdAt: -1 }); // Optimize fetching 
 NotificationSchema.index({ recipient: 1, isRead: 1 }); // Optimize unread count checks
 NotificationSchema.index({ recipient: 1, requiresAction: 1, isRead: 1 });
 NotificationSchema.index({ source: 1, isRead: 1, nextReminderAt: 1 });
+NotificationSchema.index({ sampleMovement: 1, source: 1, resolvedAt: 1 });
 NotificationSchema.index(
   { recipient: 1, dedupeKey: 1 },
   {

@@ -993,6 +993,11 @@ const Layout = ({
           return;
         }
 
+        if (notification.actionUrl?.startsWith("/")) {
+          navigate(notification.actionUrl);
+          return;
+        }
+
         // Intelligent Routing based on notification type
         if (projectId) {
           if (notification.title === "Final Update Posted") {

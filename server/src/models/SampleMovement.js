@@ -45,6 +45,8 @@ const SAMPLE_CUSTODY_EVENT_TYPES = Object.freeze([
   "marked_lost",
   "cancelled",
   "document_added",
+  "retrieval_reminder_sent",
+  "retrieval_overdue_escalated",
 ]);
 
 const FileAttachmentSchema = new mongoose.Schema(
@@ -251,6 +253,17 @@ const CustodyEventSchema = new mongoose.Schema(
   { _id: true },
 );
 
+const RetrievalReminderSchema = new mongoose.Schema(
+  {
+    dueSoonSentAt: { type: Date, default: null },
+    dueTodaySentAt: { type: Date, default: null },
+    overdueSentAt: { type: Date, default: null },
+    adminEscalatedAt: { type: Date, default: null },
+    lastEvaluatedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const SampleMovementSchema = new mongoose.Schema(
   {
     reference: {
@@ -319,6 +332,10 @@ const SampleMovementSchema = new mongoose.Schema(
       note: { type: String, trim: true, default: "", maxlength: 2000 },
       hasDamage: { type: Boolean, default: false },
       hasMissingQuantity: { type: Boolean, default: false },
+    },
+    retrievalReminders: {
+      type: RetrievalReminderSchema,
+      default: () => ({}),
     },
     ownershipTransfer: { type: OwnershipTransferSchema, default: () => ({}) },
     documents: { type: [SampleDocumentSchema], default: [] },

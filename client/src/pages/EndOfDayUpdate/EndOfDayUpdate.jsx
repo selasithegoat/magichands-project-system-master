@@ -196,6 +196,26 @@ const EndOfDayUpdate = ({ user }) => {
       realtimePaths: ["/api/projects", "/api/updates"],
     },
   });
+  const {
+    data: sampleRetrievalData,
+    isPending: sampleRetrievalsLoading,
+    isError: sampleRetrievalsError,
+  } = useQuery({
+    queryKey: ["sample-movements", "end-of-day-retrievals"],
+    queryFn: async () => {
+      const response = await fetch("/api/sample-movements/retrieval-updates", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Failed to fetch sample retrieval updates.");
+      return response.json();
+    },
+    enabled: Boolean(isFrontDesk),
+    refetchInterval: 60 * 1000,
+    meta: { realtimePaths: ["/api/sample-movements"] },
+  });
+  const sampleRetrievals = sampleRetrievalData?.retrievals || [];
+  const sampleRetrievalSummary = sampleRetrievalData?.summary || {};
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -435,7 +455,7 @@ const EndOfDayUpdate = ({ user }) => {
   };
 
   const handleServerDownload = async () => {
-    if (!projects.length || downloadingReport) return;
+    if ((!projects.length && !sampleRetrievals.length) || downloadingReport) return;
 
     try {
       setDownloadingReport(true);
@@ -468,7 +488,7 @@ const EndOfDayUpdate = ({ user }) => {
   };
 
   const handlePrint = () => {
-    if (!filteredProjects.length) return;
+    if (!filteredProjects.length && !sampleRetrievals.length) return;
 
     const userName = user
       ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
@@ -534,6 +554,26 @@ const EndOfDayUpdate = ({ user }) => {
                   : ""
               }
             </td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const retrievalRowsHtml = sampleRetrievals
+      .map((movement) => {
+        const projectReference =
+          movement.projectSnapshot?.orderId ||
+          movement.projectSnapshot?.projectName ||
+          "Unlinked project";
+        const latestUpdate = movement.latestUpdate?.note || "Awaiting sample retrieval";
+        return `
+          <tr class="sample-retrieval-${movement.attentionState === "overdue" ? "overdue" : "due-soon"}">
+            <td>${escapeHtml(movement.reference || "N/A")}</td>
+            <td>${escapeHtml(movement.client?.name || "Unknown client")}</td>
+            <td>${escapeHtml(projectReference)}</td>
+            <td>${escapeHtml(String(movement.outstandingQuantity || 0))}</td>
+            <td>${escapeHtml(formatDateTime(movement.expectedReturnAt))}</td>
+            <td>${escapeHtml(latestUpdate)}</td>
           </tr>
         `;
       })
@@ -659,6 +699,15 @@ const EndOfDayUpdate = ({ user }) => {
               background: #fee2e2;
               color: #991b1b;
             }
+            .sample-retrieval-heading {
+              margin: 12px 0 4px;
+              color: #1d4f91;
+              font-size: 10px;
+              font-weight: 800;
+              letter-spacing: 0.05em;
+            }
+            .sample-retrieval-overdue { background: #fef2f2; color: #b91c1c; }
+            .sample-retrieval-due-soon { background: #fffbeb; }
           </style>
         </head>
         <body>
@@ -683,6 +732,15 @@ const EndOfDayUpdate = ({ user }) => {
             </thead>
             <tbody>${rowsHtml}</tbody>
           </table>
+          ${
+            retrievalRowsHtml
+              ? `<div class="sample-retrieval-heading">SAMPLE RETRIEVAL UPDATES</div>
+                <table>
+                  <thead><tr><th>Reference</th><th>Client</th><th>Project</th><th>Outstanding</th><th>Expected Retrieval</th><th>Latest Update</th></tr></thead>
+                  <tbody>${retrievalRowsHtml}</tbody>
+                </table>`
+              : ""
+          }
         </body>
       </html>
     `;
@@ -753,7 +811,7 @@ const EndOfDayUpdate = ({ user }) => {
             type="button"
             className="eod-action-btn eod-print-btn"
             onClick={handlePrint}
-            disabled={filteredProjects.length === 0}
+            disabled={filteredProjects.length === 0 && sampleRetrievals.length === 0}
           >
             <PrinterIcon />
             Print Report
@@ -762,7 +820,7 @@ const EndOfDayUpdate = ({ user }) => {
             type="button"
             className="download-btn"
             onClick={handleServerDownload}
-            disabled={projects.length === 0 || downloadingReport}
+            disabled={(projects.length === 0 && sampleRetrievals.length === 0) || downloadingReport}
           >
             <DownloadIcon width={18} height={18} />
             {downloadingReport ? "Preparing Report..." : "Download Report"}
@@ -771,6 +829,45 @@ const EndOfDayUpdate = ({ user }) => {
       </div>
 
       <EndOfDayRouteTabs />
+
+      <section className="eod-sample-retrievals" aria-labelledby="eod-sample-retrievals-title">
+        <div className="eod-sample-retrievals-heading">
+          <div>
+            <span>Custody follow-up</span>
+            <h2 id="eod-sample-retrievals-title">Sample retrieval updates</h2>
+            <p>Returnable samples due within seven days or already overdue.</p>
+          </div>
+          <div className="eod-sample-retrieval-counts" aria-label="Sample retrieval summary">
+            <span><strong>{sampleRetrievalSummary.dueSoon || 0}</strong> due soon</span>
+            <span className="urgent"><strong>{sampleRetrievalSummary.overdue || 0}</strong> overdue</span>
+          </div>
+        </div>
+
+        {sampleRetrievalsLoading ? (
+          <div className="eod-sample-retrieval-state">Loading retrieval updates…</div>
+        ) : sampleRetrievalsError ? (
+          <div className="eod-sample-retrieval-state error">Sample retrieval updates could not be loaded.</div>
+        ) : sampleRetrievals.length === 0 ? (
+          <div className="eod-sample-retrieval-state clear">No sample retrievals need attention.</div>
+        ) : (
+          <div className="eod-sample-retrieval-list">
+            {sampleRetrievals.map((movement) => (
+              <button
+                type="button"
+                key={movement._id}
+                className={movement.attentionState === "overdue" ? "overdue" : "due-soon"}
+                onClick={() => navigate(`/sample-custody?movement=${movement._id}`)}
+              >
+                <span className="eod-sample-reference">{movement.reference}</span>
+                <span className="eod-sample-client"><strong>{movement.client?.name || "Unknown client"}</strong><small>{movement.projectSnapshot?.orderId || movement.projectSnapshot?.projectName || "Unlinked project"}</small></span>
+                <span className="eod-sample-due"><strong>{formatDateTime(movement.expectedReturnAt)}</strong><small>{movement.attentionState === "overdue" ? "Retrieval overdue" : movement.reminderStage === "due_today" ? "Due today" : "Due soon"}</small></span>
+                <span className="eod-sample-latest"><strong>{movement.outstandingQuantity || 0} outstanding</strong><small>{movement.latestUpdate?.note || "Awaiting sample retrieval"}</small></span>
+                <span className="eod-sample-open" aria-hidden="true">›</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
 
       <div className="eod-filter-panel" aria-label="End of Day filters">
         <div className="eod-filter-heading">

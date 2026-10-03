@@ -190,7 +190,7 @@ const createDeliveryClaim = async ({
   );
 };
 
-const buildEmailHtml = ({ reportDate, projectCount }) => `
+const buildEmailHtml = ({ reportDate, projectCount, sampleRetrievalCount = 0 }) => `
 <!doctype html>
 <html lang="en">
   <body style="margin:0;padding:24px;background:#f1f5f9;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
@@ -207,7 +207,7 @@ const buildEmailHtml = ({ reportDate, projectCount }) => `
             <tr>
               <td style="padding:26px;">
                 <p style="margin:0 0 12px;font-size:16px;line-height:1.6;">The End of Day report for <strong>${reportDate}</strong> is attached.</p>
-                <p style="margin:0;font-size:15px;line-height:1.6;color:#475569;">The report contains ${projectCount} active project${projectCount === 1 ? "" : "s"} and the current Department Updates board.</p>
+                <p style="margin:0;font-size:15px;line-height:1.6;color:#475569;">The report contains ${projectCount} active project${projectCount === 1 ? "" : "s"}, ${sampleRetrievalCount} sample retrieval update${sampleRetrievalCount === 1 ? "" : "s"}, and the current Department Updates board.</p>
               </td>
             </tr>
           </table>
@@ -259,14 +259,15 @@ const sendClaimedReport = async ({
   report,
   reportDate,
   projectCount,
+  sampleRetrievalCount = 0,
   now,
 }) => {
   const subject = `End of Day Scrum Update - ${reportDate}`;
-  const text = `The End of Day Scrum Update for ${reportDate} is attached. It contains ${projectCount} active project${projectCount === 1 ? "" : "s"} and the current Department Updates board.`;
+  const text = `The End of Day Scrum Update for ${reportDate} is attached. It contains ${projectCount} active project${projectCount === 1 ? "" : "s"}, ${sampleRetrievalCount} sample retrieval update${sampleRetrievalCount === 1 ? "" : "s"}, and the current Department Updates board.`;
 
   try {
     const delivery = await sendEmailDetailed(claim.recipient, subject, text, {
-      html: buildEmailHtml({ reportDate, projectCount }),
+      html: buildEmailHtml({ reportDate, projectCount, sampleRetrievalCount }),
       messageId: `<eod-${claim.reportDate}-${claim.recipient.replace(
         /[^a-z0-9]/gi,
         "-",
@@ -353,7 +354,10 @@ const runScheduledEndOfDayReport = async ({
 
   try {
     const reportData = await loadEndOfDayReportData({ now });
-    if (reportData.projectCount === 0) {
+    if (
+      reportData.projectCount === 0 &&
+      reportData.sampleRetrievalCount === 0
+    ) {
       await markClaimsSkipped(claims, 0);
       return { status: "skipped_empty", projectCount: 0 };
     }
@@ -372,6 +376,7 @@ const runScheduledEndOfDayReport = async ({
           report,
           reportDate: report.reportDate,
           projectCount: reportData.projectCount,
+          sampleRetrievalCount: reportData.sampleRetrievalCount,
           now,
         }),
       );

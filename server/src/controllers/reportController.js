@@ -29,9 +29,12 @@ const downloadEndOfDayReport = async (req, res) => {
   try {
     const now = new Date();
     const reportData = await loadEndOfDayReportData({ now });
-    if (reportData.projectCount === 0) {
+    if (
+      reportData.projectCount === 0 &&
+      reportData.sampleRetrievalCount === 0
+    ) {
       return res.status(404).json({
-        message: "There are no active projects to include in the report.",
+        message: "There are no active projects or sample retrieval updates to include in the report.",
       });
     }
 

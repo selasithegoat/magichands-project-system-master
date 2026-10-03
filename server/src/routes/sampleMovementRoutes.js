@@ -13,6 +13,7 @@ const {
   createSampleMovement,
   getSampleMovement,
   getSampleMovements,
+  getSampleRetrievalUpdates,
   recordSampleReturn,
   rejectOwnershipTransfer,
   rejectSampleMovement,
@@ -62,6 +63,7 @@ router.use(protect);
 router.use(requireSampleMovementAccess);
 
 router.route("/").get(getSampleMovements).post(createSampleMovement);
+router.get("/retrieval-updates", getSampleRetrievalUpdates);
 router.route("/:id").get(getSampleMovement).patch(updateSampleMovement);
 router.post(
   "/:id/items/:itemId/photos",

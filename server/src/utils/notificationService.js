@@ -33,6 +33,8 @@ const createNotification = async (
     const recipientKey = recipientId?.toString?.() || "";
     const senderKey = senderId?.toString?.() || "";
     const projectKey = projectId?.toString?.() || null;
+    const sampleMovementKey =
+      deliveryOptions?.sampleMovementId?.toString?.() || null;
     const reminderKey = deliveryOptions?.reminderId?.toString?.() || null;
     const allowSelf = Boolean(deliveryOptions?.allowSelf);
     const sourceKey = String(deliveryOptions?.source || "").trim();
@@ -133,6 +135,10 @@ const createNotification = async (
             recipient: recipientKey,
             sender: senderKey,
             project: projectKey,
+            sampleMovement:
+              sampleMovementKey && mongoose.Types.ObjectId.isValid(sampleMovementKey)
+                ? sampleMovementKey
+                : null,
             reminder: normalizedReminderKey,
             type,
             title,

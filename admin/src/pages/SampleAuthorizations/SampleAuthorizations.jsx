@@ -1,6 +1,6 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import usePersistedState from "@client/hooks/usePersistedState";
 import useUnsavedChangesGuard from "@client/hooks/useUnsavedChangesGuard";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
@@ -396,6 +396,7 @@ const DetailPanel = ({ movement, loading, error, onClose, onDecision }) => {
 
 const SampleAuthorizations = () => {
   const queryClient = useQueryClient();
+  const [urlSearchParams, setUrlSearchParams] = useSearchParams();
   const [queue, setQueue] = useState("release");
   const [registerFilter, setRegisterFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -404,6 +405,17 @@ const SampleAuthorizations = () => {
   const [selectedId, setSelectedId] = useState("");
   const [decision, setDecision] = useState("");
   const [feedback, setFeedback] = useState("");
+  const requestedMovement = urlSearchParams.get("movement") || "";
+  const requestedAttention = urlSearchParams.get("attention") || "";
+  const activeSelectedId = selectedId || requestedMovement;
+  const activeQueue = ["due_soon", "overdue"].includes(requestedAttention)
+    ? "register"
+    : queue;
+  const activeRegisterFilter = ["due_soon", "overdue"].includes(
+    requestedAttention,
+  )
+    ? requestedAttention
+    : registerFilter;
 
   useEffect(() => {
     if (!feedback) return undefined;
@@ -411,19 +423,26 @@ const SampleAuthorizations = () => {
     return () => window.clearTimeout(timeout);
   }, [feedback]);
 
-  const selectedQueue = QUEUES.find((item) => item.key === queue) || QUEUES[0];
+  const selectedQueue =
+    QUEUES.find((item) => item.key === activeQueue) || QUEUES[0];
   const queryParams = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), limit: "40" });
     if (selectedQueue.status) params.set("status", selectedQueue.status);
-    if (queue === "register" && registerFilter === "authorized") {
+    if (activeQueue === "register" && activeRegisterFilter === "authorized") {
       params.set("status", "authorized");
     }
-    if (queue === "register" && registerFilter === "with_clients") {
+    if (activeQueue === "register" && activeRegisterFilter === "with_clients") {
       params.set("scope", "with_clients");
+    }
+    if (
+      activeQueue === "register" &&
+      ["due_soon", "overdue"].includes(activeRegisterFilter)
+    ) {
+      params.set("attention", activeRegisterFilter);
     }
     if (deferredSearch) params.set("search", deferredSearch);
     return params.toString();
-  }, [deferredSearch, page, queue, registerFilter, selectedQueue.status]);
+  }, [activeQueue, activeRegisterFilter, deferredSearch, page, selectedQueue.status]);
 
   const listQuery = useQuery({
     queryKey: ["sample-movements", "admin-authorizations", queryParams],
@@ -433,9 +452,9 @@ const SampleAuthorizations = () => {
   });
 
   const detailQuery = useQuery({
-    queryKey: ["sample-movement", "admin-authorization", selectedId],
-    queryFn: () => requestSampleMovements(`/${selectedId}`),
-    enabled: Boolean(selectedId),
+    queryKey: ["sample-movement", "admin-authorization", activeSelectedId],
+    queryFn: () => requestSampleMovements(`/${activeSelectedId}`),
+    enabled: Boolean(activeSelectedId),
     meta: { realtimePaths: ["/api/sample-movements"] },
   });
 
@@ -445,19 +464,36 @@ const SampleAuthorizations = () => {
   const pagination = data.pagination || { page: 1, pages: 1, total: 0 };
 
   const switchQueue = (nextQueue, nextRegisterFilter = "") => {
+    if (urlSearchParams.has("attention")) {
+      const nextParams = new URLSearchParams(urlSearchParams);
+      nextParams.delete("attention");
+      setUrlSearchParams(nextParams, { replace: true });
+    }
     setQueue(nextQueue);
     setRegisterFilter(nextQueue === "register" ? nextRegisterFilter : "");
     setPage(1);
   };
 
   const resultsLabel =
-    queue !== "register"
+    activeQueue !== "register"
       ? selectedQueue.label
-      : registerFilter === "authorized"
+      : activeRegisterFilter === "authorized"
         ? "Ready for release"
-        : registerFilter === "with_clients"
+        : activeRegisterFilter === "with_clients"
           ? "Samples with clients"
+          : activeRegisterFilter === "overdue"
+            ? "Overdue retrievals"
+            : activeRegisterFilter === "due_soon"
+              ? "Retrievals due soon"
           : selectedQueue.label;
+
+  const closeDetails = () => {
+    setSelectedId("");
+    if (!urlSearchParams.has("movement")) return;
+    const nextParams = new URLSearchParams(urlSearchParams);
+    nextParams.delete("movement");
+    setUrlSearchParams(nextParams, { replace: true });
+  };
 
   const completeDecision = async (updated, message) => {
     setDecision("");
@@ -484,17 +520,23 @@ const SampleAuthorizations = () => {
       </header>
 
       <section className="sample-auth-summary" aria-label="Sample authorization summary">
-        <button type="button" className={queue === "release" ? "active amber" : "amber"} onClick={() => switchQueue("release")}>
+        <button type="button" className={activeQueue === "release" ? "active amber" : "amber"} onClick={() => switchQueue("release")}>
           <span>Release requests</span><strong>{summary.awaitingAuthorization || 0}</strong><small>Awaiting authorization</small>
         </button>
-        <button type="button" className={queue === "ownership" ? "active purple" : "purple"} onClick={() => switchQueue("ownership")}>
+        <button type="button" className={activeQueue === "ownership" ? "active purple" : "purple"} onClick={() => switchQueue("ownership")}>
           <span>Ownership requests</span><strong>{summary.ownershipTransferPending || 0}</strong><small>Client retention decisions</small>
         </button>
-        <button type="button" className={queue === "register" && registerFilter === "authorized" ? "active blue" : "blue"} onClick={() => switchQueue("register", "authorized")}>
+        <button type="button" className={activeQueue === "register" && activeRegisterFilter === "authorized" ? "active blue" : "blue"} onClick={() => switchQueue("register", "authorized")}>
           <span>Ready for release</span><strong>{summary.readyForRelease || 0}</strong><small>Already authorized</small>
         </button>
-        <button type="button" className={queue === "register" && registerFilter === "with_clients" ? "active green" : "green"} onClick={() => switchQueue("register", "with_clients")}>
+        <button type="button" className={activeQueue === "register" && activeRegisterFilter === "with_clients" ? "active green" : "green"} onClick={() => switchQueue("register", "with_clients")}>
           <span>With clients</span><strong>{summary.withClients || 0}</strong><small>Outside the premises</small>
+        </button>
+        <button type="button" className={activeQueue === "register" && activeRegisterFilter === "due_soon" ? "active amber" : "amber"} onClick={() => switchQueue("register", "due_soon")}>
+          <span>Due soon</span><strong>{summary.dueSoon || 0}</strong><small>Retrieval within seven days</small>
+        </button>
+        <button type="button" className={activeQueue === "register" && activeRegisterFilter === "overdue" ? "active red" : "red"} onClick={() => switchQueue("register", "overdue")}>
+          <span>Overdue</span><strong>{summary.overdue || 0}</strong><small>Escalated retrievals</small>
         </button>
       </section>
 
@@ -502,7 +544,7 @@ const SampleAuthorizations = () => {
         <div className="sample-auth-toolbar">
           <div className="sample-auth-tabs" role="tablist" aria-label="Authorization queues">
             {QUEUES.map((item) => (
-              <button key={item.key} type="button" role="tab" aria-selected={queue === item.key} className={queue === item.key ? "active" : ""} onClick={() => switchQueue(item.key)}>
+              <button key={item.key} type="button" role="tab" aria-selected={activeQueue === item.key} className={activeQueue === item.key ? "active" : ""} onClick={() => switchQueue(item.key)}>
                 {item.label}
                 {item.key === "release" && summary.awaitingAuthorization > 0 && <span>{summary.awaitingAuthorization}</span>}
                 {item.key === "ownership" && summary.ownershipTransferPending > 0 && <span>{summary.ownershipTransferPending}</span>}
@@ -538,7 +580,7 @@ const SampleAuthorizations = () => {
                     <td data-label="Custody plan"><strong>{movement.handoverMethod === "pickup" ? "Client pick-up" : "Dispatch"}</strong><small>{String(movement.disposition || "").replace(/_/g, " ")} · Return {movement.disposition === "client_owned" ? "not required" : formatDate(movement.expectedReturnAt)}</small></td>
                     <td data-label="Samples"><strong>{totalQuantity(movement)} objects</strong><small>{movement.items?.length || 0} line item{movement.items?.length === 1 ? "" : "s"}</small></td>
                     <td data-label="Submitted"><strong>{formatDate(movement.status === "ownership_transfer_pending" ? movement.ownershipTransfer?.requestedAt : movement.authorization?.submittedAt)}</strong><small>{personName(movement.status === "ownership_transfer_pending" ? movement.ownershipTransfer?.requestedBy : movement.authorization?.submittedBy)}</small></td>
-                    <td data-label="Status"><span className={`sample-auth-status ${statusTone(movement.status)}`}>{formatStatus(movement.status)}</span></td>
+                    <td data-label="Status"><span className={`sample-auth-status ${movement.attentionState === "overdue" ? "danger" : movement.attentionState === "due_soon" ? "warning" : statusTone(movement.status)}`}>{movement.attentionState === "overdue" ? "Retrieval overdue" : movement.attentionState === "due_soon" ? "Due soon" : formatStatus(movement.status)}</span></td>
                     <td><button type="button" className="sample-auth-open" onClick={(event) => { event.stopPropagation(); setSelectedId(movement._id); }} aria-label={`Review ${movement.reference}`}>›</button></td>
                   </tr>
                 ))}
@@ -556,12 +598,12 @@ const SampleAuthorizations = () => {
         )}
       </section>
 
-      {selectedId && (
+      {activeSelectedId && (
         <DetailPanel
           movement={detailQuery.data}
           loading={detailQuery.isPending}
           error={detailQuery.error}
-          onClose={() => setSelectedId("")}
+          onClose={closeDetails}
           onDecision={setDecision}
         />
       )}

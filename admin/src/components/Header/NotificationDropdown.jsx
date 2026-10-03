@@ -81,6 +81,11 @@ const NotificationDropdown = ({
 
   const openNotification = (notification) => {
     markAsRead(notification._id);
+    if (notification.actionUrl?.startsWith("/")) {
+      onClose();
+      navigate(notification.actionUrl);
+      return;
+    }
     const projectId = notification.project?._id;
     if (
       notification.source?.startsWith("production_action_escalation:") &&

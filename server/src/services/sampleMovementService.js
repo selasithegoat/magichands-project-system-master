@@ -41,12 +41,20 @@ const allocateSampleMovementReference = async (date = new Date()) => {
 
 const appendCustodyEvent = (
   movement,
-  { type, actor, fromStatus = null, toStatus = null, note = "", details = null },
+  {
+    type,
+    actor,
+    actorName = "",
+    fromStatus = null,
+    toStatus = null,
+    note = "",
+    details = null,
+  },
 ) => {
   movement.custodyEvents.push({
     type,
     actor: actor?._id || actor?.id || actor || null,
-    actorName: getUserDisplayName(actor),
+    actorName: String(actorName || "").trim() || getUserDisplayName(actor),
     fromStatus,
     toStatus,
     note: String(note || "").trim(),

@@ -17,7 +17,11 @@ const {
 } = require("docx");
 const DepartmentUpdateBoard = require("../models/DepartmentUpdateBoard");
 const Project = require("../models/Project");
+const SampleMovement = require("../models/SampleMovement");
 require("../models/User");
+const {
+  getSampleMovementAttentionState,
+} = require("../utils/sampleMovementLifecycle");
 const {
   normalizeProjectUpdateContent,
 } = require("../utils/projectUpdateText");
@@ -206,7 +210,8 @@ const sortProjectsByLead = (projects = []) =>
 
 const loadEndOfDayReportData = async ({ now = new Date() } = {}) => {
   const nowMs = now.getTime();
-  const [allProjects, departmentBoard] = await Promise.all([
+  const dueSoonAt = new Date(nowMs + 7 * 24 * 60 * 60 * 1000);
+  const [allProjects, departmentBoard, sampleMovements] = await Promise.all([
     Project.find({
       "cancellation.isCancelled": { $ne: true },
     })
@@ -242,6 +247,23 @@ const loadEndOfDayReportData = async ({ now = new Date() } = {}) => {
       .populate("assistantLeadId", "firstName lastName")
       .lean(),
     DepartmentUpdateBoard.findOne({ boardKey: DEPARTMENT_BOARD_KEY }).lean(),
+    SampleMovement.find({
+      status: {
+        $in: [
+          "dispatched",
+          "in_client_custody",
+          "partially_returned",
+          "ownership_transfer_pending",
+        ],
+      },
+      disposition: { $in: ["returnable", "decision_pending"] },
+      expectedReturnAt: { $ne: null, $lte: dueSoonAt },
+    })
+      .select(
+        "reference projectSnapshot client expectedReturnAt status items.quantity items.quantityReturned custodyEvents",
+      )
+      .sort({ expectedReturnAt: 1, _id: 1 })
+      .lean(),
   ]);
 
   const projects = sortProjectsByLead(
@@ -252,6 +274,11 @@ const loadEndOfDayReportData = async ({ now = new Date() } = {}) => {
     projects,
     departmentBoard,
     projectCount: projects.length,
+    sampleRetrievals: sampleMovements.map((movement) => ({
+      ...movement,
+      attentionState: getSampleMovementAttentionState(movement, { now }),
+    })),
+    sampleRetrievalCount: sampleMovements.length,
   };
 };
 
@@ -300,6 +327,20 @@ const formatDeliveryDate = (value, timeZone = DEFAULT_TIME_ZONE) => {
     month: "short",
     day: "numeric",
     year: "numeric",
+  }).format(parsedDate);
+};
+
+const formatRetrievalDate = (value, timeZone = DEFAULT_TIME_ZONE) => {
+  if (!value) return "N/A";
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return "N/A";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(parsedDate);
 };
 
@@ -740,9 +781,129 @@ const buildProjectTable = (projects, now, timeZone) => {
   });
 };
 
+const buildSampleRetrievalTable = (sampleRetrievals, timeZone) => {
+  if (!Array.isArray(sampleRetrievals) || sampleRetrievals.length === 0) {
+    return null;
+  }
+
+  const headings = [
+    "Reference",
+    "Client / Project",
+    "Outstanding",
+    "Expected Retrieval",
+    "Attention",
+    "Latest Update",
+  ];
+  const rows = [
+    new TableRow({
+      height: DOCX_TABLE_ROW_HEIGHT,
+      children: headings.map(
+        (text) =>
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text,
+                    size: DOCX_FONT_SIZE,
+                    font: DOCX_FONT,
+                    color: "FFFFFF",
+                  }),
+                ],
+                spacing: DOCX_PARAGRAPH_SPACING,
+              }),
+            ],
+            shading: { fill: "1D4F91" },
+            margins: DOCX_CELL_MARGINS,
+            verticalAlign: VerticalAlign.CENTER,
+          }),
+      ),
+    }),
+  ];
+
+  sampleRetrievals.forEach((movement) => {
+    const outstanding = (movement.items || []).reduce(
+      (total, item) =>
+        total +
+        Math.max(
+          0,
+          Number(item.quantity || 0) - Number(item.quantityReturned || 0),
+        ),
+      0,
+    );
+    const latestEvent = [...(movement.custodyEvents || [])].sort(
+      (left, right) =>
+        new Date(right.occurredAt || 0).getTime() -
+        new Date(left.occurredAt || 0).getTime(),
+    )[0];
+    const projectLabel = [
+      movement.client?.name,
+      movement.projectSnapshot?.orderId || movement.projectSnapshot?.projectName,
+    ]
+      .map(toText)
+      .filter(Boolean)
+      .join(" / ");
+    const values = [
+      movement.reference,
+      projectLabel,
+      String(outstanding),
+      formatRetrievalDate(movement.expectedReturnAt, timeZone),
+      movement.attentionState === "overdue" ? "OVERDUE" : "Due soon",
+      latestEvent?.note || "Awaiting sample retrieval",
+    ];
+
+    rows.push(
+      new TableRow({
+        height: DOCX_TABLE_ROW_HEIGHT,
+        children: values.map(
+          (text) =>
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: toText(text),
+                      size: DOCX_FONT_SIZE,
+                      font: DOCX_FONT,
+                      color:
+                        movement.attentionState === "overdue"
+                          ? "B91C1C"
+                          : "000000",
+                    }),
+                  ],
+                  spacing: DOCX_PARAGRAPH_SPACING,
+                }),
+              ],
+              shading: {
+                fill:
+                  movement.attentionState === "overdue" ? "FEF2F2" : "FFFBEB",
+              },
+              margins: DOCX_CELL_MARGINS,
+              verticalAlign: VerticalAlign.CENTER,
+            }),
+        ),
+      }),
+    );
+  });
+
+  return new Table({
+    rows,
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+      bottom: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+      left: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+      right: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+      insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "CBD5E1" },
+    },
+  });
+};
+
 const generateEndOfDayReport = async ({
   projects,
   departmentBoard,
+  sampleRetrievals = [],
   now = new Date(),
   timeZone = DEFAULT_TIME_ZONE,
   generatedBy = "Front Desk",
@@ -753,6 +914,28 @@ const generateEndOfDayReport = async ({
     timeZone,
   );
   const children = [buildProjectTable(projects, now, timeZone)];
+  const sampleRetrievalTable = buildSampleRetrievalTable(
+    sampleRetrievals,
+    timeZone,
+  );
+
+  if (sampleRetrievalTable) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: "SAMPLE RETRIEVAL UPDATES",
+            bold: true,
+            size: DOCX_FONT_SIZE,
+            color: "1D4F91",
+            font: DOCX_FONT,
+          }),
+        ],
+        spacing: { before: 180, after: 80 },
+      }),
+      sampleRetrievalTable,
+    );
+  }
 
   if (departmentTable) {
     children.push(

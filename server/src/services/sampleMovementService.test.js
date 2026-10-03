@@ -76,3 +76,16 @@ test("manual events retain a readable actor snapshot", () => {
   assert.equal(getUserDisplayName(actor), "FD-001");
   assert.equal(movement.custodyEvents[0].actorName, "FD-001");
 });
+
+test("system events can retain a readable actor without a user reference", () => {
+  const movement = buildDraft();
+  appendCustodyEvent(movement, {
+    type: "retrieval_reminder_sent",
+    actor: null,
+    actorName: "System",
+    fromStatus: "in_client_custody",
+    toStatus: "in_client_custody",
+  });
+  assert.equal(movement.custodyEvents[0].actor, null);
+  assert.equal(movement.custodyEvents[0].actorName, "System");
+});

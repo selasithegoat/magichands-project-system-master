@@ -30,6 +30,10 @@ const {
   populateSampleMovementQuery,
   transitionSampleMovement,
 } = require("../services/sampleMovementService");
+const {
+  getSampleRetrievalReminderStage,
+  resolveSampleRetrievalNotifications,
+} = require("../services/sampleRetrievalReminderService");
 
 const MAX_ITEMS = 50;
 const EDITABLE_STATUSES = new Set(["draft", "changes_requested"]);
@@ -37,6 +41,7 @@ const RETURNABLE_CUSTODY_STATUSES = new Set([
   "dispatched",
   "in_client_custody",
   "partially_returned",
+  "ownership_transfer_pending",
 ]);
 
 const toText = (value, maxLength = 2000) =>
@@ -56,7 +61,8 @@ const toDateOrNull = (value) => {
 };
 
 const toBoolean = (value) =>
-  value === true || ["true", "1", "yes"].includes(toText(value, 10).toLowerCase());
+  value === true ||
+  ["true", "1", "yes"].includes(toText(value, 10).toLowerCase());
 
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -65,7 +71,10 @@ const readClient = (source = {}, project = null) => ({
   name: toText(source.name || project?.details?.client, 200),
   contactPerson: toText(source.contactPerson, 200),
   contactRole: toText(source.contactRole, 120),
-  email: toText(source.email || project?.details?.clientEmail, 254).toLowerCase(),
+  email: toText(
+    source.email || project?.details?.clientEmail,
+    254,
+  ).toLowerCase(),
   phone: toText(source.phone || project?.details?.clientPhone, 80),
   address: toText(source.address, 500),
 });
@@ -168,9 +177,12 @@ const loadProject = async (projectId) => {
 const readMovementPayload = async (body = {}, existing = null) => {
   const projectId = body.project || body.projectId || existing?.project;
   const project = await loadProject(projectId);
-  if (!project) return { error: "Linked project was not found.", statusCode: 404 };
+  if (!project)
+    return { error: "Linked project was not found.", statusCode: 404 };
   if (project?.cancellation?.isCancelled) {
-    return { error: "Samples cannot be registered against a cancelled project." };
+    return {
+      error: "Samples cannot be registered against a cancelled project.",
+    };
   }
 
   const items = readItems(body.items ?? existing?.items, existing?.items);
@@ -197,7 +209,9 @@ const readMovementPayload = async (body = {}, existing = null) => {
     return { error: "Expected return date is invalid." };
   }
 
-  const existingProjectId = String(existing?.project?._id || existing?.project || "");
+  const existingProjectId = String(
+    existing?.project?._id || existing?.project || "",
+  );
   const projectChanged = Boolean(
     existingProjectId && existingProjectId !== String(project._id),
   );
@@ -244,11 +258,14 @@ const sendControllerError = (res, error, fallbackMessage) => {
   }
   if (error?.name === "VersionError") {
     return res.status(409).json({
-      message: "This record was changed by another user. Refresh and try again.",
+      message:
+        "This record was changed by another user. Refresh and try again.",
     });
   }
   if (error?.code === 11000) {
-    return res.status(409).json({ message: "Sample movement reference already exists." });
+    return res
+      .status(409)
+      .json({ message: "Sample movement reference already exists." });
   }
   console.error(fallbackMessage, error);
   return res.status(500).json({ message: fallbackMessage });
@@ -256,13 +273,18 @@ const sendControllerError = (res, error, fallbackMessage) => {
 
 const requireOperator = (req, res) => {
   if (canOperateSampleMovements(req.user)) return true;
-  res.status(403).json({ message: "Only Front Desk can perform this sample custody action." });
+  res.status(403).json({
+    message: "Only Front Desk can perform this sample custody action.",
+  });
   return false;
 };
 
 const requireAuthorizer = (req, res) => {
   if (canAuthorizeSampleMovements(req.user)) return true;
-  res.status(403).json({ message: "Only an Administration admin can perform this authorization action." });
+  res.status(403).json({
+    message:
+      "Only an Administration admin can perform this authorization action.",
+  });
   return false;
 };
 
@@ -292,7 +314,9 @@ const toFileAttachment = (file, userId) => ({
 });
 
 const hashUploadedFile = async (file) => {
-  const filePath = file?.path || (file?.filename ? `${upload.uploadDir}/${file.filename}` : "");
+  const filePath =
+    file?.path ||
+    (file?.filename ? `${upload.uploadDir}/${file.filename}` : "");
   if (!filePath) return "";
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash("sha256");
@@ -322,7 +346,9 @@ const uploadSampleItemPhotos = async (req, res) => {
     }
     const files = Array.isArray(req.files) ? req.files : [];
     if (files.length === 0) {
-      return res.status(400).json({ message: "Select at least one sample photo." });
+      return res
+        .status(400)
+        .json({ message: "Select at least one sample photo." });
     }
     const photoType = toText(req.body.photoType, 30).toLowerCase();
     const destination = photoType === "return" ? "returnPhotos" : "photos";
@@ -360,12 +386,16 @@ const uploadSampleDocuments = async (req, res) => {
     }
     const files = Array.isArray(req.files) ? req.files : [];
     if (files.length === 0) {
-      return res.status(400).json({ message: "Select at least one custody document." });
+      return res
+        .status(400)
+        .json({ message: "Select at least one custody document." });
     }
     const type = toText(req.body.type, 80).toLowerCase();
     if (!SAMPLE_DOCUMENT_TYPES.includes(type)) {
       await upload.cleanupRequestFiles(req);
-      return res.status(400).json({ message: "Select a valid custody document type." });
+      return res
+        .status(400)
+        .json({ message: "Select a valid custody document type." });
     }
     const requestedStatus = toText(req.body.status, 40).toLowerCase();
     const status = SAMPLE_DOCUMENT_STATUSES.includes(requestedStatus)
@@ -414,7 +444,11 @@ const uploadSampleDocuments = async (req, res) => {
     return respondWithMovement(res, movement._id);
   } catch (error) {
     if (!persisted) await upload.cleanupRequestFiles(req);
-    return sendControllerError(res, error, "Failed to upload custody documents.");
+    return sendControllerError(
+      res,
+      error,
+      "Failed to upload custody documents.",
+    );
   }
 };
 
@@ -423,7 +457,9 @@ const createSampleMovement = async (req, res) => {
   try {
     const payload = await readMovementPayload(req.body);
     if (payload.error) {
-      return res.status(payload.statusCode || 400).json({ message: payload.error });
+      return res
+        .status(payload.statusCode || 400)
+        .json({ message: payload.error });
     }
     const reference = await allocateSampleMovementReference();
     const movement = new SampleMovement({
@@ -505,7 +541,10 @@ const getSampleMovementSummary = async (now = new Date()) => {
 const getSampleMovements = async (req, res) => {
   try {
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(200, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
+    const limit = Math.min(
+      200,
+      Math.max(1, Number.parseInt(req.query.limit, 10) || 50),
+    );
     const filter = {};
     const status = toText(req.query.status, 80).toLowerCase();
     const disposition = toText(req.query.disposition, 80).toLowerCase();
@@ -519,7 +558,8 @@ const getSampleMovements = async (req, res) => {
     );
 
     if (SAMPLE_MOVEMENT_STATUSES.includes(status)) filter.status = status;
-    if (SAMPLE_DISPOSITIONS.includes(disposition)) filter.disposition = disposition;
+    if (SAMPLE_DISPOSITIONS.includes(disposition))
+      filter.disposition = disposition;
     if (SAMPLE_HANDOVER_METHODS.includes(handoverMethod)) {
       filter.handoverMethod = handoverMethod;
     }
@@ -616,10 +656,89 @@ const getSampleMovement = async (req, res) => {
       return res.status(400).json({ message: "Invalid sample movement ID." });
     }
     const movement = await getSampleMovementById(req.params.id);
-    if (!movement) return res.status(404).json({ message: "Sample movement not found." });
+    if (!movement)
+      return res.status(404).json({ message: "Sample movement not found." });
     return res.json(movement);
   } catch (error) {
     return sendControllerError(res, error, "Failed to load sample movement.");
+  }
+};
+
+const getSampleRetrievalUpdates = async (req, res) => {
+  try {
+    const now = new Date();
+    const dueSoonAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const movements = await populateSampleMovementQuery(
+      SampleMovement.find({
+        status: { $in: Array.from(RETURNABLE_CUSTODY_STATUSES) },
+        disposition: { $in: ["returnable", "decision_pending"] },
+        expectedReturnAt: { $ne: null, $lte: dueSoonAt },
+      })
+        .select("-documents -items.photos -items.returnPhotos")
+        .sort({ expectedReturnAt: 1, _id: 1 }),
+    ).lean();
+
+    const retrievals = movements.map((movement) => {
+      const attentionState = getSampleMovementAttentionState(movement, { now });
+      const reminderStage = getSampleRetrievalReminderStage(movement, { now });
+      const latestEvent = [...(movement.custodyEvents || [])].sort(
+        (left, right) =>
+          new Date(right.occurredAt || 0).getTime() -
+          new Date(left.occurredAt || 0).getTime(),
+      )[0];
+      const outstandingQuantity = (movement.items || []).reduce(
+        (total, item) =>
+          total +
+          Math.max(
+            0,
+            Number(item.quantity || 0) - Number(item.quantityReturned || 0),
+          ),
+        0,
+      );
+      return {
+        _id: movement._id,
+        reference: movement.reference,
+        project: movement.project,
+        projectSnapshot: movement.projectSnapshot,
+        client: movement.client,
+        frontDeskOwner: movement.frontDeskOwner,
+        status: movement.status,
+        expectedReturnAt: movement.expectedReturnAt,
+        attentionState,
+        reminderStage,
+        outstandingQuantity,
+        latestUpdate: latestEvent
+          ? {
+              type: latestEvent.type,
+              note: latestEvent.note,
+              occurredAt: latestEvent.occurredAt,
+              actorName: latestEvent.actorName,
+            }
+          : null,
+      };
+    });
+
+    return res.json({
+      retrievals,
+      summary: {
+        dueSoon: retrievals.filter(
+          (movement) => movement.attentionState === "due_soon",
+        ).length,
+        dueToday: retrievals.filter(
+          (movement) => movement.reminderStage === "due_today",
+        ).length,
+        overdue: retrievals.filter(
+          (movement) => movement.attentionState === "overdue",
+        ).length,
+      },
+      generatedAt: now,
+    });
+  } catch (error) {
+    return sendControllerError(
+      res,
+      error,
+      "Failed to load sample retrieval updates.",
+    );
   }
 };
 
@@ -629,11 +748,16 @@ const updateSampleMovement = async (req, res) => {
     const movement = await findMovement(req, res);
     if (!movement) return;
     if (!EDITABLE_STATUSES.has(movement.status)) {
-      return res.status(409).json({ message: "Only draft records or records returned for changes can be edited." });
+      return res.status(409).json({
+        message:
+          "Only draft records or records returned for changes can be edited.",
+      });
     }
     const payload = await readMovementPayload(req.body, movement.toObject());
     if (payload.error) {
-      return res.status(payload.statusCode || 400).json({ message: payload.error });
+      return res
+        .status(payload.statusCode || 400)
+        .json({ message: payload.error });
     }
     Object.assign(movement, payload.data, { updatedBy: req.user._id });
     appendCustodyEvent(movement, {
@@ -681,18 +805,25 @@ const decideAuthorization = (decision) => async (req, res) => {
     if (!movement) return;
     const submittedBy = String(movement.authorization?.submittedBy || "");
     if (submittedBy && submittedBy === String(req.user._id)) {
-      return res.status(403).json({ message: "You cannot authorize a sample movement you submitted." });
+      return res.status(403).json({
+        message: "You cannot authorize a sample movement you submitted.",
+      });
     }
     const note = toText(req.body.note || req.body.decisionNote, 2000);
     if (decision !== "authorized" && !note) {
-      return res.status(400).json({ message: "A decision reason is required." });
+      return res
+        .status(400)
+        .json({ message: "A decision reason is required." });
     }
     if (
       decision === "authorized" &&
-      movement.items.some((item) => !Array.isArray(item.photos) || item.photos.length === 0)
+      movement.items.some(
+        (item) => !Array.isArray(item.photos) || item.photos.length === 0,
+      )
     ) {
       return res.status(422).json({
-        message: "Every sample item needs an outbound photo before release can be authorized.",
+        message:
+          "Every sample item needs an outbound photo before release can be authorized.",
       });
     }
     const statusByDecision = {
@@ -717,7 +848,11 @@ const decideAuthorization = (decision) => async (req, res) => {
     await movement.save();
     return respondWithMovement(res, movement._id);
   } catch (error) {
-    return sendControllerError(res, error, "Failed to record authorization decision.");
+    return sendControllerError(
+      res,
+      error,
+      "Failed to record authorization decision.",
+    );
   }
 };
 
@@ -728,7 +863,9 @@ const releaseSampleMovement = async (req, res) => {
     if (!movement) return;
     const recipientName = toText(req.body.recipientName, 200);
     if (movement.handoverMethod === "pickup" && !recipientName) {
-      return res.status(400).json({ message: "Recipient name is required for client pick-up." });
+      return res
+        .status(400)
+        .json({ message: "Recipient name is required for client pick-up." });
     }
     const nextStatus = resolvePostReleaseStatus({
       disposition: movement.disposition,
@@ -741,7 +878,10 @@ const releaseSampleMovement = async (req, res) => {
     movement.release.recipientName = recipientName;
     movement.release.recipientRole = toText(req.body.recipientRole, 120);
     movement.release.courierName = toText(req.body.courierName, 200);
-    movement.release.trackingReference = toText(req.body.trackingReference, 200);
+    movement.release.trackingReference = toText(
+      req.body.trackingReference,
+      200,
+    );
     if (nextStatus === "in_client_custody" || nextStatus === "client_owned") {
       movement.release.clientReceiptConfirmedAt =
         toDateOrNull(req.body.receivedAt) || releaseAt;
@@ -755,7 +895,11 @@ const releaseSampleMovement = async (req, res) => {
     await movement.save();
     return respondWithMovement(res, movement._id);
   } catch (error) {
-    return sendControllerError(res, error, "Failed to release sample movement.");
+    return sendControllerError(
+      res,
+      error,
+      "Failed to release sample movement.",
+    );
   }
 };
 
@@ -764,11 +908,15 @@ const confirmSampleReceipt = async (req, res) => {
   try {
     const movement = await findMovement(req, res);
     if (!movement) return;
-    const recipientName = toText(req.body.recipientName, 200) || movement.release.recipientName;
-    if (!recipientName) return res.status(400).json({ message: "Recipient name is required." });
+    const recipientName =
+      toText(req.body.recipientName, 200) || movement.release.recipientName;
+    if (!recipientName)
+      return res.status(400).json({ message: "Recipient name is required." });
     movement.release.recipientName = recipientName;
-    movement.release.recipientRole = toText(req.body.recipientRole, 120) || movement.release.recipientRole;
-    movement.release.clientReceiptConfirmedAt = toDateOrNull(req.body.receivedAt) || new Date();
+    movement.release.recipientRole =
+      toText(req.body.recipientRole, 120) || movement.release.recipientRole;
+    movement.release.clientReceiptConfirmedAt =
+      toDateOrNull(req.body.receivedAt) || new Date();
     transitionSampleMovement(movement, "in_client_custody", {
       type: "client_receipt_confirmed",
       actor: req.user,
@@ -788,23 +936,44 @@ const recordSampleReturn = async (req, res) => {
     const movement = await findMovement(req, res);
     if (!movement) return;
     if (!RETURNABLE_CUSTODY_STATUSES.has(movement.status)) {
-      return res.status(409).json({ message: "Returns can only be recorded while samples are in client custody." });
+      return res.status(409).json({
+        message:
+          "Returns can only be recorded while samples are in client custody.",
+      });
     }
     const returns = Array.isArray(req.body.items) ? req.body.items : [];
-    if (!returns.length) return res.status(400).json({ message: "Add at least one returned item." });
+    if (!returns.length)
+      return res
+        .status(400)
+        .json({ message: "Add at least one returned item." });
 
     for (const returnedItem of returns) {
-      const item = movement.items.id(toObjectIdOrNull(returnedItem.itemId || returnedItem._id));
-      const quantity = Number(returnedItem.quantityReturned ?? returnedItem.quantity);
+      const item = movement.items.id(
+        toObjectIdOrNull(returnedItem.itemId || returnedItem._id),
+      );
+      const quantity = Number(
+        returnedItem.quantityReturned ?? returnedItem.quantity,
+      );
       if (!item || !Number.isInteger(quantity) || quantity <= 0) {
-        return res.status(400).json({ message: "Each returned item needs a valid item ID and a whole-number quantity." });
+        return res.status(400).json({
+          message:
+            "Each returned item needs a valid item ID and a whole-number quantity.",
+        });
       }
-      if (Number(item.quantityReturned || 0) + quantity > Number(item.quantity)) {
-        return res.status(400).json({ message: `Returned quantity exceeds the released quantity for ${item.description}.` });
+      if (
+        Number(item.quantityReturned || 0) + quantity >
+        Number(item.quantity)
+      ) {
+        return res.status(400).json({
+          message: `Returned quantity exceeds the released quantity for ${item.description}.`,
+        });
       }
       item.quantityReturned = Number(item.quantityReturned || 0) + quantity;
       item.returnCondition = toText(returnedItem.returnCondition, 120);
-      item.returnConditionNotes = toText(returnedItem.returnConditionNotes, 1000);
+      item.returnConditionNotes = toText(
+        returnedItem.returnConditionNotes,
+        1000,
+      );
     }
 
     const allReturned = movement.items.every(
@@ -832,8 +1001,11 @@ const recordSampleReturn = async (req, res) => {
     movement.returnSummary.note = note;
     movement.returnSummary.hasDamage = toBoolean(req.body.hasDamage);
     movement.returnSummary.hasMissingQuantity = !allReturned;
-    if (allReturned) movement.returnSummary.completedAt = toDateOrNull(req.body.returnedAt) || new Date();
+    if (allReturned)
+      movement.returnSummary.completedAt =
+        toDateOrNull(req.body.returnedAt) || new Date();
     await movement.save();
+    if (allReturned) await resolveSampleRetrievalNotifications(movement._id);
     return respondWithMovement(res, movement._id);
   } catch (error) {
     return sendControllerError(res, error, "Failed to record sample return.");
@@ -846,25 +1018,46 @@ const requestOwnershipTransfer = async (req, res) => {
     const movement = await findMovement(req, res);
     if (!movement) return;
     const reason = toText(req.body.reason || req.body.requestReason, 2000);
-    if (!reason) return res.status(400).json({ message: "Ownership-transfer reason is required." });
+    if (!reason)
+      return res
+        .status(400)
+        .json({ message: "Ownership-transfer reason is required." });
     if (!toBoolean(req.body.clientConfirmed)) {
-      return res.status(400).json({ message: "Client confirmation is required before requesting ownership transfer." });
+      return res.status(400).json({
+        message:
+          "Client confirmation is required before requesting ownership transfer.",
+      });
     }
 
-    const treatments = Array.isArray(req.body.itemTreatments) ? req.body.itemTreatments : [];
+    const treatments = Array.isArray(req.body.itemTreatments)
+      ? req.body.itemTreatments
+      : [];
     for (const treatment of treatments) {
       const item = movement.items.id(toObjectIdOrNull(treatment.itemId));
       const productionTreatment = toText(treatment.productionTreatment, 80);
-      const quantityApplied = Math.max(0, Number(treatment.productionQuantityApplied) || 0);
-      if (!item || !SAMPLE_PRODUCTION_TREATMENTS.includes(productionTreatment)) {
-        return res.status(400).json({ message: "Ownership request contains an invalid item treatment." });
+      const quantityApplied = Math.max(
+        0,
+        Number(treatment.productionQuantityApplied) || 0,
+      );
+      if (
+        !item ||
+        !SAMPLE_PRODUCTION_TREATMENTS.includes(productionTreatment)
+      ) {
+        return res.status(400).json({
+          message: "Ownership request contains an invalid item treatment.",
+        });
       }
       if (!Number.isInteger(quantityApplied)) {
-        return res.status(400).json({ message: "Production quantities must be whole numbers." });
+        return res
+          .status(400)
+          .json({ message: "Production quantities must be whole numbers." });
       }
-      const outstanding = Number(item.quantity) - Number(item.quantityReturned || 0);
+      const outstanding =
+        Number(item.quantity) - Number(item.quantityReturned || 0);
       if (quantityApplied > outstanding) {
-        return res.status(400).json({ message: `Production quantity exceeds the outstanding quantity for ${item.description}.` });
+        return res.status(400).json({
+          message: `Production quantity exceeds the outstanding quantity for ${item.description}.`,
+        });
       }
       item.productionTreatment = productionTreatment;
       item.productionQuantityApplied = quantityApplied;
@@ -881,14 +1074,29 @@ const requestOwnershipTransfer = async (req, res) => {
     movement.ownershipTransfer.requestReason = reason;
     movement.ownershipTransfer.previousStatus = previousStatus;
     movement.ownershipTransfer.clientConfirmed = true;
-    movement.ownershipTransfer.clientConfirmationNote = toText(req.body.clientConfirmationNote, 2000);
-    movement.ownershipTransfer.linkedBillingDocument = toObjectIdOrNull(req.body.linkedBillingDocument);
-    movement.ownershipTransfer.billingReference = toText(req.body.billingReference, 120);
-    movement.ownershipTransfer.paymentReference = toText(req.body.paymentReference, 120);
+    movement.ownershipTransfer.clientConfirmationNote = toText(
+      req.body.clientConfirmationNote,
+      2000,
+    );
+    movement.ownershipTransfer.linkedBillingDocument = toObjectIdOrNull(
+      req.body.linkedBillingDocument,
+    );
+    movement.ownershipTransfer.billingReference = toText(
+      req.body.billingReference,
+      120,
+    );
+    movement.ownershipTransfer.paymentReference = toText(
+      req.body.paymentReference,
+      120,
+    );
     await movement.save();
     return respondWithMovement(res, movement._id);
   } catch (error) {
-    return sendControllerError(res, error, "Failed to request ownership transfer.");
+    return sendControllerError(
+      res,
+      error,
+      "Failed to request ownership transfer.",
+    );
   }
 };
 
@@ -904,16 +1112,24 @@ const decideOwnershipTransfer = (approved) => async (req, res) => {
       });
     }
     const note = toText(req.body.note || req.body.decisionNote, 2000);
-    if (!note) return res.status(400).json({ message: "An ownership decision note is required." });
+    if (!note)
+      return res
+        .status(400)
+        .json({ message: "An ownership decision note is required." });
     if (approved && !movement.ownershipTransfer.clientConfirmed) {
-      return res.status(400).json({ message: "Client confirmation is required before ownership transfer approval." });
+      return res.status(400).json({
+        message:
+          "Client confirmation is required before ownership transfer approval.",
+      });
     }
     const nextStatus = approved
       ? "client_owned"
       : movement.ownershipTransfer.previousStatus || "in_client_custody";
     if (approved) movement.disposition = "client_owned";
     transitionSampleMovement(movement, nextStatus, {
-      type: approved ? "ownership_transfer_approved" : "ownership_transfer_rejected",
+      type: approved
+        ? "ownership_transfer_approved"
+        : "ownership_transfer_rejected",
       actor: req.user,
       note,
     });
@@ -924,9 +1140,14 @@ const decideOwnershipTransfer = (approved) => async (req, res) => {
       ? toDateOrNull(req.body.effectiveAt) || new Date()
       : null;
     await movement.save();
+    if (approved) await resolveSampleRetrievalNotifications(movement._id);
     return respondWithMovement(res, movement._id);
   } catch (error) {
-    return sendControllerError(res, error, "Failed to record ownership-transfer decision.");
+    return sendControllerError(
+      res,
+      error,
+      "Failed to record ownership-transfer decision.",
+    );
   }
 };
 
@@ -934,11 +1155,16 @@ const cancelSampleMovement = async (req, res) => {
   try {
     const operator = canOperateSampleMovements(req.user);
     const authorizer = canAuthorizeSampleMovements(req.user);
-    if (!operator && !authorizer) return res.status(403).json({ message: "You cannot cancel sample movements." });
+    if (!operator && !authorizer)
+      return res
+        .status(403)
+        .json({ message: "You cannot cancel sample movements." });
     const movement = await findMovement(req, res);
     if (!movement) return;
     if (isTerminalSampleMovementStatus(movement.status)) {
-      return res.status(409).json({ message: "This sample movement is already closed." });
+      return res
+        .status(409)
+        .json({ message: "This sample movement is already closed." });
     }
     const cancellableStatuses = [
       "draft",
@@ -948,14 +1174,21 @@ const cancelSampleMovement = async (req, res) => {
     ];
     if (!cancellableStatuses.includes(movement.status)) {
       return res.status(409).json({
-        message: "Released samples cannot be cancelled; record their return, ownership transfer, or loss instead.",
+        message:
+          "Released samples cannot be cancelled; record their return, ownership transfer, or loss instead.",
       });
     }
     if (operator && !authorizer && movement.status === "authorized") {
-      return res.status(403).json({ message: "Front Desk can only cancel a sample movement before authorization." });
+      return res.status(403).json({
+        message:
+          "Front Desk can only cancel a sample movement before authorization.",
+      });
     }
     const reason = toText(req.body.reason || req.body.note, 2000);
-    if (!reason) return res.status(400).json({ message: "Cancellation reason is required." });
+    if (!reason)
+      return res
+        .status(400)
+        .json({ message: "Cancellation reason is required." });
     transitionSampleMovement(movement, "cancelled", {
       type: "cancelled",
       actor: req.user,
@@ -976,6 +1209,7 @@ module.exports = {
   createSampleMovement,
   getSampleMovement,
   getSampleMovements,
+  getSampleRetrievalUpdates,
   recordSampleReturn,
   rejectOwnershipTransfer: decideOwnershipTransfer(false),
   rejectSampleMovement: decideAuthorization("rejected"),

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import SampleMovementDetails from "./SampleMovementDetails";
 import SampleMovementForm from "./SampleMovementForm";
 import {
@@ -75,6 +76,7 @@ const useDebouncedValue = (value, delay = 300) => {
 
 const SampleCustody = () => {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState("");
@@ -86,6 +88,7 @@ const SampleCustody = () => {
   const [formMovement, setFormMovement] = useState(undefined);
   const [selectedId, setSelectedId] = useState("");
   const [feedback, setFeedback] = useState(null);
+  const activeSelectedId = selectedId || searchParams.get("movement") || "";
 
   useEffect(() => {
     if (!feedback) return undefined;
@@ -130,9 +133,9 @@ const SampleCustody = () => {
   });
 
   const detailQuery = useQuery({
-    queryKey: ["sample-movement", selectedId],
-    queryFn: () => requestSampleMovement(`/${selectedId}`),
-    enabled: Boolean(selectedId),
+    queryKey: ["sample-movement", activeSelectedId],
+    queryFn: () => requestSampleMovement(`/${activeSelectedId}`),
+    enabled: Boolean(activeSelectedId),
     meta: { realtimePaths: ["/api/sample-movements"] },
   });
 
@@ -177,6 +180,14 @@ const SampleCustody = () => {
     queryClient.setQueryData(["sample-movement", updated._id], updated);
     setFeedback({ type: "success", message });
     await invalidateRecords();
+  };
+
+  const closeDetails = () => {
+    setSelectedId("");
+    if (!searchParams.has("movement")) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("movement");
+    setSearchParams(nextParams, { replace: true });
   };
 
   const hasFilters = Boolean(
@@ -295,12 +306,12 @@ const SampleCustody = () => {
         />
       )}
 
-      {selectedId && (
+      {activeSelectedId && (
         <SampleMovementDetails
           movement={detailQuery.data}
           loading={detailQuery.isPending}
           error={detailQuery.error}
-          onClose={() => setSelectedId("")}
+          onClose={closeDetails}
           onEdit={(movement) => setFormMovement(movement)}
           onChanged={handleChanged}
         />
