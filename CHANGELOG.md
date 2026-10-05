@@ -6,6 +6,15 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-05
+
+- Added a complete sample custody workflow with Front Desk intake, Admin authorization, ownership review, evidence uploads, waybills, retrieval reminders, escalation, End-of-Day reporting, record deletion, and retrieval date updates.
+- Added persistent production queues, deadline prediction, acknowledgement-based ownership, escalating reminders, and project lead follow-up controls.
+- Added production execution lifecycle controls, Production In Progress tracking, secure completion follow-up, and an Admin production oversight dashboard.
+- Added an action-required notification inbox, deduplicated production prompts, and persistent missed-alert notifications.
+- Strengthened production subdepartment access controls and expanded Admin controls for production batches.
+- Improved production workflow feedback, project brief layouts, notification sizing, and toast presentation.
+
 ## [1.0.0] - 2026-09-04
 
 - Redesigned the Client Project Details experience with a modern information hierarchy and workflow ribbon.
