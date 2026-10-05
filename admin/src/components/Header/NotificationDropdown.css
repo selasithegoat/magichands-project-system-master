@@ -1,6 +1,6 @@
 .notification-dropdown {
   position: absolute;
-  top: 60px;
+  top: 48px;
   right: 0;
   width: 400px;
   background: var(--bg-dark);

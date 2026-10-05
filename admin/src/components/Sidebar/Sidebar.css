@@ -336,3 +336,43 @@
     transition: none;
   }
 }
+
+html[data-admin-theme="dark"] .sidebar {
+  --sidebar-ink: #f8fafc;
+  --sidebar-muted: #94a3b8;
+  --sidebar-line: #273449;
+  background: #111b2d;
+  border-right-color: #273449;
+}
+
+html[data-admin-theme="dark"] .sidebar-brand-copy strong {
+  color: #f8fafc;
+}
+
+html[data-admin-theme="dark"] .sidebar-brand-copy span,
+html[data-admin-theme="dark"] .sidebar-account-copy span {
+  color: #94a3b8;
+}
+
+html[data-admin-theme="dark"] .sidebar .nav-item {
+  color: #aebbd0;
+}
+
+html[data-admin-theme="dark"] .sidebar .nav-item:hover {
+  color: #e0e7ff;
+  background: rgba(99, 102, 241, 0.13);
+  border-color: rgba(129, 140, 248, 0.16);
+}
+
+html[data-admin-theme="dark"] .sidebar-footer {
+  border-top-color: #273449;
+  background: #111b2d;
+}
+
+html[data-admin-theme="dark"] .sidebar-account-copy strong {
+  color: #e2e8f0;
+}
+
+html[data-admin-theme="dark"] .sidebar-logout-btn {
+  color: #94a3b8;
+}

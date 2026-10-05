@@ -2,46 +2,8 @@ import React, { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import "./Sidebar.css";
 import { LogoutIcon } from "../../icons/Icons";
+import { adminNavigationItems } from "../../config/adminNavigation";
 import ConfirmationModal from "../ConfirmationModal/ConfirmationModal";
-
-const sidebarItems = [
-  { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { to: "/projects", label: "Projects", icon: "projects" },
-  { to: "/deadlines", label: "Deadlines", icon: "deadlines" },
-  {
-    to: "/production-oversight",
-    label: "Production Oversight",
-    icon: "production",
-  },
-  {
-    to: "/orders-management",
-    label: "Orders Management",
-    icon: "orders",
-  },
-  {
-    to: "/billing-documents",
-    label: "Billing Documents",
-    icon: "billing",
-  },
-  {
-    to: "/sample-authorizations",
-    label: "Sample Authorizations",
-    icon: "authorizations",
-  },
-  {
-    to: "/cancelled-orders",
-    label: "Cancelled Orders",
-    icon: "cancelled",
-  },
-  { to: "/clients", label: "Client Intelligence", icon: "clients" },
-  { to: "/teams", label: "Team", icon: "team" },
-  { to: "/analytics", label: "Analytics", icon: "analytics" },
-  {
-    to: "/health-performance",
-    label: "Project Performance",
-    icon: "performance",
-  },
-];
 
 const iconPaths = {
   dashboard: (
@@ -222,7 +184,7 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
 
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <span className="sidebar-nav-label">Workspace</span>
-          {sidebarItems.map((item) => (
+          {adminNavigationItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

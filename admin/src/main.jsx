@@ -8,10 +8,12 @@ import RealtimeQuerySync from "./components/RealtimeQuerySync.jsx";
 import MutationFeedback from "./components/MutationFeedback/MutationFeedback.jsx";
 import { installMutationFeedback } from "./utils/mutationFeedback.js";
 import { queryClient } from "./utils/queryClient.js";
+import { applyAdminTheme, getInitialAdminTheme } from "./utils/adminTheme.js";
 
 import { BrowserRouter } from "react-router-dom";
 
 installMutationFeedback({ axios });
+applyAdminTheme(getInitialAdminTheme());
 
 const baseName = window.location.pathname.startsWith("/admin")
   ? "/admin"
