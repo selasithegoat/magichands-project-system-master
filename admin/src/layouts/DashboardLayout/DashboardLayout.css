@@ -17,6 +17,15 @@
   flex: 1;
 }
 
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 11900;
+  border: 0;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(2px);
+}
+
 @media (max-width: 1024px) {
   /* Tablet styles - simplified */
   .dashboard-main {
