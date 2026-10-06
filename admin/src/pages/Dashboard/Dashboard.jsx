@@ -1,94 +1,50 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import "./Dashboard.css";
 import {
-  ProjectsIcon,
   CheckCircleIcon,
   DeadlineIcon,
-  RocketIcon,
+  ProjectsIcon,
   ReportsIcon,
+  RocketIcon,
 } from "../../icons/Icons";
-import { useNavigate } from "react-router-dom";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
 import {
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
 } from "@client/utils/quoteStatus";
-import BillingAttentionPanel from "@client/components/features/BillingAttentionPanel";
 
-// Inline Icons for those not in Icons.jsx
 const ClockIcon = () => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10"></circle>
-    <polyline points="12 6 12 12 16 14"></polyline>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
   </svg>
 );
 
-const AlertTriangleIcon = () => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-    <line x1="12" y1="9" x2="12" y2="13"></line>
-    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+const AttentionIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+    <path d="M12 3v8" />
+    <path d="M7.4 6.7a8 8 0 1 0 9.2 0" />
+    <circle cx="12" cy="12" r="10" />
   </svg>
 );
 
 const TruckIcon = () => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="1" y="3" width="15" height="13"></rect>
-    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
-    <circle cx="5.5" cy="18.5" r="2.5"></circle>
-    <circle cx="18.5" cy="18.5" r="2.5"></circle>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+    <path d="M3 5h11v11H3zM14 9h4l3 3v4h-7z" />
+    <circle cx="7" cy="18" r="2" />
+    <circle cx="18" cy="18" r="2" />
   </svg>
 );
 
 const ChevronRightIcon = () => (
-  <svg
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M9 18l6-6-6-6"></path>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+    <path d="m9 18 6-6-6-6" />
   </svg>
 );
 
-const PENDING_ACCEPTANCE_STATUSES = new Set([
-  "Order Created",
-  "Quote Created",
-  "Pending Acceptance",
-]);
 const EMPTY_ADMIN_DASHBOARD_SUMMARY = {
   stats: {
     active: 0,
@@ -100,13 +56,8 @@ const EMPTY_ADMIN_DASHBOARD_SUMMARY = {
     quotes: 0,
     corporate: 0,
   },
-  projects: {
-    todayCreated: [],
-    recentProjects: [],
-  },
-  workload: {
-    leads: [],
-  },
+  projects: { todayCreated: [], recentProjects: [] },
+  workload: { leads: [] },
   deadlines: {
     todayProjects: 0,
     todayOrders: 0,
@@ -139,53 +90,44 @@ const EMPTY_ADMIN_DASHBOARD_SUMMARY = {
   },
 };
 
-const isEmergencyProject = (project) =>
-  project?.projectType === "Emergency" || project?.priority === "Urgent";
+const PENDING_ACCEPTANCE_STATUSES = new Set([
+  "Order Created",
+  "Quote Created",
+  "Pending Acceptance",
+]);
+
 const isQuoteProject = (project) => project?.projectType === "Quote";
 const isCorporateProject = (project) => project?.projectType === "Corporate Job";
+const isEmergencyProject = (project) =>
+  project?.projectType === "Emergency" || project?.priority === "Urgent";
+
 const getProjectStatusDisplay = (project) =>
   isQuoteProject(project)
     ? getQuoteStatusDisplay(
         project?.status || "",
         getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
       )
-    : project?.status || "";
-const normalizeDepartmentList = (value) => {
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => {
-        if (!entry) return "";
-        if (typeof entry === "string") return entry.trim();
-        if (typeof entry === "object") {
-          const candidate =
-            entry.name || entry.label || entry.department || entry.title || entry.value;
-          return candidate ? String(candidate).trim() : "";
-        }
-        return String(entry).trim();
-      })
-      .filter(Boolean);
+    : project?.status || "Unknown status";
+
+const getStatusPillClass = (status) => {
+  if (["Completed", "Finished", "Declined"].includes(status)) return "completed";
+  if (
+    PENDING_ACCEPTANCE_STATUSES.has(status) ||
+    status === "Pending Scope Approval" ||
+    status === "Pending Feedback"
+  ) {
+    return "pending";
   }
-  if (typeof value === "string") {
-    return value.trim() ? [value.trim()] : [];
-  }
-  if (value && typeof value === "object") {
-    const candidate =
-      value.name || value.label || value.department || value.title || value.value;
-    return candidate ? [String(candidate).trim()] : [];
-  }
-  return [];
+  return "active";
 };
-const formatDepartmentLabel = (value) => {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) return "";
-  return trimmed.replace(/_/g, " ").replace(/\s*\/\s*/g, " / ");
-};
+
 const getProjectTypeLabel = (project) => {
   if (isEmergencyProject(project)) return "Emergency";
   if (isCorporateProject(project)) return "Corporate";
   if (isQuoteProject(project)) return "Quote";
   return project?.projectType || "Standard";
 };
+
 const getProjectTypeClass = (project) => {
   if (isEmergencyProject(project)) return "emergency";
   if (isCorporateProject(project)) return "corporate";
@@ -193,793 +135,602 @@ const getProjectTypeClass = (project) => {
   return "standard";
 };
 
-const formatDashboardDeadlineTime = (deadline) => {
-  if (deadline?.deliveryTime) return deadline.deliveryTime;
-  return "End of day";
+const getProjectName = (project) =>
+  renderProjectName(project?.details, null, "Untitled Project");
+
+const getBillingActionLabel = (project) => {
+  if (project?.category === "delivered_unresolved") return "Verify billing";
+  if (project?.category === "override_active") return "Review override";
+  return "Resolve issue";
 };
 
-// SVG Donut Chart Component
-const StatusDonut = ({ stats }) => {
-  const size = 180;
-  const strokeWidth = 18;
-  const center = size / 2;
-  const radius = center - strokeWidth / 2;
-  const circumference = 2 * Math.PI * radius;
+const getProjectClient = (project) =>
+  project?.details?.client ||
+  project?.orderRef?.client ||
+  project?.details?.clientName ||
+  "Unknown client";
 
-  const total = stats.inProgress + stats.completed + stats.delayed || 1;
-  const pIn = (stats.inProgress / total) * circumference;
-  const pComp = (stats.completed / total) * circumference;
+const getOrderLabel = (project) => {
+  const orderId =
+    project?.orderId ||
+    project?.orderRef?.orderNumber ||
+    project?._id?.slice(-6)?.toUpperCase() ||
+    "Order";
+  return String(orderId).startsWith("#") ? orderId : `#${orderId}`;
+};
 
-  return (
-    <div className="donut-wrapper">
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        className="status-donut"
-      >
-        {/* Delayed Segment (Orange) */}
-        <circle
-          cx={center}
-          cy={center}
-          r={radius}
-          fill="transparent"
-          stroke="#f59e0b"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={0}
-        />
-        {/* Completed Segment (Green) */}
-        <circle
-          cx={center}
-          cy={center}
-          r={radius}
-          fill="transparent"
-          stroke="#10b981"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${pComp + pIn} ${circumference}`}
-          strokeDashoffset={0}
-          transform={`rotate(-90 ${center} ${center})`}
-        />
-        {/* In Progress Segment (Blue) */}
-        <circle
-          cx={center}
-          cy={center}
-          r={radius}
-          fill="transparent"
-          stroke="#3b82f6"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${pIn} ${circumference}`}
-          strokeDashoffset={0}
-          transform={`rotate(-90 ${center} ${center})`}
-        />
-      </svg>
-      <div className="donut-content">
-        <span className="donut-label">Total Projects</span>
-        <span className="donut-value">
-          {total === 1 && stats.inProgress === 0 ? 0 : total}
-        </span>
-      </div>
-    </div>
+const getInitials = (name) =>
+  String(name || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "--";
+
+const formatShortDate = (value) => {
+  if (!value) return "Date unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "Africa/Accra",
+  });
+};
+
+const formatDeadlineTime = (deadline) => deadline?.deliveryTime || "End of day";
+
+const getGreeting = () => {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      hourCycle: "h23",
+      timeZone: "Africa/Accra",
+    }).format(new Date()),
   );
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 };
+
+const DashboardMetricCard = ({ metric, onOpen }) => (
+  <button
+    type="button"
+    className={`dashboard-metric-card tone-${metric.tone}`}
+    onClick={onOpen}
+    aria-label={`${metric.label}: ${metric.value}. ${metric.actionLabel}`}
+  >
+    <div className="dashboard-metric-heading">
+      <span className="dashboard-metric-icon">{metric.icon}</span>
+      <span>
+        <small>{metric.label}</small>
+        <em>{metric.context}</em>
+      </span>
+      <ChevronRightIcon />
+    </div>
+    <div className="dashboard-metric-value">{metric.value}</div>
+    <div className="dashboard-metric-detail">
+      <span>{metric.detail}</span>
+      <strong>{metric.actionLabel}</strong>
+    </div>
+    <div className="dashboard-metric-track" aria-hidden="true">
+      <span style={{ width: `${metric.progress}%` }} />
+    </div>
+  </button>
+);
 
 const ProjectStatusOverview = ({ overview }) => {
-  const [selectedPeriod, setSelectedPeriod] = useState("All Time");
-
   const periods = useMemo(() => {
-    const nextPeriods = Array.isArray(overview?.periods)
-      ? overview.periods
-      : EMPTY_ADMIN_DASHBOARD_SUMMARY.statusOverview.periods;
-    return nextPeriods.length
-      ? nextPeriods
+    const available = Array.isArray(overview?.periods) ? overview.periods : [];
+    return available.length
+      ? available
       : EMPTY_ADMIN_DASHBOARD_SUMMARY.statusOverview.periods;
   }, [overview]);
-
-  const selectedOverview =
+  const [selectedPeriod, setSelectedPeriod] = useState("All Time");
+  const selected =
     periods.find((period) => period.label === selectedPeriod) || periods[0];
-  const selectedPeriodValue = selectedOverview?.label || "All Time";
   const stats =
-    selectedOverview?.stats ||
+    selected?.stats ||
     EMPTY_ADMIN_DASHBOARD_SUMMARY.statusOverview.periods[0].stats;
+  const completeEnd = Math.max(0, Math.min(100, Number(stats.pComp) || 0));
+  const progressEnd = Math.max(
+    completeEnd,
+    Math.min(100, completeEnd + (Number(stats.pIn) || 0)),
+  );
 
   return (
-    <div className="status-overview-card">
-      <div className="overview-header">
-        <h3 className="section-title">Project Status Overview</h3>
-        <div className="period-selector-wrapper">
+    <section className="dashboard-panel dashboard-health-card">
+      <div className="dashboard-panel-header">
+        <div>
+          <h2>Portfolio Health</h2>
+          <p>Real project status distribution</p>
+        </div>
+        <label className="dashboard-period-select">
+          <span className="sr-only">Status period</span>
           <select
-            className="period-select"
-            value={selectedPeriodValue}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
+            value={selected?.label || "All Time"}
+            onChange={(event) => setSelectedPeriod(event.target.value)}
           >
-            {periods.map((p) => (
-              <option key={p.label} value={p.label}>
-                {p.label}
+            {periods.map((period) => (
+              <option key={period.label} value={period.label}>
+                {period.label}
               </option>
             ))}
           </select>
-          <span className="chevron-down">v</span>
+        </label>
+      </div>
+
+      <div className="dashboard-health-body">
+        <div
+          className={`dashboard-health-ring ${stats.total ? "" : "is-empty"}`}
+          style={{
+            "--completion-end": `${completeEnd}%`,
+            "--progress-end": `${progressEnd}%`,
+          }}
+        >
+          <div>
+            <strong>{stats.pComp || 0}%</strong>
+            <span>completed</span>
+            <small>{stats.total || 0} total</small>
+          </div>
         </div>
       </div>
 
-      <div className="overview-body">
-        <StatusDonut stats={stats} />
-
-        <div className="status-list">
-          <div className="status-item">
-            <div className="status-label-group">
-              <span className="status-dot in-progress"></span>
-              <span className="status-text">In Progress</span>
-            </div>
-            <div className="status-metrics">
-              <span className="status-percent">{stats.pIn}%</span>
-              <span className="status-count">{stats.inProgress} Projects</span>
-            </div>
-          </div>
-
-          <div className="status-item">
-            <div className="status-label-group">
-              <span className="status-dot completed"></span>
-              <span className="status-text">Completed</span>
-            </div>
-            <div className="status-metrics">
-              <span className="status-percent">{stats.pComp}%</span>
-              <span className="status-count">{stats.completed} Projects</span>
-            </div>
-          </div>
-
-          <div className="status-item">
-            <div className="status-label-group">
-              <span className="status-dot delayed"></span>
-              <span className="status-text">Delayed</span>
-            </div>
-            <div className="status-metrics">
-              <span className="status-percent">{stats.pDel}%</span>
-              <span className="status-count">{stats.delayed} Projects</span>
-            </div>
-          </div>
-        </div>
+      <div className="dashboard-health-legend">
+        <div><i className="completed" /><strong>{stats.completed || 0}</strong><span>Completed</span></div>
+        <div><i className="progress" /><strong>{stats.inProgress || 0}</strong><span>In progress</span></div>
+        <div><i className="delayed" /><strong>{stats.delayed || 0}</strong><span>Delayed</span></div>
       </div>
-    </div>
+    </section>
   );
 };
 
 const Dashboard = ({ user }) => {
   const navigate = useNavigate();
-  const { data: dashboardSummary = EMPTY_ADMIN_DASHBOARD_SUMMARY, isPending: isLoading } =
-    useQuery({
-      queryKey: ["projects", "dashboard-summary", "admin"],
-      queryFn: async () => {
-        const response = await fetch(
-          "/api/projects/dashboard-summary?source=admin",
-          {
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
-            cache: "no-store",
+  const [projectView, setProjectView] = useState("recent");
+  const {
+    data: dashboardSummary = EMPTY_ADMIN_DASHBOARD_SUMMARY,
+    isPending: isLoading,
+  } = useQuery({
+    queryKey: ["projects", "dashboard-summary", "admin"],
+    queryFn: async () => {
+      const response = await fetch("/api/projects/dashboard-summary?source=admin", {
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Failed to fetch admin dashboard summary.");
+      const payload = await response.json();
+      return {
+        ...EMPTY_ADMIN_DASHBOARD_SUMMARY,
+        ...(payload || {}),
+        stats: { ...EMPTY_ADMIN_DASHBOARD_SUMMARY.stats, ...(payload?.stats || {}) },
+        projects: {
+          ...EMPTY_ADMIN_DASHBOARD_SUMMARY.projects,
+          ...(payload?.projects || {}),
+        },
+        workload: {
+          ...EMPTY_ADMIN_DASHBOARD_SUMMARY.workload,
+          ...(payload?.workload || {}),
+        },
+        deadlines: {
+          ...EMPTY_ADMIN_DASHBOARD_SUMMARY.deadlines,
+          ...(payload?.deadlines || {}),
+        },
+        billingAttention: {
+          ...EMPTY_ADMIN_DASHBOARD_SUMMARY.billingAttention,
+          ...(payload?.billingAttention || {}),
+          counts: {
+            ...EMPTY_ADMIN_DASHBOARD_SUMMARY.billingAttention.counts,
+            ...(payload?.billingAttention?.counts || {}),
           },
-        );
-        if (!response.ok) {
-          throw new Error("Failed to fetch admin dashboard summary.");
-        }
-        const payload = await response.json();
-        return {
-          ...EMPTY_ADMIN_DASHBOARD_SUMMARY,
-          ...(payload || {}),
-          stats: {
-            ...EMPTY_ADMIN_DASHBOARD_SUMMARY.stats,
-            ...(payload?.stats || {}),
-          },
-          projects: {
-            ...EMPTY_ADMIN_DASHBOARD_SUMMARY.projects,
-            ...(payload?.projects || {}),
-          },
-          workload: {
-            ...EMPTY_ADMIN_DASHBOARD_SUMMARY.workload,
-            ...(payload?.workload || {}),
-          },
-          statusOverview: {
-            ...EMPTY_ADMIN_DASHBOARD_SUMMARY.statusOverview,
-            ...(payload?.statusOverview || {}),
-          },
-        };
-      },
-      meta: {
-        realtimePaths: ["/api/projects"],
-      },
-    });
-  const stats = dashboardSummary.stats || EMPTY_ADMIN_DASHBOARD_SUMMARY.stats;
+        },
+      };
+    },
+    meta: { realtimePaths: ["/api/projects"] },
+  });
 
-  const getStatusPillClass = (status) => {
-    if (["Completed", "Finished", "Declined"].includes(status)) return "completed";
-    if (
-      PENDING_ACCEPTANCE_STATUSES.has(status) ||
-      status === "Pending Scope Approval" ||
-      status === "Pending Acceptance"
-    )
-      return "pending";
-    if (status === "Pending Feedback") return "pending";
-    return "active";
-  };
-
-  const statCards = [
-    {
-      key: "emergencies",
-      value: stats.emergencies,
-      label: "Emergencies",
-      tone: "rose",
-      hint: "Urgent project queue",
-      cta: "Open queue",
-      icon: <RocketIcon />,
-      statusFilter: "emergency",
-      group: "priority",
-    },
-    {
-      key: "critical",
-      value: stats.overdue,
-      label: "Critical / Overdue",
-      tone: "red",
-      hint: "Needs attention",
-      cta: "See urgent",
-      icon: <AlertTriangleIcon />,
-      statusFilter: "critical",
-      group: "priority",
-    },
-    {
-      key: "active",
-      value: stats.active,
-      label: "Active Projects",
-      tone: "blue",
-      hint: "Open projects",
-      cta: "View list",
-      icon: <ProjectsIcon />,
-      statusFilter: "active",
-      group: "overview",
-    },
-    {
-      key: "pending",
-      value: stats.pending,
-      label: "Pending Acceptance",
-      tone: "purple",
-      hint: "Unaccepted orders from leads",
-      cta: "Review now",
-      icon: <ClockIcon />,
-      statusFilter: "pending",
-      group: "priority",
-    },
-    {
-      key: "pending-delivery",
-      value: stats.pendingDelivery,
-      label: "Pending Delivery",
-      tone: "teal",
-      hint: "Ready to dispatch",
-      cta: "Dispatch list",
-      icon: <TruckIcon />,
-      statusFilter: "delivery",
-      group: "priority",
-    },
-    {
-      key: "quotes",
-      value: stats.quotes,
-      label: "Quotes",
-      tone: "orange",
-      hint: "Quote pipeline",
-      cta: "Open quotes",
-      icon: <ReportsIcon />,
-      statusFilter: "quote",
-      group: "overview",
-    },
-    {
-      key: "corporate",
-      value: stats.corporate,
-      label: "Corporate Projects",
-      tone: "indigo",
-      hint: "Corporate job queue",
-      cta: "Corporate queue",
-      icon: <ProjectsIcon />,
-      statusFilter: "corporate",
-      group: "overview",
-    },
-    {
-      key: "completed",
-      value: stats.completed,
-      label: "Total Completed",
-      tone: "green",
-      hint: "Finished projects",
-      cta: "View archive",
-      icon: <CheckCircleIcon />,
-      statusFilter: "completed",
-      group: "overview",
-    },
-  ];
-
-  const openProjectsWithFilter = (statusFilter) => {
-    const params = new URLSearchParams({ status: statusFilter });
-    navigate(`/projects?${params.toString()}`);
-  };
-
-  const priorityCards = statCards.filter((card) => card.group === "priority");
-  const overviewCards = statCards.filter((card) => card.group === "overview");
-  const dashboardProjects =
-    dashboardSummary.projects || EMPTY_ADMIN_DASHBOARD_SUMMARY.projects;
-  const recentProjects = Array.isArray(dashboardProjects.recentProjects)
-    ? dashboardProjects.recentProjects
+  const stats = dashboardSummary.stats;
+  const deadlineSummary = dashboardSummary.deadlines;
+  const recentProjects = Array.isArray(dashboardSummary.projects?.recentProjects)
+    ? dashboardSummary.projects.recentProjects
     : [];
-  const todayProjects = Array.isArray(dashboardProjects.todayCreated)
-    ? dashboardProjects.todayCreated
+  const todayProjects = Array.isArray(dashboardSummary.projects?.todayCreated)
+    ? dashboardSummary.projects.todayCreated
+    : [];
+  const todayDeadlines = Array.isArray(deadlineSummary?.preview)
+    ? deadlineSummary.preview
     : [];
   const leadWorkload = Array.isArray(dashboardSummary.workload?.leads)
     ? dashboardSummary.workload.leads
     : [];
-  const deadlineSummary = {
-    ...EMPTY_ADMIN_DASHBOARD_SUMMARY.deadlines,
-    ...(dashboardSummary.deadlines || {}),
-  };
-  const todayDeadlines = Array.isArray(deadlineSummary.preview)
-    ? deadlineSummary.preview
+  const billingCounts = dashboardSummary.billingAttention?.counts || {};
+  const billingProjects = Array.isArray(dashboardSummary.billingAttention?.projects)
+    ? dashboardSummary.billingAttention.projects
     : [];
 
-  const todayLabel = useMemo(
-    () =>
-      new Date().toLocaleDateString("en-US", {
-        timeZone: "Africa/Accra",
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      }),
-    [],
-  );
+  const portfolioTotal = Number(stats.active) + Number(stats.completed) || 0;
+  const completedPercent = portfolioTotal
+    ? Math.round((Number(stats.completed) / portfolioTotal) * 100)
+    : 0;
+  const activePercent = portfolioTotal
+    ? Math.round((Number(stats.active) / portfolioTotal) * 100)
+    : 0;
+  const quoteShare = stats.active
+    ? Math.min(100, Math.round((Number(stats.quotes) / Number(stats.active)) * 100))
+    : 0;
+  const deadlineLoad =
+    Number(deadlineSummary.todayOrders) + Number(deadlineSummary.overdueOrders);
+  const todayDeadlinePercent = deadlineLoad
+    ? Math.round((Number(deadlineSummary.todayOrders) / deadlineLoad) * 100)
+    : 0;
+
+  const metrics = [
+    {
+      key: "active",
+      label: "Active Projects",
+      value: stats.active,
+      context: `${stats.pending} pending acceptance`,
+      detail: `${stats.overdue} critical or overdue`,
+      actionLabel: "View projects",
+      tone: "indigo",
+      progress: activePercent,
+      icon: <ProjectsIcon />,
+      onOpen: () => navigate("/projects?status=active"),
+    },
+    {
+      key: "quotes",
+      label: "Quote Pipeline",
+      value: stats.quotes,
+      context: "Open quote projects",
+      detail: `${stats.corporate} corporate projects`,
+      actionLabel: "Open quotes",
+      tone: "emerald",
+      progress: quoteShare,
+      icon: <ReportsIcon />,
+      onOpen: () => navigate("/projects?status=quote"),
+    },
+    {
+      key: "deliveries",
+      label: "Deliveries Today",
+      value: deadlineSummary.todayOrders,
+      context: `${deadlineSummary.todayProjects} projects due`,
+      detail: `${deadlineSummary.urgentToday} urgent today`,
+      actionLabel: "View schedule",
+      tone: "amber",
+      progress: todayDeadlinePercent,
+      icon: <TruckIcon />,
+      onOpen: () => navigate("/deadlines?scope=today"),
+    },
+    {
+      key: "completed",
+      label: "Completed Projects",
+      value: stats.completed,
+      context: `${completedPercent}% of recorded portfolio`,
+      detail: `${portfolioTotal} projects tracked`,
+      actionLabel: "View archive",
+      tone: "green",
+      progress: completedPercent,
+      icon: <CheckCircleIcon />,
+      onOpen: () => navigate("/projects?status=completed"),
+    },
+  ];
+
+  const attentionSignals = [
+    {
+      key: "overdue",
+      value: Number(stats.overdue) || 0,
+      label: "critical / overdue",
+      onOpen: () => navigate("/projects?status=critical"),
+    },
+    {
+      key: "emergencies",
+      value: Number(stats.emergencies) || 0,
+      label: "emergency projects",
+      onOpen: () => navigate("/projects?status=emergency"),
+    },
+    {
+      key: "billing",
+      value: Number(billingCounts.total) || 0,
+      label: "billing exceptions",
+      onOpen: () =>
+        billingProjects[0]
+          ? navigate(`/projects/${billingProjects[0]._id}`)
+          : navigate("/billing-documents"),
+    },
+    {
+      key: "delivery",
+      value: Number(stats.pendingDelivery) || 0,
+      label: "pending delivery",
+      onOpen: () => navigate("/projects?status=delivery"),
+    },
+  ];
+  const attentionTotal = attentionSignals.reduce((sum, item) => sum + item.value, 0);
+  const visibleProjects = projectView === "today" ? todayProjects : recentProjects;
+  const firstName =
+    user?.firstName || String(user?.name || "Admin").trim().split(/\s+/)[0] || "Admin";
+  const todayLabel = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "Africa/Accra",
+  });
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          height: "400px",
-          display: "grid",
-          placeItems: "center",
-          color: "#64748b",
-        }}
-      >
-        Loading Overview...
+      <div className="dashboard-loading" role="status">
+        <span />
+        <strong>Loading your operational overview...</strong>
       </div>
     );
   }
 
   return (
     <div className="admin-dashboard-container">
-      {/* Header */}
-      <div className="admin-header">
+      <section className="dashboard-welcome">
         <div>
-          <div className="admin-date">
-            {new Date().toLocaleDateString("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            })}
-          </div>
-          <h1 className="admin-title">Overview</h1>
-          <p className="admin-subtitle">
-            Welcome back, {user?.firstName || user?.name || "Admin"}. All
-            systems operational.
+          <span className="dashboard-date-label">{todayLabel}</span>
+          <h1>
+            {getGreeting()}, {firstName} <span aria-hidden="true">✨</span>
+          </h1>
+          <p>
+            Here is the current picture across {stats.active} active projects and{" "}
+            {deadlineSummary.todayOrders} orders due today.
           </p>
         </div>
-      </div>
-
-      <BillingAttentionPanel
-        summary={dashboardSummary.billingAttention}
-        loading={isLoading}
-        onOpenProject={(project) => navigate(`/projects/${project._id}`)}
-      />
-
-      {/* Stats Grid */}
-      <div className="admin-stats-panel">
-        <div className="admin-stats-section">
-          <div className="admin-stats-section-header">
-            <div>
-              <div className="admin-stats-eyebrow">Priority Alerts</div>
-              <h3 className="admin-stats-title">Action Center</h3>
-            </div>
-            <div className="admin-stats-note">
-              Items that need immediate attention
-            </div>
-          </div>
-          <div className="admin-stats-grid priority">
-            {priorityCards.map((card) => (
-              <button
-                key={card.key}
-                type="button"
-                className={`admin-stat-card stat-card-action stat-card-${card.key} ${
-                  card.key === "emergencies" || card.key === "critical"
-                    ? "stat-card-priority"
-                    : ""
-                }`}
-                onClick={() => openProjectsWithFilter(card.statusFilter)}
-                aria-label={`${card.label} - open filtered projects`}
-              >
-                <div className="stat-card-top">
-                  <div className={`stat-icon-wrapper ${card.tone}`}>
-                    {card.icon}
-                  </div>
-                  <div className="stat-card-title">
-                    <div className="stat-label">{card.label}</div>
-                    <div className="stat-hint">{card.hint}</div>
-                  </div>
-                </div>
-                <div className="stat-card-middle">
-                  <div className="stat-value">{card.value}</div>
-                </div>
-                <div className="stat-card-footer">
-                  <span>{card.cta || "Open queue"}</span>
-                  <ChevronRightIcon />
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="admin-stats-section">
-          <div className="admin-stats-section-header">
-            <div>
-              <div className="admin-stats-eyebrow">Operations</div>
-              <h3 className="admin-stats-title">Production Overview</h3>
-            </div>
-            <div className="admin-stats-note">
-              Snapshot of active workload
-            </div>
-          </div>
-          <div className="admin-stats-grid">
-            {overviewCards.map((card) => (
-              <button
-                key={card.key}
-                type="button"
-                className={`admin-stat-card stat-card-action stat-card-${card.key}`}
-                onClick={() => openProjectsWithFilter(card.statusFilter)}
-                aria-label={`${card.label} - open filtered projects`}
-              >
-                <div className="stat-card-top">
-                  <div className={`stat-icon-wrapper ${card.tone}`}>
-                    {card.icon}
-                  </div>
-                  <div className="stat-card-title">
-                    <div className="stat-label">{card.label}</div>
-                    <div className="stat-hint">{card.hint}</div>
-                  </div>
-                </div>
-                <div className="stat-card-middle">
-                  <div className="stat-value">{card.value}</div>
-                </div>
-                <div className="stat-card-footer">
-                  <span>{card.cta || "Open list"}</span>
-                  <ChevronRightIcon />
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <section className="dashboard-deadlines-card">
-        <div className="dashboard-deadlines-heading">
-          <div className="dashboard-deadlines-title-wrap">
-            <span className="dashboard-deadlines-icon"><DeadlineIcon /></span>
-            <div>
-              <div className="today-projects-eyebrow">Today&apos;s deadlines</div>
-              <h3 className="section-title">Delivery &amp; Quote Commitments</h3>
-              <p>{todayLabel} · Africa/Accra time</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="dashboard-deadlines-open"
-            onClick={() => navigate("/deadlines?scope=today")}
-          >
-            View deadline intelligence <ChevronRightIcon />
-          </button>
-        </div>
-
-        <div className="dashboard-deadlines-summary">
+        <div className="dashboard-welcome-actions">
           <button type="button" onClick={() => navigate("/deadlines?scope=today")}>
-            <strong>{deadlineSummary.todayOrders}</strong>
-            <span>Orders due today</span>
-            <small>{deadlineSummary.todayProjects} projects</small>
+            <DeadlineIcon /> Today&apos;s schedule
           </button>
-          <button type="button" className="danger" onClick={() => navigate("/deadlines?scope=overdue")}>
-            <strong>{deadlineSummary.overdueOrders}</strong>
-            <span>Overdue orders</span>
-            <small>{deadlineSummary.overdueProjects} projects</small>
-          </button>
-          <button type="button" className="warning" onClick={() => navigate("/deadlines?scope=today&sort=urgency")}>
-            <strong>{deadlineSummary.urgentToday}</strong>
-            <span>Urgent today</span>
-            <small>Urgent priority or already late</small>
-          </button>
-          <button type="button" className="quote" onClick={() => navigate("/deadlines?scope=today&projectType=Quote")}>
-            <strong>{deadlineSummary.quoteProjectsToday}</strong>
-            <span>Quote deadlines</span>
-            <small>Included in today&apos;s plan</small>
+          <button type="button" className="primary" onClick={() => navigate("/projects")}>
+            View all projects <ChevronRightIcon />
           </button>
         </div>
+      </section>
 
-        <div className="dashboard-deadlines-list">
-          {todayDeadlines.length > 0 ? (
-            todayDeadlines.map((deadline) => (
+      <section
+        className={`dashboard-attention ${attentionTotal ? "has-alerts" : "is-clear"}`}
+        aria-label="Immediate attention"
+      >
+        <div className="dashboard-attention-title">
+          <span className="dashboard-attention-icon">
+            {attentionTotal ? <AttentionIcon /> : <CheckCircleIcon />}
+          </span>
+          <div>
+            <div className="dashboard-attention-heading">
+              <h2>{attentionTotal ? "Immediate Attention Required" : "No Immediate Exceptions"}</h2>
+              <span>{attentionTotal} bottlenecks flagged</span>
+            </div>
+            <div className="dashboard-attention-signals">
+              {attentionSignals.map((signal) => (
+                <button type="button" key={signal.key} onClick={signal.onOpen}>
+                  <strong>{signal.value}</strong>
+                  <span>{signal.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {billingProjects.length > 0 && (
+          <div className="dashboard-attention-projects">
+            {billingProjects.slice(0, 2).map((project) => (
               <button
                 type="button"
-                key={deadline.projectId}
-                className={`dashboard-deadline-row ${deadline.isOverdue ? "overdue" : deadline.isUrgent ? "urgent" : ""}`}
-                onClick={() => navigate(`/projects/${deadline.projectId}`)}
-              >
-                <span className="dashboard-deadline-time">
-                  <strong>{formatDashboardDeadlineTime(deadline)}</strong>
-                  <small>{deadline.isOverdue ? "Past due" : deadline.isUrgent ? "Urgent" : "Today"}</small>
-                </span>
-                <span className="dashboard-deadline-project">
-                  <strong>{deadline.orderId} · {deadline.projectName}</strong>
-                  <small>{deadline.client}</small>
-                </span>
-                <span className="dashboard-deadline-lead">
-                  <strong>{deadline.projectLeadName || "Unassigned"}</strong>
-                  <small>{deadline.assistantLeadName ? `with ${deadline.assistantLeadName}` : "Project lead"}</small>
-                </span>
-                <span className={`dashboard-deadline-type ${deadline.projectType === "Quote" ? "quote" : ""}`}>
-                  {deadline.projectType}
-                </span>
-                <span className="dashboard-deadline-chevron"><ChevronRightIcon /></span>
-              </button>
-            ))
-          ) : (
-            <div className="dashboard-deadlines-empty">
-              <DeadlineIcon />
-              <div><strong>No active deadlines today</strong><span>Delivery and quote commitments will appear here.</span></div>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Projects Created Today */}
-      <section className="today-projects-card">
-        <div className="today-projects-header">
-          <div>
-            <div className="today-projects-eyebrow">Projects Created Today</div>
-            <h3 className="section-title">Today's New Projects</h3>
-            <p className="today-projects-subtitle">{todayLabel}</p>
-          </div>
-          <div className="today-projects-count">
-            <span className="today-count-number">{todayProjects.length}</span>
-            <span className="today-count-label">Created</span>
-          </div>
-        </div>
-
-        <div className="today-projects-list">
-          {todayProjects.length > 0 ? (
-            todayProjects.map((project) => {
-              const rawOrderId =
-                project.orderId ||
-                project.orderRef?.orderNumber ||
-                project?._id?.slice(-6)?.toUpperCase() ||
-                "";
-              const orderLabel = rawOrderId
-                ? rawOrderId.startsWith("#")
-                  ? rawOrderId
-                  : `#${rawOrderId}`
-                : "Order";
-              const projectName = renderProjectName(
-                project.details,
-                null,
-                "Untitled Project",
-              );
-              const leadLabel = getLeadDisplay(project, "Unassigned");
-              const clientLabel =
-                project.details?.client ||
-                project.orderRef?.client ||
-                project.details?.clientName ||
-                "Unknown Client";
-              const displayStatus = getProjectStatusDisplay(project);
-              const createdTime = project?.createdAt
-                ? new Date(project.createdAt).toLocaleTimeString("en-US", {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })
-                : "";
-              const departments = normalizeDepartmentList(project?.departments || []);
-              return (
-                <button
-                  key={project._id}
-                  type="button"
-                  className="today-project-row"
-                  onClick={() => navigate(`/projects/${project._id}`)}
-                >
-                  <div className="today-project-primary">
-                    <div className="today-project-order">{orderLabel}</div>
-                    <div className="today-project-name">{projectName}</div>
-                    <div className="today-project-meta">
-                      <span>{leadLabel}</span>
-                      <span>Client: {clientLabel}</span>
-                      {createdTime && <span>Created {createdTime}</span>}
-                    </div>
-                  </div>
-
-                  <div className="today-project-status">
-                    <span
-                      className={`status-pill ${getStatusPillClass(displayStatus)}`}
-                    >
-                      {displayStatus}
-                    </span>
-                    <span
-                      className={`today-type-pill ${getProjectTypeClass(project)}`}
-                    >
-                      {getProjectTypeLabel(project)}
-                    </span>
-                  </div>
-
-                  <div className="today-project-depts">
-                    {departments.length > 0 ? (
-                      departments.map((dept) => (
-                        <span
-                          key={`${project._id}-${dept}`}
-                          className="today-dept-chip"
-                        >
-                          {formatDepartmentLabel(dept)}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="today-project-depts-empty">
-                        No departments engaged yet
-                      </span>
-                    )}
-                  </div>
-
-                  <span className="today-project-chevron">
-                    <ChevronRightIcon />
-                  </span>
-                </button>
-              );
-            })
-          ) : (
-            <div className="today-projects-empty">
-              No projects created today yet.
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* NEW: Project Status Overview Component */}
-      <ProjectStatusOverview overview={dashboardSummary.statusOverview} />
-
-      {/* Main Content Body */}
-      <div className="admin-dashboard-body">
-        {/* Left Column: Recent Projects */}
-        <div className="dashboard-main-col">
-          <div className="section-header">
-            <h3 className="section-title">Recent Projects</h3>
-          </div>
-
-          <div className="recent-projects-card">
-            {recentProjects.map((project) => (
-              <div
                 key={project._id}
-                className="project-row"
                 onClick={() => navigate(`/projects/${project._id}`)}
               >
-                <div className="project-info">
-                  <h4>
-                    {renderProjectName(
-                      project.details,
-                      null,
-                      "Untitled Project",
-                    )}
-                  </h4>
-                  <div className="project-meta">
-                    {project.orderId} |{" "}
-                    {getLeadDisplay(project, "No Lead")}
-                  </div>
-                </div>
-
-                <div className="project-client">
-                  {project.details?.client || "Unknown Client"}
-                </div>
-
-                <div className="project-status">
-                  <span
-                    className={`status-pill ${getStatusPillClass(
-                      getProjectStatusDisplay(project),
-                    )}`}
-                  >
-                    {getProjectStatusDisplay(project)}
-                  </span>
-                </div>
-
-                <div style={{ color: "#cbd5e1" }}>
-                  <ChevronRightIcon />
-                </div>
-              </div>
+                <span className="dashboard-attention-project-copy">
+                  <strong>
+                    {getOrderLabel(project)} · {getProjectName(project)}
+                  </strong>
+                  <small>
+                    {(project.missingLabels || []).join(", ") || "Billing review required"}
+                  </small>
+                </span>
+                <span className="dashboard-attention-project-action">
+                  {getBillingActionLabel(project)}
+                </span>
+              </button>
             ))}
-            {recentProjects.length === 0 && (
-              <div
-                style={{
-                  padding: "3rem",
-                  textAlign: "center",
-                  color: "#94a3b8",
-                }}
-              >
-                No active projects found.
+          </div>
+        )}
+      </section>
+
+      <section className="dashboard-metrics" aria-label="Operational metrics">
+        {metrics.map((metric) => (
+          <DashboardMetricCard
+            key={metric.key}
+            metric={metric}
+            onOpen={metric.onOpen}
+          />
+        ))}
+      </section>
+
+      <div className="dashboard-content-grid">
+        <div className="dashboard-content-main">
+          <section className="dashboard-panel dashboard-commitments">
+            <div className="dashboard-panel-header">
+              <div>
+                <h2>Delivery &amp; Quote Commitments</h2>
+                <p>Real commitments scheduled for today</p>
               </div>
-            )}
-          </div>
-        </div>
+              <button type="button" className="dashboard-text-action" onClick={() => navigate("/deadlines?scope=today")}>
+                <span>{deadlineSummary.todayOrders} due</span> View schedule
+              </button>
+            </div>
 
-        {/* Right Column: Insights / Workload */}
-        <div className="dashboard-side-col">
-          <div className="section-header">
-            <h3 className="section-title">Team Workload Distribution</h3>
-          </div>
-
-          <div className="chart-card">
-            {(() => {
-              if (leadWorkload.length === 0) {
-                return (
-                  <div
-                    style={{
-                      padding: "1rem",
-                      color: "#94a3b8",
-                      textAlign: "center",
-                      fontStyle: "italic",
-                    }}
+            <div className="dashboard-commitment-list">
+              {todayDeadlines.length > 0 ? (
+                todayDeadlines.map((deadline) => (
+                  <button
+                    type="button"
+                    key={deadline.projectId}
+                    className={deadline.isOverdue ? "overdue" : deadline.isUrgent ? "urgent" : ""}
+                    onClick={() => navigate(`/projects/${deadline.projectId}`)}
                   >
-                    No active workload data.
+                    <span className="dashboard-commitment-time">
+                      {formatDeadlineTime(deadline)}
+                    </span>
+                    <span className="dashboard-commitment-project">
+                      <strong>{deadline.orderId || "Order"} / {deadline.projectName}</strong>
+                      <small>{deadline.client}</small>
+                    </span>
+                    <span className={`dashboard-type-pill ${deadline.projectType === "Quote" ? "quote" : ""}`}>
+                      {deadline.projectType || "Standard"}
+                    </span>
+                    <span className="dashboard-commitment-lead">
+                      <i>{getInitials(deadline.projectLeadName)}</i>
+                      <span>{deadline.projectLeadName || "Unassigned"}</span>
+                    </span>
+                    <ChevronRightIcon />
+                  </button>
+                ))
+              ) : (
+                <div className="dashboard-empty-state compact">
+                  <DeadlineIcon />
+                  <div>
+                    <strong>No active commitments today</strong>
+                    <span>Today&apos;s delivery and quote commitments will appear here.</span>
                   </div>
-                );
-              }
+                </div>
+              )}
+            </div>
+          </section>
 
-              // Predefined colors for variety
-              const colors = [
-                "#3b82f6", // Blue
-                "#8b5cf6", // Purple
-                "#10b981", // Green
-                "#f59e0b", // Amber
-                "#ef4444", // Red
-                "#ec4899", // Pink
-                "#6366f1", // Indigo
-                "#14b8a6", // Teal
-              ];
+          <section className="dashboard-panel dashboard-projects-panel">
+            <div className="dashboard-panel-header dashboard-projects-header">
+              <div>
+                <h2>Recent Projects &amp; Orders</h2>
+                <p>Live project records from the Admin portfolio</p>
+              </div>
+              <div className="dashboard-project-tabs" role="group" aria-label="Project list view">
+                <button
+                  type="button"
+                  className={projectView === "recent" ? "active" : ""}
+                  onClick={() => setProjectView("recent")}
+                >
+                  Recent <span>{recentProjects.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={projectView === "today" ? "active" : ""}
+                  onClick={() => setProjectView("today")}
+                >
+                  Created today <span>{todayProjects.length}</span>
+                </button>
+              </div>
+            </div>
 
-              return leadWorkload.map((row, idx) => {
-                const leadName = row.leadName || "Unassigned";
-                const count = Number(row.count) || 0;
-                const percent = Number(row.percentage) || 0;
-                return (
-                  <div key={leadName} className="dept-bar-group">
-                    <div className="dept-header">
-                      <span>{leadName}</span>
-                      <span style={{ color: "#64748b" }}>{count} Projects</span>
-                    </div>
-                    <div className="dept-track">
-                      <div
-                        className="dept-fill"
-                        style={{
-                          width: `${percent}%`,
-                          backgroundColor: colors[idx % colors.length],
-                        }}
-                      />
-                    </div>
+            <div className="dashboard-project-table">
+              <div className="dashboard-project-table-head" aria-hidden="true">
+                <span>Project details</span>
+                <span>Status</span>
+                <span>Type / created</span>
+                <span>Lead</span>
+                <span />
+              </div>
+              {visibleProjects.length > 0 ? (
+                visibleProjects.map((project) => {
+                  const status = getProjectStatusDisplay(project);
+                  return (
+                    <button
+                      type="button"
+                      key={project._id}
+                      className="dashboard-project-row"
+                      onClick={() => navigate(`/projects/${project._id}`)}
+                    >
+                      <span className="dashboard-project-primary">
+                        <strong>{getProjectName(project)}</strong>
+                        <small>{getOrderLabel(project)} / {getProjectClient(project)}</small>
+                      </span>
+                      <span className={`dashboard-status-pill ${getStatusPillClass(status)}`}>
+                        {status}
+                      </span>
+                      <span className="dashboard-project-type-date">
+                        <strong className={getProjectTypeClass(project)}>{getProjectTypeLabel(project)}</strong>
+                        <small>{formatShortDate(project.createdAt || project.orderDate)}</small>
+                      </span>
+                      <span className="dashboard-project-lead">
+                        {getLeadDisplay(project, "Unassigned")}
+                      </span>
+                      <ChevronRightIcon />
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="dashboard-empty-state">
+                  <ProjectsIcon />
+                  <div>
+                    <strong>{projectView === "today" ? "No projects created today" : "No recent projects"}</strong>
+                    <span>Project activity will appear here when records are available.</span>
                   </div>
-                );
-              });
-            })()}
-            <p
-              style={{
-                marginTop: "1.5rem",
-                fontSize: "0.75rem",
-                color: "#94a3b8",
-                textAlign: "center",
-              }}
-            >
-              Tracking active project distribution across team members.
-            </p>
-          </div>
+                </div>
+              )}
+            </div>
+          </section>
         </div>
+
+        <aside className="dashboard-content-side">
+          <ProjectStatusOverview overview={dashboardSummary.statusOverview} />
+
+          <section className="dashboard-panel dashboard-workload-card">
+            <div className="dashboard-panel-header">
+              <div>
+                <h2>Team Workload</h2>
+                <p>Share of active projects by lead</p>
+              </div>
+              <button type="button" className="dashboard-text-action" onClick={() => navigate("/teams")}>
+                View team
+              </button>
+            </div>
+
+            <div className="dashboard-workload-list">
+              {leadWorkload.length > 0 ? (
+                leadWorkload.map((row, index) => {
+                  const leadName = row.leadName || "Unassigned";
+                  const count = Number(row.count) || 0;
+                  const percentage = Number(row.percentage) || 0;
+                  return (
+                    <div className="dashboard-workload-row" key={`${leadName}-${index}`}>
+                      <div className="dashboard-workload-person">
+                        <i>{getInitials(leadName)}</i>
+                        <strong>{leadName}</strong>
+                        <span>{count} {count === 1 ? "project" : "projects"}</span>
+                        <em>{percentage}%</em>
+                      </div>
+                      <div className="dashboard-workload-track">
+                        <span style={{ width: `${Math.max(2, percentage)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="dashboard-empty-state compact">
+                  <ProjectsIcon />
+                  <div>
+                    <strong>No active workload data</strong>
+                    <span>Lead distribution will appear when projects are assigned.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="dashboard-insight-card">
+            <span><RocketIcon /></span>
+            <div>
+              <strong>Operational snapshot</strong>
+              <p>
+                {leadWorkload.length
+                  ? `${leadWorkload[0]?.leadName || "The leading assignee"} currently holds the largest share of active work at ${leadWorkload[0]?.percentage || 0}%.`
+                  : "Assign project leads to unlock workload distribution insights."}
+              </p>
+              <button type="button" onClick={() => navigate("/teams")}>Review assignments</button>
+            </div>
+          </section>
+        </aside>
       </div>
     </div>
   );
