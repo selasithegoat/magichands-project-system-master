@@ -1,10 +1,14 @@
 import React, { useDeferredValue, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { getDepartmentLabel } from "@client/constants/departments";
+import { openDeliveryCalendar } from "@client/utils/deliveryCalendar";
 import "./Deadlines.css";
 
 const BUSINESS_TIME_ZONE = "Africa/Accra";
 const EMPTY_RESPONSE = {
+  asOf: null,
+  businessDate: null,
   summary: {
     totalProjects: 0,
     totalOrders: 0,
@@ -108,17 +112,43 @@ const buildGroups = (rows, groupBy) => {
   return Array.from(groups.values());
 };
 
-const SummaryCard = ({ tone, value, label, detail, onClick, active }) => (
+const DeadlineMetricIcon = ({ type }) => {
+  const paths = {
+    portfolio: <><path d="M5 4h14v16H5z" /><path d="M9 8h6M9 12h6M9 16h4" /></>,
+    overdue: <><path d="M12 4 3 20h18Z" /><path d="M12 9v4M12 17h.01" /></>,
+    today: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    week: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 10h18" /></>,
+    coverage: <><path d="m5 12 4 4L19 6" /><circle cx="12" cy="12" r="10" /></>,
+  };
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">{paths[type] || paths.portfolio}</svg>;
+};
+
+const SummaryCard = ({ tone, icon, value, label, unit, detail, meta, progress, onClick, active }) => (
   <button
     type="button"
     className={`deadline-summary-card ${tone} ${active ? "active" : ""}`}
     onClick={onClick}
   >
+    <span className="deadline-summary-icon"><DeadlineMetricIcon type={icon} /></span>
+    {meta && <span className="deadline-summary-meta">{meta}</span>}
     <span className="deadline-summary-label">{label}</span>
-    <strong>{value}</strong>
-    <small>{detail}</small>
+    <div><strong>{value}</strong><small>{unit}</small></div>
+    <span className="deadline-summary-foot">{detail}</span>
+    <span className="deadline-summary-track"><span style={{ width: `${Math.min(100, Math.max(0, progress || 0))}%` }} /></span>
   </button>
 );
+
+const csvCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+const getInitials = (value) =>
+  String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase() || "--";
 
 const Deadlines = () => {
   const navigate = useNavigate();
@@ -218,6 +248,115 @@ const Deadlines = () => {
   const summary = data.summary || EMPTY_RESPONSE.summary;
   const options = data.filterOptions || EMPTY_RESPONSE.filterOptions;
   const pagination = data.pagination || EMPTY_RESPONSE.pagination;
+  const coveragePercent = summary.totalProjects
+    ? Math.round(
+        ((summary.totalProjects - summary.overdueProjects) / summary.totalProjects) *
+          1000,
+      ) / 10
+    : 100;
+  const currentUrgency = useMemo(() => {
+    const overdue = rows.filter((row) => row.isOverdue).length;
+    const urgent = rows.filter((row) => row.isUrgent && !row.isOverdue).length;
+    const ready = rows.filter((row) => row.readiness?.key === "ready").length;
+    return {
+      overdue,
+      urgent,
+      ready,
+      onTrack: Math.max(0, rows.length - overdue - urgent - ready),
+    };
+  }, [rows]);
+  const leadWorkload = useMemo(() => {
+    const leads = new Map();
+    rows.forEach((row) => {
+      const name = row.projectLead?.name || "Unassigned";
+      const current = leads.get(name) || {
+        name,
+        count: 0,
+        overdue: 0,
+        urgent: 0,
+      };
+      current.count += 1;
+      if (row.isOverdue) current.overdue += 1;
+      else if (row.isUrgent) current.urgent += 1;
+      leads.set(name, current);
+    });
+    return Array.from(leads.values())
+      .sort((left, right) => right.overdue - left.overdue || right.urgent - left.urgent || right.count - left.count)
+      .slice(0, 5);
+  }, [rows]);
+  const attentionRows = useMemo(
+    () =>
+      rows
+        .filter(
+          (row) =>
+            row.isOverdue ||
+            row.isUrgent ||
+            ["blocked", "at-risk", "unassigned"].includes(row.readiness?.key),
+        )
+        .slice(0, 3),
+    [rows],
+  );
+  const activeFilterCount = [lead, status, projectType, priority, deferredSearch].filter(
+    Boolean,
+  ).length;
+  const asOfLabel = data.asOf
+    ? new Date(data.asOf).toLocaleString("en-GB", {
+        timeZone: BUSINESS_TIME_ZONE,
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "Live";
+
+  const clearFilters = () => {
+    setSearchInput("");
+    updateParams({
+      search: "",
+      lead: "",
+      status: "",
+      projectType: "",
+      priority: "",
+      sort: "deadline-asc",
+      groupBy: "order",
+    });
+  };
+
+  const handleExportCsv = () => {
+    const csvRows = [
+      [
+        "Order",
+        "Project",
+        "Client",
+        "Deadline",
+        "Lead",
+        "Status",
+        "Readiness",
+        "Priority",
+        "Departments",
+      ],
+      ...rows.map((row) => [
+        row.orderId,
+        row.projectName,
+        row.client,
+        `${formatDate(row.dueAt)} ${formatTime(row)}`,
+        row.projectLead?.name || "Unassigned",
+        row.status,
+        row.readiness?.label || "In progress",
+        row.priority,
+        (row.departments || []).map(getDepartmentLabel).join(" / "),
+      ]),
+    ];
+    const csv = csvRows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `deadline-intelligence-${toDateKey()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const toggleExpanded = (projectId) => {
     setExpandedRows((current) => ({
@@ -240,50 +379,114 @@ const Deadlines = () => {
     <div className="deadline-intelligence-page">
       <header className="deadline-hero">
         <div>
-          <span className="deadline-eyebrow">Operations control</span>
-          <h1>Deadline Intelligence</h1>
+          <div className="deadline-title-line">
+            <h1>Deadline Intelligence &amp; Delivery Control</h1>
+            <span>Live operational data</span>
+          </div>
           <p>
-            Delivery and quote deadlines across every active order, calculated in
-            Africa/Accra time.
+            Delivery urgency, commitment status, and floor allocation across all
+            active projects and production orders.
           </p>
         </div>
-        <div className="deadline-hero-note">
-          <span>Current portfolio</span>
-          <strong>{summary.totalOrders} orders</strong>
-          <small>{summary.quoteProjects} scheduled quote projects included</small>
+        <div className="deadline-hero-actions">
+          <span className="deadline-as-of">As of {asOfLabel} · Accra</span>
+          <button type="button" onClick={openDeliveryCalendar} aria-haspopup="dialog">
+            <DeadlineMetricIcon type="week" /> Calendar
+          </button>
+          <button type="button" onClick={handleExportCsv}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3" /></svg>
+            Export CSV
+          </button>
+          <button type="button" className="primary" onClick={() => choosePreset("overdue")}>
+            Review critical deadlines
+          </button>
         </div>
       </header>
 
       <section className="deadline-summary-grid" aria-label="Deadline summary">
         <SummaryCard
+          tone="indigo"
+          icon="portfolio"
+          label="Portfolio deadlines"
+          value={summary.totalOrders}
+          unit="active orders"
+          detail={`${summary.totalProjects} scheduled projects`}
+          meta={`${summary.quoteProjects} quotes`}
+          progress={100}
+          active={scope === "all"}
+          onClick={() => choosePreset("all")}
+        />
+        <SummaryCard
           tone="red"
-          label="Overdue"
+          icon="overdue"
+          label="Overdue commitments"
           value={summary.overdueOrders}
-          detail={`${summary.overdueProjects} projects`}
+          unit="orders"
+          detail={`${summary.overdueProjects} projects require attention`}
+          meta="Critical"
+          progress={summary.totalProjects ? (summary.overdueProjects / summary.totalProjects) * 100 : 0}
           active={scope === "overdue"}
           onClick={() => choosePreset("overdue")}
         />
         <SummaryCard
           tone="amber"
+          icon="today"
           label="Due today"
           value={summary.todayOrders}
-          detail={`${summary.todayProjects} projects`}
+          unit="orders"
+          detail={`${summary.todayProjects} projects scheduled today`}
+          meta={`${summary.unassignedProjects} unassigned`}
+          progress={summary.totalProjects ? (summary.todayProjects / summary.totalProjects) * 100 : 0}
           active={scope === "today"}
           onClick={() => choosePreset("today")}
         />
         <SummaryCard
           tone="blue"
+          icon="week"
           label="Next 7 days"
           value={summary.nextSevenDaysOrders}
-          detail={`${summary.nextSevenDaysProjects} projects`}
+          unit="orders"
+          detail={`${summary.nextSevenDaysProjects} projects in the window`}
+          meta="7-day horizon"
+          progress={summary.totalProjects ? (summary.nextSevenDaysProjects / summary.totalProjects) * 100 : 0}
           active={scope === "range" && from === toDateKey()}
           onClick={() => choosePreset("week")}
         />
+        <SummaryCard
+          tone="green"
+          icon="coverage"
+          label="On-time coverage"
+          value={`${coveragePercent}%`}
+          unit="portfolio"
+          detail={`${summary.totalProjects - summary.overdueProjects} projects remain on time`}
+          meta={summary.overdueProjects ? `${summary.overdueProjects} overdue` : "All clear"}
+          progress={coveragePercent}
+          active={false}
+          onClick={() => choosePreset("all")}
+        />
       </section>
+
+      {(summary.overdueProjects > 0 || summary.unassignedProjects > 0) && (
+        <section className="deadline-risk-banner" aria-label="Urgent delivery risk">
+          <span className="deadline-risk-icon"><DeadlineMetricIcon type="overdue" /></span>
+          <div>
+            <strong>Urgent delivery risks require review</strong>
+            <span>
+              {summary.overdueProjects} overdue projects and {summary.unassignedProjects}{" "}
+              unassigned commitments are currently visible in the portfolio.
+            </span>
+          </div>
+          <div>
+            <button type="button" onClick={() => choosePreset("overdue")}>Review overdue</button>
+            <button type="button" className="primary" onClick={() => updateParams({ lead: "unassigned" })}>Review unassigned</button>
+          </div>
+        </section>
+      )}
 
       <section className="deadline-workspace">
         <div className="deadline-presets" aria-label="Date presets">
-          <button className={scope === "today" ? "active" : ""} onClick={() => choosePreset("today")}>Today</button>
+          <span className="deadline-presets-label">View</span>
+          <button className={scope === "today" ? "active" : ""} onClick={() => choosePreset("today")}>Today <span>{summary.todayOrders}</span></button>
           <button
             className={
               scope === "range" &&
@@ -296,7 +499,13 @@ const Deadlines = () => {
           >
             Tomorrow
           </button>
-          <button className={scope === "overdue" ? "active danger" : ""} onClick={() => choosePreset("overdue")}>Overdue</button>
+          <button className={scope === "overdue" ? "active danger" : ""} onClick={() => choosePreset("overdue")}>Overdue <span>{summary.overdueOrders}</span></button>
+          <button
+            className={scope === "range" && from === toDateKey() && to === addDaysToDateKey(toDateKey(), 6) ? "active" : ""}
+            onClick={() => choosePreset("week")}
+          >
+            Next 7 days <span>{summary.nextSevenDaysOrders}</span>
+          </button>
           <button className={scope === "all" ? "active" : ""} onClick={() => choosePreset("all")}>All active</button>
           <div className="deadline-custom-range">
             <input
@@ -392,14 +601,22 @@ const Deadlines = () => {
               <option value="none">No grouping</option>
             </select>
           </label>
+          {activeFilterCount > 0 && (
+            <button type="button" className="deadline-clear-filters" onClick={clearFilters}>
+              Reset {activeFilterCount} filter{activeFilterCount === 1 ? "" : "s"}
+            </button>
+          )}
         </div>
 
         <div className="deadline-results-header">
           <div>
-            <strong>{pagination.totalOrders} orders</strong>
-            <span>{pagination.total} matching projects</span>
+            <strong>Delivery commitments</strong>
+            <span>{pagination.totalOrders} orders · {pagination.total} matching projects</span>
           </div>
-          {isFetching && !isPending && <span className="deadline-refreshing">Refreshing…</span>}
+          <span className="deadline-results-context">
+            {groupBy === "order" ? "Grouped by order" : groupBy === "lead" ? "Grouped by lead" : groupBy === "date" ? "Grouped by date" : "Ungrouped"}
+            {isFetching && !isPending && <b className="deadline-refreshing">Refreshing…</b>}
+          </span>
         </div>
 
         {isPending ? (
@@ -421,10 +638,9 @@ const Deadlines = () => {
                     {groupBy === "order" && group.rows[0]?.client && <small>{group.rows[0].client}</small>}
                   </header>
                 )}
-                <div className="deadline-table-wrap admin-data-table-scroll admin-data-table-scroll--flush admin-data-table-scroll--cards">
+                <div className="deadline-table-wrap">
                   <table
-                    className="deadline-table admin-data-table admin-data-table--cards admin-data-table--interactive"
-                    style={{ "--admin-table-min-width": "980px" }}
+                    className="deadline-table"
                   >
                     <thead>
                       <tr>
@@ -457,11 +673,11 @@ const Deadlines = () => {
                                 </div>
                               </td>
                               <td data-label="Project" data-table-primary="true">
-                                <div className="deadline-project-cell admin-table-identity">
-                                  <strong className="admin-table-title">{row.projectName}</strong>
-                                  <span className="admin-table-subtitle">
+                                <div className="deadline-project-cell">
+                                  <strong>{row.projectName}</strong>
+                                  <span>
                                     {row.orderId}
-                                    <b className={`deadline-type-badge admin-table-chip ${row.projectType === "Quote" ? "quote" : ""}`}>{row.projectType}</b>
+                                    <b className={`deadline-type-badge ${row.projectType === "Quote" ? "quote" : ""}`}>{row.projectType}</b>
                                   </span>
                                 </div>
                               </td>
@@ -472,18 +688,18 @@ const Deadlines = () => {
                                   {row.assistantLead?.name && <span>with {row.assistantLead.name}</span>}
                                 </div>
                               </td>
-                              <td data-label="Stage"><span className="deadline-status-pill admin-table-status is-neutral">{row.status}</span></td>
+                              <td data-label="Stage"><span className="deadline-status-pill">{row.status}</span></td>
                               <td data-label="Readiness">
-                                <span className={`deadline-readiness admin-table-status ${row.readiness?.key || "in-progress"}`}>{row.readiness?.label || "In progress"}</span>
+                                <span className={`deadline-readiness ${row.readiness?.key || "in-progress"}`}>{row.readiness?.label || "In progress"}</span>
                               </td>
                               <td className="deadline-row-action">
-                                <button type="button" className="admin-table-action" aria-label={expanded ? "Collapse deadline details" : "Expand deadline details"} onClick={(event) => { event.stopPropagation(); toggleExpanded(row.projectId); }}>
+                                <button type="button" aria-label={expanded ? "Collapse deadline details" : "Expand deadline details"} onClick={(event) => { event.stopPropagation(); toggleExpanded(row.projectId); }}>
                                   {expanded ? "−" : "+"}
                                 </button>
                               </td>
                             </tr>
                             {expanded && (
-                              <tr className="deadline-detail-row admin-table-detail-row">
+                              <tr className="deadline-detail-row">
                                 <td colSpan="7">
                                   <div className="deadline-detail-grid">
                                     <div>
@@ -494,7 +710,7 @@ const Deadlines = () => {
                                     <div>
                                       <span>Production scope</span>
                                       <strong>{row.itemCount} item lines · {row.totalQuantity} units</strong>
-                                      <small>{row.departments.length ? row.departments.join(" · ") : "No departments assigned"}</small>
+                                      <small>{row.departments.length ? row.departments.map(getDepartmentLabel).join(" · ") : "No departments assigned"}</small>
                                     </div>
                                     <div>
                                       <span>Operational signal</span>
@@ -535,6 +751,71 @@ const Deadlines = () => {
           </nav>
         )}
       </section>
+
+      {rows.length > 0 && (
+        <section className="deadline-operations-footer">
+          <div className="deadline-allocation-panel">
+            <header>
+              <div>
+                <span>Current view</span>
+                <h2>Urgency Allocation &amp; Floor SLA Meter</h2>
+              </div>
+              <small>Based on {rows.length} visible commitments</small>
+            </header>
+            <div className="deadline-allocation-bar" aria-label="Urgency allocation">
+              <span className="overdue" style={{ width: `${(currentUrgency.overdue / rows.length) * 100}%` }} />
+              <span className="urgent" style={{ width: `${(currentUrgency.urgent / rows.length) * 100}%` }} />
+              <span className="track" style={{ width: `${(currentUrgency.onTrack / rows.length) * 100}%` }} />
+              <span className="ready" style={{ width: `${(currentUrgency.ready / rows.length) * 100}%` }} />
+            </div>
+            <div className="deadline-allocation-legend">
+              <span><i className="overdue" />{currentUrgency.overdue} overdue</span>
+              <span><i className="urgent" />{currentUrgency.urgent} urgent</span>
+              <span><i className="track" />{currentUrgency.onTrack} on track</span>
+              <span><i className="ready" />{currentUrgency.ready} ready</span>
+            </div>
+            <div className="deadline-attention-grid">
+              {attentionRows.length > 0 ? attentionRows.map((row) => (
+                <button type="button" key={row.projectId} onClick={(event) => openProject(event, row.projectId)}>
+                  <span>{row.readiness?.label || "Attention"}</span>
+                  <strong>{row.projectName}</strong>
+                  <small>{row.orderId} · {row.projectLead?.name || "Unassigned"}</small>
+                </button>
+              )) : (
+                <div className="deadline-all-clear">
+                  <DeadlineMetricIcon type="coverage" />
+                  <strong>No visible commitments require escalation.</strong>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <aside className="deadline-leads-panel">
+            <header>
+              <div><span>Ownership</span><h2>Floor Leads</h2></div>
+              <small>{leadWorkload.length} visible</small>
+            </header>
+            <div>
+              {leadWorkload.map((leadRow) => (
+                <button
+                  type="button"
+                  key={leadRow.name}
+                  onClick={() => {
+                    const option = (options.leads || []).find((entry) => entry.name === leadRow.name);
+                    updateParams({ lead: option?.id || (leadRow.name === "Unassigned" ? "unassigned" : "") });
+                  }}
+                >
+                  <span className="deadline-lead-avatar">{getInitials(leadRow.name)}</span>
+                  <span><strong>{leadRow.name}</strong><small>{leadRow.count} commitments</small></span>
+                  <em className={leadRow.overdue ? "danger" : leadRow.urgent ? "warning" : "success"}>
+                    {leadRow.overdue ? `${leadRow.overdue} overdue` : leadRow.urgent ? `${leadRow.urgent} urgent` : "On track"}
+                  </em>
+                </button>
+              ))}
+            </div>
+          </aside>
+        </section>
+      )}
     </div>
   );
 };

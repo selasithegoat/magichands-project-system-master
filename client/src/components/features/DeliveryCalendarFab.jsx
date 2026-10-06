@@ -15,6 +15,7 @@ import ReminderBellIcon from "../icons/ReminderBellIcon";
 import XIcon from "../icons/XIcon";
 import Toast from "../ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { DELIVERY_CALENDAR_OPEN_EVENT } from "../../utils/deliveryCalendar";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import "./DeliveryCalendarFab.css";
 
@@ -312,6 +313,14 @@ const DeliveryCalendarFab = ({
   useEffect(() => {
     if (isOpen) fetchCalendar();
   }, [fetchCalendar, isOpen]);
+
+  useEffect(() => {
+    const handleExternalOpen = () => setIsOpen(true);
+    window.addEventListener(DELIVERY_CALENDAR_OPEN_EVENT, handleExternalOpen);
+    return () => {
+      window.removeEventListener(DELIVERY_CALENDAR_OPEN_EVENT, handleExternalOpen);
+    };
+  }, []);
 
   useEffect(
     () => () => {
