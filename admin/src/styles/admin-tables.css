@@ -125,7 +125,7 @@
 .admin-table-code {
   overflow: hidden;
   color: #93c5fd;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
   font-size: 0.67rem;
   font-weight: 750;
   letter-spacing: 0.025em;

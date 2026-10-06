@@ -18,6 +18,7 @@ import {
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
 } from "@client/utils/quoteStatus";
+import { getDepartmentLabel } from "@client/constants/departments";
 
 const GROUP_ROW_TRANSITION_MS = 220;
 const URGENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
@@ -218,6 +219,65 @@ const getPageConfig = (mode) =>
         statusOptions: ACTIVE_STATUS_OPTIONS,
       };
 
+const getWorkflowProgress = (project) => {
+  const status = getProjectStatusDisplay(project).toLowerCase();
+  if (/completed|finished|delivered|declined/.test(status)) return 100;
+  if (/delivery|pickup/.test(status)) return 92;
+  if (/packaging/.test(status)) return 84;
+  if (/photography/.test(status)) return 78;
+  if (/quality/.test(status)) return 72;
+  if (/production|fabrication/.test(status)) return 62;
+  if (/master approval|mockup/.test(status)) return 42;
+  if (/scope approval|engagement|meeting/.test(status)) return 28;
+  if (/acceptance|approval|created|new order/.test(status)) return 15;
+  if (/quote|cost|sample|bid/.test(status)) return 32;
+  if (/hold|blocked/.test(status)) return 20;
+  return 10;
+};
+
+const isDueToday = (project) => {
+  const value = project?.details?.deliveryDate;
+  if (!value) return false;
+  const dueDate = new Date(value);
+  const now = new Date();
+  return (
+    dueDate.getFullYear() === now.getFullYear() &&
+    dueDate.getMonth() === now.getMonth() &&
+    dueDate.getDate() === now.getDate()
+  );
+};
+
+const csvCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+const PipelineIcon = ({ type }) => {
+  if (type === "proofing") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <path d="m8 3 8 8M14 3l7 7-9 9H5v-7Z" />
+        <path d="m3 21 5-5" />
+      </svg>
+    );
+  }
+  if (type === "production") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <path d="M4 21V8l5 3V8l5 3V4h6v17Z" />
+        <path d="M8 17h2M14 17h2" />
+      </svg>
+    );
+  }
+  if (type === "dispatch") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+        <path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z" />
+        <circle cx="7" cy="19" r="2" />
+        <circle cx="18" cy="19" r="2" />
+      </svg>
+    );
+  }
+  return <ProjectsIcon />;
+};
+
 const Projects = ({ user }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -229,6 +289,7 @@ const Projects = ({ user }) => {
     isOpen: false,
     projectId: null,
   });
+  const [selectedProjectIds, setSelectedProjectIds] = useState([]);
 
   // Pagination & Filter State
   const [viewMode, setViewMode] = usePersistedState(
@@ -255,6 +316,10 @@ const Projects = ({ user }) => {
     "admin-projects-lead-filter",
     "All",
   );
+  const [typeFilter, setTypeFilter] = usePersistedState(
+    "admin-projects-type-filter",
+    "All",
+  );
   const [currentPage, setCurrentPage] = usePersistedState(
     "admin-projects-page",
     1,
@@ -265,7 +330,7 @@ const Projects = ({ user }) => {
       },
     },
   );
-  const [itemsPerPage] = useState(15);
+  const [itemsPerPage] = useState(10);
   const isFinishedView = viewMode === "finished";
   const pageConfig = getPageConfig(viewMode);
 
@@ -382,7 +447,7 @@ const Projects = ({ user }) => {
 
     setFilterStatus(mappedStatus);
     setCurrentPage(1);
-  }, [searchParams]);
+  }, [searchParams, setCurrentPage, setFilterStatus, setViewMode]);
 
   useEffect(
     () => () => {
@@ -448,30 +513,6 @@ const Projects = ({ user }) => {
     }
   };
 
-  const getStatusClass = (status) => {
-    if (!status) return "draft";
-    const lower = status.toLowerCase();
-    if (
-      lower.includes("hold") ||
-      lower.includes("declined") ||
-      lower.includes("blocked") ||
-      lower.includes("overdue")
-    )
-      return "on-hold";
-    if (lower.includes("finished") || lower.includes("completed"))
-      return "completed";
-    if (lower.includes("feedback") || lower.includes("delivered"))
-      return "feedback";
-    if (lower.includes("engagement") || lower.includes("meeting"))
-      return "engagement";
-    if (lower.includes("pending") || lower.includes("awaiting"))
-      return "pending";
-    if (lower.includes("progress") || lower.includes("sent"))
-      return "in-progress";
-    if (lower.includes("created") || lower.includes("new")) return "created";
-    return "draft";
-  };
-
   const getGroupProjects = (group) =>
     Array.isArray(group?.projects) ? group.projects : [];
 
@@ -494,25 +535,52 @@ const Projects = ({ user }) => {
     [groupedOrders],
   );
 
+  const allProjects = useMemo(
+    () => groupedOrders.flatMap((group) => getGroupProjects(group)),
+    [groupedOrders],
+  );
+
+  const pipelineSummary = useMemo(() => {
+    const activeProjects = allProjects.filter((project) => !isClosedProject(project));
+    const urgentProjects = activeProjects.filter(isUrgentProject);
+    const pendingProofing = activeProjects.filter((project) =>
+      /mockup|scope approval|master approval|proof/i.test(getProjectStatusDisplay(project)),
+    );
+    const production = activeProjects.filter((project) =>
+      /production|quality control|photography|packaging|fabrication/i.test(
+        getProjectStatusDisplay(project),
+      ),
+    );
+    const dispatch = activeProjects.filter(isPendingDeliveryProject);
+    const productionDepartments = new Set(
+      production.flatMap((project) =>
+        Array.isArray(project?.departments) ? project.departments.filter(Boolean) : [],
+      ),
+    );
+    const productionOnTrack = production.filter(
+      (project) => !isUrgentProject(project),
+    ).length;
+
+    return {
+      active: activeProjects.length,
+      onSchedule: Math.max(0, activeProjects.length - urgentProjects.length),
+      flagged: urgentProjects.length,
+      pendingProofing: pendingProofing.length,
+      proofingUrgent: pendingProofing.filter(isUrgentProject).length,
+      production: production.length,
+      productionDepartments: productionDepartments.size,
+      productionOnTrackPercent: production.length
+        ? Math.round((productionOnTrack / production.length) * 100)
+        : 0,
+      dispatch: dispatch.length,
+      dispatchDueToday: dispatch.filter(isDueToday).length,
+    };
+  }, [allProjects]);
+
   const getGroupClient = (group, projects = []) =>
     group?.client ||
     projects.find((project) => project?.details?.client)?.details?.client ||
     "-";
-
-  const getGroupStatusSummary = (projects = []) => {
-    const statuses = Array.from(
-      new Set(projects.map((project) => getProjectStatusDisplay(project)).filter(Boolean)),
-    );
-    if (statuses.length === 0) {
-      return { label: "Draft", className: getStatusClass("Draft") };
-    }
-    const primary = statuses[0];
-    return {
-      label:
-        statuses.length === 1 ? primary : `${primary} +${statuses.length - 1} more`,
-      className: getStatusClass(primary),
-    };
-  };
 
   const matchesStatusFilter = useCallback((project) => {
     const projectStatus = getProjectStatusDisplay(project);
@@ -590,6 +658,7 @@ const Projects = ({ user }) => {
 
     setViewMode(nextViewMode);
     setFilterStatus(getDefaultFilterStatus(nextViewMode));
+    setTypeFilter("All");
     setCurrentPage(1);
 
     const params = new URLSearchParams(searchParams);
@@ -625,18 +694,42 @@ const Projects = ({ user }) => {
     .filter((l) => l && l !== "" && l !== "Unassigned")
     .sort();
 
+  const uniqueTypes = [
+    ...new Set(
+      modeScopedOrderGroups.flatMap((group) =>
+        getGroupProjects(group).map((project) => project?.projectType || "Standard"),
+      ),
+    ),
+  ].sort();
+
   // Filter Logic
   const filteredOrderGroups = statusScopedOrderGroups.filter((group) => {
     const projectsInGroup = getGroupProjects(group);
     if (projectsInGroup.length === 0) return false;
 
-    if (
-      searchQuery &&
-      !String(group?.orderNumber || "")
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase())
-    ) {
-      return false;
+    if (searchQuery) {
+      const normalizedSearch = searchQuery.trim().toLowerCase();
+      const searchableValues = [
+        group?.orderNumber,
+        getGroupClient(group, projectsInGroup),
+        group?.clientEmail,
+        group?.clientPhone,
+        ...projectsInGroup.flatMap((project) => [
+          project?.orderId,
+          renderProjectName(project?.details, null, ""),
+          project?.details?.client,
+          project?.details?.clientEmail,
+          project?.details?.clientPhone,
+          getLeadDisplay(project, ""),
+        ]),
+      ];
+      if (
+        !searchableValues.some((value) =>
+          String(value || "").toLowerCase().includes(normalizedSearch),
+        )
+      ) {
+        return false;
+      }
     }
 
     if (
@@ -652,6 +745,12 @@ const Projects = ({ user }) => {
       );
       if (!hasLead) return false;
     }
+    if (typeFilter !== "All") {
+      const hasType = projectsInGroup.some(
+        (project) => (project?.projectType || "Standard") === typeFilter,
+      );
+      if (!hasType) return false;
+    }
     return true;
   });
 
@@ -663,11 +762,19 @@ const Projects = ({ user }) => {
     indexOfLastItem,
   );
   const totalPages = Math.ceil(filteredOrderGroups.length / itemsPerPage);
+  const visibleProjectIds = paginatedOrderGroups
+    .flatMap((group) => getGroupProjects(group))
+    .map((project) => project?._id)
+    .filter(Boolean);
+  const allVisibleSelected =
+    visibleProjectIds.length > 0 &&
+    visibleProjectIds.every((projectId) => selectedProjectIds.includes(projectId));
   const hasActiveFilters = Boolean(
     searchQuery ||
       filterStatus !== "All" ||
       clientFilter !== "All" ||
-      leadFilter !== "All",
+      leadFilter !== "All" ||
+      typeFilter !== "All",
   );
 
   const clearProjectFilters = () => {
@@ -675,14 +782,76 @@ const Projects = ({ user }) => {
     setFilterStatus(getDefaultFilterStatus(viewMode));
     setClientFilter("All");
     setLeadFilter("All");
+    setTypeFilter("All");
     setCurrentPage(1);
+  };
+
+  const toggleProjectSelection = (projectIds, checked) => {
+    const normalizedIds = (Array.isArray(projectIds) ? projectIds : [projectIds]).filter(
+      Boolean,
+    );
+    setSelectedProjectIds((current) => {
+      const next = new Set(current);
+      normalizedIds.forEach((projectId) => {
+        if (checked) next.add(projectId);
+        else next.delete(projectId);
+      });
+      return Array.from(next);
+    });
+  };
+
+  const handleExportCsv = () => {
+    const projectsToExport = filteredOrderGroups.flatMap((group) =>
+      getGroupProjects(group).map((project) => ({ project, group })),
+    );
+    const rows = [
+      [
+        "Order ID",
+        "Project",
+        "Type",
+        "Client",
+        "Contact",
+        "Submitted",
+        "Deadline",
+        "Status",
+        "Departments",
+        "Lead",
+      ],
+      ...projectsToExport.map(({ project, group }) => [
+        project?.orderId || group?.orderNumber || "",
+        renderProjectName(project?.details, null, "Untitled"),
+        project?.projectType || "Standard",
+        project?.details?.client || group?.client || "",
+        project?.details?.clientEmail ||
+          project?.details?.clientPhone ||
+          group?.clientEmail ||
+          group?.clientPhone ||
+          "",
+        formatDate(project?.orderDate || project?.createdAt),
+        formatDate(project?.details?.deliveryDate),
+        getProjectStatusDisplay(project),
+        (project?.departments || []).map(getDepartmentLabel).join(" / "),
+        getLeadDisplay(project, "Unassigned"),
+      ]),
+    ];
+    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${isFinishedView ? "finished" : "active"}-projects-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(totalPages);
     }
-  }, [currentPage, totalPages]);
+  }, [currentPage, setCurrentPage, totalPages]);
 
   const toggleOrderGroup = (groupKey) => {
     if (!groupKey) return;
@@ -762,37 +931,96 @@ const Projects = ({ user }) => {
       .toUpperCase();
   };
 
-  const renderPeopleCell = (lead, client) => (
-    <div className="project-people-cell">
-      <span className="project-person-avatar" aria-hidden="true">
-        {getInitials(lead)}
-      </span>
-      <span className="project-person-copy">
-        <strong>{lead || "Unassigned"}</strong>
+  const getProjectDescriptor = (project) => {
+    const items = Array.isArray(project?.items) ? project.items : [];
+    const totalQuantity = items.reduce(
+      (sum, item) => sum + (Number(item?.qty) || 0),
+      0,
+    );
+    const parts = [];
+    if (items[0]?.description) parts.push(items[0].description);
+    if (items.length > 1) parts.push(`${items.length} line items`);
+    if (totalQuantity > 0) parts.push(`${totalQuantity.toLocaleString()} units`);
+    return parts.join(" · ") || project?.projectType || "Project order";
+  };
+
+  const renderClientCell = (project, group) => {
+    const client = project?.details?.client || group?.client || "Unknown client";
+    const contact =
+      project?.details?.clientEmail ||
+      project?.details?.clientPhone ||
+      group?.clientEmail ||
+      group?.clientPhone ||
+      "No contact recorded";
+    return (
+      <div className="project-client-cell">
+        <span className="project-person-avatar" aria-hidden="true">
+          {getInitials(client)}
+        </span>
+        <span className="project-person-copy">
+          <strong>{client}</strong>
+          <small>{contact}</small>
+        </span>
+      </div>
+    );
+  };
+
+  const renderScheduleCell = (project) => {
+    const urgent = isUrgentProject(project);
+    return (
+      <div className="project-schedule-cell">
+        <span>
+          <small>Submitted</small>
+          <strong>{formatDate(project?.orderDate || project?.createdAt)}</strong>
+        </span>
+        <span className={urgent ? "is-urgent" : ""}>
+          <small>{isDueToday(project) ? "Due today" : "Deadline"}</small>
+          <strong>
+            {formatDate(project?.details?.deliveryDate)}
+            {project?.details?.deliveryTime
+              ? ` · ${formatTime(project.details.deliveryTime)}`
+              : ""}
+          </strong>
+        </span>
+      </div>
+    );
+  };
+
+  const renderWorkflowCell = (project) => {
+    const status = getProjectStatusDisplay(project) || "Draft";
+    const progress = getWorkflowProgress(project);
+    const departments = Array.isArray(project?.departments)
+      ? project.departments.map(getDepartmentLabel).filter(Boolean)
+      : [];
+    return (
+      <div className="project-workflow-cell">
+        <div>
+          <strong>{status}</strong>
+          <span>{progress}%</span>
+        </div>
+        <div className="project-progress-track" aria-label={`${progress}% workflow progress`}>
+          <span style={{ width: `${progress}%` }} />
+        </div>
         <small>
-          <span>Client</span>
-          {client || "-"}
+          {departments.length > 0
+            ? departments.slice(0, 2).join(" / ")
+            : "Department not assigned"}
         </small>
-      </span>
-    </div>
-  );
+      </div>
+    );
+  };
 
-  const renderTimelineCell = (date, time, { grouped = false } = {}) => (
-    <div className="project-timeline-cell">
-      <strong>{formatDate(date)}</strong>
-      <small>
-        <span>{grouped ? "Order received" : "Received"}</span>
-        {grouped ? "Multiple times" : formatTime(time)}
-      </small>
-    </div>
-  );
-
-  const renderStatusBadge = (status, className = getStatusClass(status)) => (
-    <span className={`status-badge ${className}`} title={status || "Draft"}>
-      <span className="status-badge-dot" aria-hidden="true" />
-      <span>{status || "Draft"}</span>
-    </span>
-  );
+  const renderLeadCell = (project) => {
+    const lead = getLeadDisplay(project, "Unassigned");
+    return (
+      <div className="project-lead-cell">
+        <span className="project-person-avatar" aria-hidden="true">
+          {getInitials(lead)}
+        </span>
+        <strong>{lead}</strong>
+      </div>
+    );
+  };
 
   const canDeleteProject = (project) =>
     !(
@@ -806,7 +1034,10 @@ const Projects = ({ user }) => {
       <button
         type="button"
         className="project-open-btn"
-        onClick={() => openProjectDetails(project)}
+        onClick={(event) => {
+          event.stopPropagation();
+          openProjectDetails(project);
+        }}
       >
         <span>Open</span>
         <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -827,36 +1058,152 @@ const Projects = ({ user }) => {
     </div>
   );
 
+  const handleRowKeyDown = (event, openRow) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openRow();
+  };
+
+  const pipelineCards = [
+    {
+      key: "queue",
+      tone: "indigo",
+      icon: "queue",
+      label: "Active queue load",
+      value: pipelineSummary.active,
+      unit: "projects booked",
+      left: `${pipelineSummary.onSchedule} on schedule`,
+      right: `${pipelineSummary.flagged} flagged`,
+      progress: pipelineSummary.active
+        ? Math.round((pipelineSummary.onSchedule / pipelineSummary.active) * 100)
+        : 0,
+    },
+    {
+      key: "proofing",
+      tone: "amber",
+      icon: "proofing",
+      label: "Pending mockup & proofing",
+      value: pipelineSummary.pendingProofing,
+      unit: "projects awaiting review",
+      left: "Client or team sign-off",
+      right: `${pipelineSummary.proofingUrgent} urgent`,
+      progress: pipelineSummary.active
+        ? Math.round((pipelineSummary.pendingProofing / pipelineSummary.active) * 100)
+        : 0,
+    },
+    {
+      key: "production",
+      tone: "emerald",
+      icon: "production",
+      label: "In production / fabrication",
+      value: pipelineSummary.production,
+      unit: "projects in production",
+      left: `${pipelineSummary.productionDepartments} departments active`,
+      right: `${pipelineSummary.productionOnTrackPercent}% on track`,
+      progress: pipelineSummary.productionOnTrackPercent,
+    },
+    {
+      key: "dispatch",
+      tone: "violet",
+      icon: "dispatch",
+      label: "Ready for dispatch / pickup",
+      value: pipelineSummary.dispatch,
+      unit: "projects staged",
+      left: "Delivery queue",
+      right: `${pipelineSummary.dispatchDueToday} due today`,
+      progress: pipelineSummary.active
+        ? Math.round((pipelineSummary.dispatch / pipelineSummary.active) * 100)
+        : 0,
+    },
+  ];
+
+  const paginationPages = Array.from({ length: totalPages }, (_, index) => index + 1)
+    .filter(
+      (page) =>
+        page === 1 ||
+        page === totalPages ||
+        Math.abs(page - currentPage) <= 1,
+    );
+  const selectedStatusLabel =
+    pageConfig.statusOptions.find((option) => option.value === filterStatus)?.label ||
+    filterStatus;
+
   return (
     <div className="projects-page">
       <div className="projects-header">
         <div className="projects-header-copy">
-          <h1>
-            <ProjectsIcon className="text-secondary" /> {pageConfig.title}
-          </h1>
-          <p>{pageConfig.description}</p>
+          <div className="projects-title-line">
+            <h1>
+              {isFinishedView
+                ? "Finished Projects & Production Orders"
+                : "Projects & Production Orders"}
+            </h1>
+            <span>Live pipeline</span>
+          </div>
+          <p>
+            {isFinishedView
+              ? pageConfig.description
+              : "Active production orders, fabrication pipelines, and departmental deliverables."}
+          </p>
         </div>
-        <div className="projects-view-toggle" aria-label="Project views">
-          <button
-            type="button"
-            className={`projects-view-btn ${
-              !isFinishedView ? "active" : ""
-            }`}
-            onClick={() => handleViewModeChange("active")}
-          >
-            Active Projects ({projectCounts.active})
+        <div className="projects-header-actions">
+          <div className="projects-view-toggle" aria-label="Project views">
+            <button
+              type="button"
+              className={`projects-view-btn ${!isFinishedView ? "active" : ""}`}
+              onClick={() => handleViewModeChange("active")}
+            >
+              Active Projects <span>{projectCounts.active}</span>
+            </button>
+            <button
+              type="button"
+              className={`projects-view-btn ${isFinishedView ? "active" : ""}`}
+              onClick={() => handleViewModeChange("finished")}
+            >
+              Finished Projects <span>{projectCounts.finished}</span>
+            </button>
+          </div>
+          <button type="button" className="projects-export-btn" onClick={handleExportCsv}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+              <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3" />
+            </svg>
+            Export CSV
           </button>
           <button
             type="button"
-            className={`projects-view-btn ${
-              isFinishedView ? "active" : ""
-            }`}
-            onClick={() => handleViewModeChange("finished")}
+            className="projects-create-btn"
+            onClick={() => navigate("/new-orders/form")}
           >
-            Finished Projects ({projectCounts.finished})
+            <span aria-hidden="true">+</span> New Project / Order
           </button>
         </div>
       </div>
+
+      <section className="projects-pipeline-cards" aria-label="Production pipeline summary">
+        {pipelineCards.map((card) => (
+          <article key={card.key} className={`projects-pipeline-card tone-${card.tone}`}>
+            <div className="projects-pipeline-card-top">
+              <span className="projects-pipeline-icon">
+                <PipelineIcon type={card.icon} />
+              </span>
+              <span className="projects-pipeline-badge">{card.right}</span>
+            </div>
+            <span className="projects-pipeline-label">{card.label}</span>
+            <div className="projects-pipeline-value">
+              <strong>{card.value.toLocaleString()}</strong>
+              <span>{card.unit}</span>
+            </div>
+            <div className="projects-pipeline-meta">
+              <span>{card.left}</span>
+              <span>{card.right}</span>
+            </div>
+            <div className="projects-pipeline-track">
+              <span style={{ width: `${Math.min(100, Math.max(0, card.progress))}%` }} />
+            </div>
+          </article>
+        ))}
+      </section>
 
       <div className="projects-table-container">
         <div className="table-controls">
@@ -864,8 +1211,8 @@ const Projects = ({ user }) => {
             <div className="search-pill-wrapper">
               <input
                 type="text"
-                placeholder="Search by order number"
-                aria-label="Search projects by order number"
+                placeholder="Search by order, job title, client name, or lead..."
+                aria-label="Search projects"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -938,6 +1285,23 @@ const Projects = ({ user }) => {
                 </option>
               ))}
             </select>
+
+            <select
+              aria-label="Filter projects by type"
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="filter-pill"
+            >
+              <option value="All">Type: Any</option>
+              {uniqueTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="table-toolbar-meta">
             {hasActiveFilters && (
@@ -950,12 +1314,23 @@ const Projects = ({ user }) => {
               </button>
             )}
             <div className="result-count" aria-live="polite">
-              <strong>{paginatedOrderGroups.length}</strong> shown
-              <span aria-hidden="true">/</span>
-              {filteredOrderGroups.length} total
+              Showing <strong>{paginatedOrderGroups.length}</strong> of{" "}
+              {filteredOrderGroups.length} orders
             </div>
           </div>
         </div>
+
+        {hasActiveFilters && (
+          <div className="projects-filter-summary">
+            <span>Filtered by:</span>
+            {filterStatus !== "All" && <strong>Status: {selectedStatusLabel}</strong>}
+            {clientFilter !== "All" && <strong>Client: {clientFilter}</strong>}
+            {leadFilter !== "All" && <strong>Lead: {leadFilter}</strong>}
+            {typeFilter !== "All" && <strong>Type: {typeFilter}</strong>}
+            {searchQuery && <strong>Search: {searchQuery}</strong>}
+            <button type="button" onClick={clearProjectFilters}>Reset filters</button>
+          </div>
+        )}
 
         {loading ? (
           <div className="loading-state">{pageConfig.loadingLabel}</div>
@@ -966,11 +1341,22 @@ const Projects = ({ user }) => {
             <table className="projects-table">
               <thead>
                 <tr>
-                  <th>Project</th>
-                  <th>Type</th>
-                  <th>People</th>
-                  <th>Timeline</th>
-                  <th>Status</th>
+                  <th className="projects-select-column">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all projects on this page"
+                      checked={allVisibleSelected}
+                      onChange={(event) =>
+                        toggleProjectSelection(visibleProjectIds, event.target.checked)
+                      }
+                    />
+                  </th>
+                  <th>Order ID &amp; job description</th>
+                  <th>Priority / type</th>
+                  <th>Client &amp; contact</th>
+                  <th>Submitted &amp; deadline</th>
+                  <th>Department &amp; progress</th>
+                  <th>Assigned lead</th>
                   <th aria-label="Actions" />
                 </tr>
               </thead>
@@ -984,7 +1370,6 @@ const Projects = ({ user }) => {
                   if (!primaryProject) return null;
 
                   const groupClient = getGroupClient(group, projectsInGroup);
-                  const groupStatus = getGroupStatusSummary(projectsInGroup);
                   const expanded = Boolean(expandedOrderGroups[groupKey]);
                   const isCollapsing = Boolean(collapsingOrderGroups[groupKey]);
                   const showGroupChildren = expanded || isCollapsing;
@@ -998,16 +1383,33 @@ const Projects = ({ user }) => {
 
                   if (!isGrouped) {
                     const project = primaryProject;
-                    const projectStatus = getProjectStatusDisplay(project);
                     const orderNumber =
                       project.orderId || group?.orderNumber || "N/A";
                     return (
                       <tr
                         key={project._id}
-                        className={`project-operation-row ${
+                        className={`project-operation-row is-clickable ${
                           isEmergencyProject(project) ? "is-emergency" : ""
                         }`}
+                        role="link"
+                        tabIndex={0}
+                        aria-label={`Open ${renderProjectName(project.details, null, "project")}`}
+                        onClick={() => openProjectDetails(project)}
+                        onKeyDown={(event) =>
+                          handleRowKeyDown(event, () => openProjectDetails(project))
+                        }
                       >
+                        <td className="projects-select-column">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select project ${orderNumber}`}
+                            checked={selectedProjectIds.includes(project._id)}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) =>
+                              toggleProjectSelection(project._id, event.target.checked)
+                            }
+                          />
+                        </td>
                         <td className="operations-project-cell">
                           <div className="project-identity">
                             <div className="project-identity-meta">
@@ -1025,25 +1427,25 @@ const Projects = ({ user }) => {
                                 "Untitled",
                               )}
                             </strong>
+                            <small className="project-description">
+                              {getProjectDescriptor(project)}
+                            </small>
                           </div>
                         </td>
                         <td className="operations-type-cell">
                           {renderTypeBadge(project.projectType)}
                         </td>
-                        <td className="operations-people-column">
-                          {renderPeopleCell(
-                            getLeadDisplay(project, "Unassigned"),
-                            groupClient,
-                          )}
+                        <td className="operations-client-column">
+                          {renderClientCell(project, group)}
                         </td>
-                        <td className="operations-timeline-column">
-                          {renderTimelineCell(
-                            project.orderDate || project.createdAt,
-                            project.receivedTime,
-                          )}
+                        <td className="operations-schedule-column">
+                          {renderScheduleCell(project)}
                         </td>
-                        <td className="operations-status-cell">
-                          {renderStatusBadge(projectStatus)}
+                        <td className="operations-workflow-column">
+                          {renderWorkflowCell(project)}
+                        </td>
+                        <td className="operations-lead-column">
+                          {renderLeadCell(project)}
                         </td>
                         <td className="operations-actions-cell">
                           {renderProjectActions(project)}
@@ -1054,7 +1456,32 @@ const Projects = ({ user }) => {
 
                   return (
                     <React.Fragment key={groupKey}>
-                      <tr className="project-group-header-row">
+                      <tr
+                        className="project-group-header-row is-clickable"
+                        role="link"
+                        tabIndex={0}
+                        aria-label={`Open order ${group?.orderNumber || "N/A"}`}
+                        onClick={() => openOrderGroup(group?.orderNumber)}
+                        onKeyDown={(event) =>
+                          handleRowKeyDown(event, () => openOrderGroup(group?.orderNumber))
+                        }
+                      >
+                        <td className="projects-select-column">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select order ${group?.orderNumber || "N/A"}`}
+                            checked={projectsInGroup.every((project) =>
+                              selectedProjectIds.includes(project._id),
+                            )}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) =>
+                              toggleProjectSelection(
+                                projectsInGroup.map((project) => project._id),
+                                event.target.checked,
+                              )
+                            }
+                          />
+                        </td>
                         <td className="operations-project-cell">
                           <div className="project-group-identity">
                             <button
@@ -1062,7 +1489,10 @@ const Projects = ({ user }) => {
                               className={`project-group-toggle-btn ${
                                 expanded ? "is-expanded" : ""
                               }`}
-                              onClick={() => toggleOrderGroup(groupKey)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleOrderGroup(groupKey);
+                              }}
                               aria-expanded={expanded}
                               aria-label={`${expanded ? "Collapse" : "Expand"} order ${
                                 group?.orderNumber || "N/A"
@@ -1082,12 +1512,12 @@ const Projects = ({ user }) => {
                                 </span>
                               </div>
                               <strong className="project-title">
-                                Grouped order
+                                {groupClient}
                               </strong>
                               <small className="project-group-subtitle">
                                 {expanded
                                   ? "Showing every project in this order"
-                                  : "Expand to review the individual projects"}
+                                  : `${projectsInGroup.length} linked production projects`}
                               </small>
                             </div>
                           </div>
@@ -1100,29 +1530,29 @@ const Projects = ({ user }) => {
                                 `Mixed (${groupTypes.length})`,
                               )}
                         </td>
-                        <td className="operations-people-column">
-                          {renderPeopleCell("Multiple leads", groupClient)}
+                        <td className="operations-client-column">
+                          {renderClientCell(primaryProject, group)}
                         </td>
-                        <td className="operations-timeline-column">
-                          {renderTimelineCell(
-                            group?.orderDate ||
-                              primaryProject?.orderDate ||
-                              primaryProject?.createdAt,
-                            null,
-                            { grouped: true },
-                          )}
+                        <td className="operations-schedule-column">
+                          {renderScheduleCell(primaryProject)}
                         </td>
-                        <td className="operations-status-cell">
-                          {renderStatusBadge(
-                            groupStatus.label,
-                            groupStatus.className,
-                          )}
+                        <td className="operations-workflow-column">
+                          {renderWorkflowCell(primaryProject)}
+                        </td>
+                        <td className="operations-lead-column">
+                          <div className="project-lead-cell">
+                            <span className="project-person-avatar" aria-hidden="true">ML</span>
+                            <strong>Multiple leads</strong>
+                          </div>
                         </td>
                         <td className="operations-actions-cell">
                           <button
                             type="button"
                             className="project-open-btn project-group-open-btn"
-                            onClick={() => openOrderGroup(group?.orderNumber)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openOrderGroup(group?.orderNumber);
+                            }}
                           >
                             <span>View group</span>
                             <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -1134,8 +1564,6 @@ const Projects = ({ user }) => {
 
                       {showGroupChildren &&
                         projectsInGroup.map((project, projectIndex) => {
-                          const projectStatus =
-                            getProjectStatusDisplay(project);
                           return (
                             <tr
                               key={project._id}
@@ -1147,8 +1575,29 @@ const Projects = ({ user }) => {
                                 isEmergencyProject(project)
                                   ? "is-emergency"
                                   : ""
-                              }`}
+                              } is-clickable`}
+                              role="link"
+                              tabIndex={0}
+                              aria-label={`Open ${renderProjectName(project.details, null, "project")}`}
+                              onClick={() => openProjectDetails(project)}
+                              onKeyDown={(event) =>
+                                handleRowKeyDown(event, () => openProjectDetails(project))
+                              }
                             >
+                              <td className="projects-select-column">
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Select project ${projectIndex + 1}`}
+                                  checked={selectedProjectIds.includes(project._id)}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onChange={(event) =>
+                                    toggleProjectSelection(
+                                      project._id,
+                                      event.target.checked,
+                                    )
+                                  }
+                                />
+                              </td>
                               <td className="operations-project-cell">
                                 <div className="project-child-identity">
                                   <span
@@ -1169,26 +1618,26 @@ const Projects = ({ user }) => {
                                         "Untitled",
                                       )}
                                     </strong>
+                                    <small className="project-description">
+                                      {getProjectDescriptor(project)}
+                                    </small>
                                   </div>
                                 </div>
                               </td>
                               <td className="operations-type-cell">
                                 {renderTypeBadge(project.projectType)}
                               </td>
-                              <td className="operations-people-column">
-                                {renderPeopleCell(
-                                  getLeadDisplay(project, "Unassigned"),
-                                  project.details?.client || groupClient,
-                                )}
+                              <td className="operations-client-column">
+                                {renderClientCell(project, group)}
                               </td>
-                              <td className="operations-timeline-column">
-                                {renderTimelineCell(
-                                  project.orderDate || project.createdAt,
-                                  project.receivedTime,
-                                )}
+                              <td className="operations-schedule-column">
+                                {renderScheduleCell(project)}
                               </td>
-                              <td className="operations-status-cell">
-                                {renderStatusBadge(projectStatus)}
+                              <td className="operations-workflow-column">
+                                {renderWorkflowCell(project)}
+                              </td>
+                              <td className="operations-lead-column">
+                                {renderLeadCell(project)}
                               </td>
                               <td className="operations-actions-cell">
                                 {renderProjectActions(project)}
@@ -1202,30 +1651,54 @@ const Projects = ({ user }) => {
               </tbody>
             </table>
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="pagination-container">
-                <button
-                  className="pagination-btn"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                >
-                  Prev
-                </button>
-                <span className="pagination-info">
-                  Page {currentPage} of {totalPages}
+            <div className="pagination-container">
+              <div className="pagination-info">
+                <span>
+                  Showing {indexOfFirstItem + 1}–
+                  {Math.min(indexOfLastItem, filteredOrderGroups.length)} of{" "}
+                  {filteredOrderGroups.length} orders
                 </span>
+                <span>Rows per page: <strong>{itemsPerPage}</strong></span>
+                {selectedProjectIds.length > 0 && (
+                  <span>{selectedProjectIds.length} projects selected</span>
+                )}
+              </div>
+              <div className="pagination-pages" aria-label="Pagination">
                 <button
-                  className="pagination-btn"
+                  className="pagination-btn pagination-arrow"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  aria-label="Previous page"
+                >
+                  ‹
+                </button>
+                {paginationPages.map((page, index) => (
+                  <React.Fragment key={page}>
+                    {index > 0 && page - paginationPages[index - 1] > 1 && (
+                      <span className="pagination-ellipsis">…</span>
+                    )}
+                    <button
+                      type="button"
+                      className={`pagination-btn ${page === currentPage ? "active" : ""}`}
+                      onClick={() => setCurrentPage(page)}
+                      aria-current={page === currentPage ? "page" : undefined}
+                    >
+                      {page}
+                    </button>
+                  </React.Fragment>
+                ))}
+                <button
+                  className="pagination-btn pagination-arrow"
                   disabled={currentPage === totalPages}
                   onClick={() =>
-                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    setCurrentPage((page) => Math.min(totalPages, page + 1))
                   }
+                  aria-label="Next page"
                 >
-                  Next
+                  ›
                 </button>
               </div>
-            )}
+            </div>
           </>
         )}
       </div>
