@@ -10078,6 +10078,10 @@ const getOrderGroups = async (req, res) => {
     const projects = await populateMockupUploaders(
       Project.find(query)
         .populate("createdBy", "firstName lastName")
+        .populate(
+          "cancellation.cancelledBy",
+          "firstName lastName employeeId avatarUrl",
+        )
         .populate("projectLeadId", "firstName lastName avatarUrl")
         .populate(
           "assistantLeadId",
