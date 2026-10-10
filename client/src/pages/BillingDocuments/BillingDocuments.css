@@ -1353,6 +1353,26 @@
   }
 }
 
+@media print {
+  .billing-preview-shell {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .billing-preview-toolbar {
+    display: none !important;
+  }
+}
+
 @page {
   size: A4 portrait;
   margin: 0;
@@ -1823,5 +1843,589 @@
 @media screen and (max-width: 1024px) {
   .billing-documents-page.admin-portal {
     --billing-admin-sidebar-width: 0px;
+  }
+}
+
+/* Admin billing studio redesign */
+@media screen {
+  .billing-documents-page.admin-portal {
+    --billing-bg: #f7f7fc;
+    --billing-card: #ffffff;
+    --billing-surface-alt: #f5f6ff;
+    --billing-input: #f3f4ff;
+    --billing-border: #e5e7f1;
+    --billing-focus: #5658df;
+    --billing-primary: #5658df;
+    --billing-primary-hover: #4547c7;
+    --billing-primary-text: #ffffff;
+    --billing-primary-soft: #ededff;
+    --billing-text: #172033;
+    --billing-muted: #687184;
+    --billing-faint: #9199aa;
+    --billing-success: #05865f;
+    --billing-success-soft: #e5f8f0;
+    --billing-danger: #c52a3a;
+    --billing-danger-soft: #ffedef;
+    --billing-danger-border: #ffd5da;
+    --billing-warning: #b86b00;
+    --billing-warning-soft: #fff1dc;
+    --billing-preview-top: 76px;
+    width: 100%;
+    max-width: 1800px;
+    padding: 0;
+  }
+
+  html[data-admin-theme="dark"] .billing-documents-page.admin-portal {
+    --billing-bg: #0f192b;
+    --billing-card: #182337;
+    --billing-surface-alt: #111c2f;
+    --billing-input: #101a2c;
+    --billing-border: #2c3a50;
+    --billing-focus: #818cf8;
+    --billing-primary: #7378f2;
+    --billing-primary-hover: #8a8ef8;
+    --billing-primary-text: #ffffff;
+    --billing-primary-soft: rgba(99, 102, 241, 0.16);
+    --billing-text: #f7f9fc;
+    --billing-muted: #aab7ca;
+    --billing-faint: #7f91aa;
+    --billing-success: #34d399;
+    --billing-success-soft: rgba(16, 185, 129, 0.15);
+    --billing-danger: #fb7185;
+    --billing-danger-soft: rgba(239, 68, 68, 0.14);
+    --billing-danger-border: rgba(251, 113, 133, 0.3);
+    --billing-warning: #fbbf24;
+    --billing-warning-soft: rgba(245, 158, 11, 0.14);
+  }
+
+  .billing-documents-page.admin-portal .billing-documents-header {
+    align-items: flex-start;
+    gap: 1rem;
+    margin: 0 0 12px;
+  }
+
+  .billing-documents-page.admin-portal .billing-eyebrow {
+    margin-bottom: 5px;
+    color: var(--billing-faint);
+    font-size: 0.52rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+  }
+
+  .billing-title-line {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .billing-documents-page.admin-portal .billing-documents-header h1 {
+    margin: 0;
+    color: var(--billing-text);
+    font-size: clamp(1.28rem, 2vw, 1.65rem);
+    font-weight: 760;
+    letter-spacing: -0.035em;
+    line-height: 1.15;
+  }
+
+  .billing-documents-page.admin-portal .billing-documents-header p {
+    margin-top: 4px;
+    color: var(--billing-muted);
+    font-size: 0.66rem;
+  }
+
+  .billing-documents-page.admin-portal .billing-title-line .billing-status-badge {
+    padding: 3px 7px;
+    font-size: 0.48rem;
+  }
+
+  .billing-documents-page.admin-portal .billing-header-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .billing-documents-page.admin-portal .billing-primary-button,
+  .billing-documents-page.admin-portal .billing-secondary-button {
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 0.57rem;
+    font-weight: 720;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .billing-documents-page.admin-portal .billing-header-actions svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .billing-studio-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .billing-studio-metric {
+    --metric-color: var(--billing-primary);
+    --metric-soft: var(--billing-primary-soft);
+    min-width: 0;
+    min-height: 105px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: start;
+    gap: 4px 8px;
+    padding: 13px 14px;
+    border: 1px solid var(--billing-border);
+    border-radius: 13px;
+    background: var(--billing-card);
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.025);
+  }
+
+  .billing-studio-metric.green {
+    --metric-color: var(--billing-success);
+    --metric-soft: var(--billing-success-soft);
+  }
+
+  .billing-studio-metric.slate {
+    --metric-color: #64748b;
+    --metric-soft: #eef1f6;
+  }
+
+  html[data-admin-theme="dark"] .billing-studio-metric.slate {
+    --metric-color: #aab7ca;
+    --metric-soft: rgba(148, 163, 184, 0.12);
+  }
+
+  .billing-studio-metric.amber {
+    --metric-color: var(--billing-warning);
+    --metric-soft: var(--billing-warning-soft);
+  }
+
+  .billing-studio-metric > span:not(.billing-studio-metric-icon) {
+    align-self: center;
+    color: var(--billing-muted);
+    font-size: 0.51rem;
+    font-weight: 720;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+  }
+
+  .billing-studio-metric-icon {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    border-radius: 8px;
+    background: var(--metric-soft);
+    color: var(--metric-color);
+  }
+
+  .billing-studio-metric-icon svg {
+    width: 15px;
+    height: 15px;
+    stroke-width: 1.7;
+  }
+
+  .billing-studio-metric strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--billing-text);
+    font-size: clamp(0.96rem, 1.45vw, 1.3rem);
+    font-weight: 760;
+    letter-spacing: -0.035em;
+    text-overflow: ellipsis;
+    text-transform: capitalize;
+    white-space: nowrap;
+  }
+
+  .billing-studio-metric small {
+    grid-column: 1 / -1;
+    color: var(--metric-color);
+    font-size: 0.5rem;
+    font-weight: 650;
+  }
+
+  .billing-documents-page.admin-portal .billing-document-editor {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .billing-documents-page.admin-portal .billing-editor-header {
+    position: relative;
+    z-index: 2;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--billing-border);
+    border-radius: 12px;
+    background: var(--billing-card);
+  }
+
+  .billing-documents-page.admin-portal .billing-editor-header > div:first-child span {
+    color: var(--billing-primary);
+    font-size: 0.47rem;
+    letter-spacing: 0.04em;
+  }
+
+  .billing-documents-page.admin-portal .billing-editor-header h2 {
+    margin: 2px 0 0;
+    color: var(--billing-text);
+    font-size: 0.78rem;
+    font-weight: 730;
+  }
+
+  .billing-documents-page.admin-portal .billing-editor-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .billing-documents-page.admin-portal .billing-editor-grid {
+    grid-template-columns: minmax(0, 1.45fr) minmax(420px, 0.95fr);
+    gap: 12px;
+    padding: 0;
+  }
+
+  .billing-documents-page.admin-portal .billing-form {
+    counter-reset: billing-section;
+    gap: 12px;
+  }
+
+  .billing-documents-page.admin-portal .billing-form fieldset {
+    counter-increment: billing-section;
+    gap: 10px;
+    padding: 14px;
+    border-color: var(--billing-border);
+    border-radius: 12px;
+    background: var(--billing-card);
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.025);
+  }
+
+  .billing-documents-page.admin-portal .billing-form legend {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 5px 0 0;
+    color: var(--billing-text);
+    font-size: 0.69rem;
+    font-variant: normal;
+    font-weight: 740;
+  }
+
+  .billing-documents-page.admin-portal .billing-form legend::before {
+    width: 24px;
+    height: 24px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 7px;
+    background: var(--billing-primary-soft);
+    color: var(--billing-primary);
+    content: counter(billing-section, decimal-leading-zero);
+    font-size: 0.5rem;
+    font-weight: 780;
+  }
+
+  .billing-documents-page.admin-portal .billing-form label,
+  .billing-documents-page.admin-portal .billing-documents-toolbar label {
+    gap: 4px;
+    color: var(--billing-muted);
+    font-size: 0.5rem;
+    font-weight: 720;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+  }
+
+  .billing-documents-page.admin-portal .billing-form input,
+  .billing-documents-page.admin-portal .billing-form select,
+  .billing-documents-page.admin-portal .billing-form textarea,
+  .billing-documents-page.admin-portal .billing-documents-toolbar input,
+  .billing-documents-page.admin-portal .billing-documents-toolbar select {
+    min-height: 34px;
+    box-sizing: border-box;
+    padding: 7px 9px;
+    border-color: var(--billing-border);
+    border-radius: 8px;
+    background: var(--billing-input);
+    color: var(--billing-text);
+    font-size: 0.59rem;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .billing-documents-page.admin-portal .billing-form textarea {
+    min-height: 62px;
+    line-height: 1.45;
+  }
+
+  .billing-documents-page.admin-portal .billing-item-row,
+  .billing-documents-page.admin-portal .billing-payment-row,
+  .billing-documents-page.admin-portal .billing-tax-row,
+  .billing-documents-page.admin-portal .billing-receipt-editor,
+  .billing-documents-page.admin-portal .billing-receipt-row,
+  .billing-documents-page.admin-portal .billing-linked-waybill-row,
+  .billing-documents-page.admin-portal .billing-source-loader {
+    gap: 8px;
+    padding: 9px;
+    border-color: var(--billing-border);
+    border-radius: 9px;
+    background: var(--billing-surface-alt);
+  }
+
+  .billing-documents-page.admin-portal .billing-item-row {
+    grid-template-columns: minmax(0, 1fr) 68px 92px 86px 30px;
+  }
+
+  .billing-documents-page.admin-portal .billing-item-row.waybill-item-row {
+    grid-template-columns: minmax(0, 1fr) 72px 100px 30px;
+  }
+
+  .billing-documents-page.admin-portal .billing-item-total,
+  .billing-documents-page.admin-portal .billing-tax-amount {
+    min-height: 50px;
+    font-size: 0.5rem;
+  }
+
+  .billing-documents-page.admin-portal .billing-item-total strong,
+  .billing-documents-page.admin-portal .billing-tax-amount strong {
+    font-size: 0.64rem;
+  }
+
+  .billing-documents-page.admin-portal .billing-icon-button {
+    width: 29px;
+    height: 29px;
+    border-radius: 7px;
+  }
+
+  .billing-preview-shell {
+    position: sticky;
+    top: var(--billing-preview-top);
+    min-width: 0;
+    max-height: calc(100vh - var(--billing-preview-top) - 1rem);
+    display: flex;
+    flex-direction: column;
+    align-self: start;
+    overflow: hidden;
+    border: 1px solid var(--billing-border);
+    border-radius: 12px;
+    background: var(--billing-surface-alt);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+  }
+
+  .billing-preview-toolbar {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 11px;
+    border-bottom: 1px solid var(--billing-border);
+    background: var(--billing-card);
+  }
+
+  .billing-preview-toolbar span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--billing-text);
+    font-size: 0.54rem;
+    font-weight: 700;
+  }
+
+  .billing-preview-toolbar i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--billing-success);
+  }
+
+  .billing-preview-toolbar small {
+    color: var(--billing-faint);
+    font-size: 0.48rem;
+  }
+
+  .billing-documents-page.admin-portal .billing-preview-pane {
+    position: static;
+    flex: 1 1 auto;
+    max-height: none;
+    overflow: auto;
+    padding: 10px;
+    border: 0;
+    border-radius: 0;
+    background: var(--billing-surface-alt);
+    box-shadow: none;
+  }
+
+  .billing-documents-page.admin-portal .billing-paper {
+    min-height: 920px;
+    padding: 27px 25px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.1);
+    font-size: 10px;
+  }
+
+  .billing-documents-page.admin-portal .billing-paper-header h2 {
+    font-size: 24px;
+  }
+
+  .billing-documents-page.admin-portal .billing-mh-logo,
+  .billing-documents-page.admin-portal .billing-magic-gifts-logo {
+    width: 145px;
+  }
+
+  .billing-document-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    border: 0;
+    background: rgba(15, 23, 42, 0.36);
+    backdrop-filter: blur(2px);
+    cursor: default;
+  }
+
+  .billing-documents-page.admin-portal .billing-document-list {
+    position: fixed;
+    inset: 66px 0 auto auto;
+    z-index: 1100;
+    width: min(430px, calc(100vw - 24px));
+    max-height: calc(100vh - 82px);
+    border-radius: 14px 0 0 14px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(105%);
+    transition: transform 180ms ease, opacity 180ms ease, visibility 180ms ease;
+  }
+
+  .billing-documents-page.admin-portal .billing-document-list:hover,
+  .billing-documents-page.admin-portal .billing-document-list:focus-within {
+    transform: translateX(105%);
+  }
+
+  .billing-documents-page.admin-portal .billing-document-list.is-open,
+  .billing-documents-page.admin-portal .billing-document-list.is-open:hover,
+  .billing-documents-page.admin-portal .billing-document-list.is-open:focus-within {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+    box-shadow: -18px 20px 48px rgba(15, 23, 42, 0.22);
+  }
+
+  .billing-documents-page.admin-portal .billing-document-list::after {
+    display: none;
+  }
+
+  .billing-documents-page.admin-portal .billing-list-header {
+    align-items: center;
+    padding: 12px 13px;
+    background: var(--billing-card);
+  }
+
+  .billing-list-header > div {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .billing-list-header > div > strong {
+    color: var(--billing-text);
+    font-size: 0.72rem;
+  }
+
+  .billing-list-close {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--billing-border);
+    border-radius: 8px;
+    background: var(--billing-surface-alt);
+    color: var(--billing-muted);
+    font: inherit;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  .billing-documents-page.admin-portal .billing-documents-toolbar {
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(105px, 0.55fr));
+    gap: 7px;
+    padding: 10px;
+    background: var(--billing-surface-alt);
+  }
+
+  .billing-documents-page.admin-portal .billing-list-search {
+    grid-column: auto;
+  }
+
+  .billing-documents-page.admin-portal .billing-list-scroll {
+    padding: 7px;
+  }
+
+  .billing-documents-page.admin-portal .billing-list-item {
+    margin-bottom: 4px;
+    border-color: transparent;
+  }
+
+  .billing-documents-page.admin-portal .billing-list-select {
+    gap: 6px;
+    padding: 9px;
+    font-size: 0.6rem;
+  }
+
+  .billing-documents-page.admin-portal .billing-status-badge {
+    font-size: 0.47rem;
+  }
+}
+
+@media screen and (max-width: 1320px) {
+  .billing-studio-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .billing-documents-page.admin-portal .billing-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .billing-preview-shell {
+    position: static;
+    max-height: none;
+  }
+
+  .billing-documents-page.admin-portal .billing-preview-pane {
+    max-height: 880px;
+  }
+}
+
+@media screen and (max-width: 760px) {
+  .billing-documents-page.admin-portal .billing-documents-header,
+  .billing-documents-page.admin-portal .billing-header-actions,
+  .billing-documents-page.admin-portal .billing-editor-header,
+  .billing-documents-page.admin-portal .billing-editor-actions {
+    align-items: stretch;
+  }
+
+  .billing-studio-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .billing-documents-page.admin-portal .billing-documents-toolbar,
+  .billing-documents-page.admin-portal .billing-form fieldset,
+  .billing-documents-page.admin-portal .billing-item-row,
+  .billing-documents-page.admin-portal .billing-item-row.waybill-item-row,
+  .billing-documents-page.admin-portal .billing-payment-row,
+  .billing-documents-page.admin-portal .billing-tax-row,
+  .billing-documents-page.admin-portal .billing-receipt-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .billing-documents-page.admin-portal .billing-list-search {
+    grid-column: 1;
+  }
+
+  .billing-documents-page.admin-portal .billing-icon-button {
+    grid-column: auto;
   }
 }

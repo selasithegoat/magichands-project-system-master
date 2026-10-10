@@ -606,6 +606,21 @@ const PrinterIcon = () => (
   </svg>
 );
 
+const BillingStudioMetricIcon = ({ type }) => {
+  const paths = {
+    value: <><rect x="4" y="6" width="16" height="12" rx="2" /><path d="M8 12h8M12 9v6" /></>,
+    payment: <><path d="M5 8h14v10H5z" /><path d="M8 8V5h8v3M8 13h8" /></>,
+    balance: <><rect x="5" y="4" width="14" height="16" rx="2" /><path d="M9 9h6M9 13h6M9 17h3" /></>,
+    status: <><path d="M8 3h8M9 3v4l-3 5 3 5v4M15 3v4l3 5-3 5v4" /><path d="M9 17h6" /></>,
+  };
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+      {paths[type] || paths.value}
+    </svg>
+  );
+};
+
 const BillingPreview = ({ form, totals }) => {
   const meta = getMeta(form.documentType);
   const isInvoice = meta.kind === "invoice";
@@ -1065,6 +1080,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [isDocumentListOpen, setIsDocumentListOpen] = useState(false);
   const defaultDocumentsQueryKey = [
     "billing-documents",
     portalSource,
@@ -1114,6 +1130,33 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     0,
   );
   const hasMoreDocuments = remainingDocumentCount > 0;
+  const studioMetrics = useMemo(() => {
+    const itemCount = form.lineItems.length;
+    const totalUnits = form.lineItems.reduce(
+      (sum, item) => sum + toNumber(item.quantity, 0),
+      0,
+    );
+    const remainingUnits = form.lineItems.reduce(
+      (sum, item) => sum + calculateWaybillItemRemaining(item),
+      0,
+    );
+
+    if (formMeta.kind === "waybill") {
+      return [
+        { type: "value", label: "Line items", value: String(itemCount), detail: "Dispatch entries", tone: "indigo" },
+        { type: "payment", label: "Units dispatched", value: formatQuantity(totalUnits), detail: "Across this waybill", tone: "green" },
+        { type: "balance", label: "Units remaining", value: formatQuantity(remainingUnits), detail: "Available from source", tone: "slate" },
+        { type: "status", label: "Document status", value: String(form.status || "draft").replace(/_/g, " "), detail: form._id ? "Saved document" : "Unsaved draft", tone: "amber" },
+      ];
+    }
+
+    return [
+      { type: "value", label: "Total document value", value: `${CURRENCY_SYMBOL} ${formatMoney(totals.totalAmount)}`, detail: `${itemCount} line item${itemCount === 1 ? "" : "s"}`, tone: "indigo" },
+      { type: "payment", label: formMeta.kind === "invoice" ? "Payments received" : "Tax value", value: `${CURRENCY_SYMBOL} ${formatMoney(formMeta.kind === "invoice" ? totals.paidAmount : totals.taxAmount)}`, detail: formMeta.kind === "invoice" ? `${receipts.length} linked receipt${receipts.length === 1 ? "" : "s"}` : `${totals.taxEntries.length} tax line${totals.taxEntries.length === 1 ? "" : "s"}`, tone: "green" },
+      { type: "balance", label: formMeta.kind === "invoice" ? "Outstanding balance" : "Pre-tax subtotal", value: `${CURRENCY_SYMBOL} ${formatMoney(formMeta.kind === "invoice" ? totals.balanceDue : totals.subtotal)}`, detail: formMeta.kind === "invoice" ? "Based on recorded receipts" : "Before statutory taxes", tone: "slate" },
+      { type: "status", label: "Document status", value: String(form.status || "draft").replace(/_/g, " "), detail: form._id ? "Saved document" : "Unsaved draft", tone: "amber" },
+    ];
+  }, [form._id, form.lineItems, form.status, formMeta.kind, receipts.length, totals]);
 
   const makeApiUrl = useCallback(
     (path = "", params = {}) => {
@@ -1376,6 +1419,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     setActivePreview("invoice");
     setNotice("");
     setError("");
+    setIsDocumentListOpen(false);
 
     if (selectingCurrentDocument && nextMeta.kind === "invoice") {
       fetchReceipts(document);
@@ -1393,6 +1437,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     setActivePreview("invoice");
     setNotice("");
     setError("");
+    setIsDocumentListOpen(false);
   };
 
   const updateForm = (path, value) => {
@@ -1893,11 +1938,38 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     >
       <header className="billing-documents-header">
         <div>
-          <span className="billing-eyebrow">Front Desk Billing</span>
-          <h1>Billing Documents</h1>
-          <p>Magichands and Magic Gifts</p>
+          <span className="billing-eyebrow">
+            {portalSource === "admin"
+              ? "Finance & Operations / Billing Documents / Studio Editor"
+              : "Front Desk Billing"}
+          </span>
+          <div className="billing-title-line">
+            <h1>
+              {portalSource === "admin"
+                ? `${formMeta.brand === "magic_gifts" ? "Magic Gifts" : "Magichands"} Billing Studio`
+                : "Billing Documents"}
+            </h1>
+            {portalSource === "admin" && <StatusBadge status={form.status} />}
+          </div>
+          <p>
+            {portalSource === "admin"
+              ? `${formMeta.label}${form.documentNumber ? ` #${form.documentNumber}` : " · New document"}`
+              : "Magichands and Magic Gifts"}
+          </p>
         </div>
         <div className="billing-header-actions">
+          {portalSource === "admin" && (
+            <button
+              type="button"
+              className="billing-secondary-button"
+              onClick={() => setIsDocumentListOpen(true)}
+              aria-expanded={isDocumentListOpen}
+              aria-controls="billing-document-library"
+            >
+              <ReceiptIcon />
+              Documents
+            </button>
+          )}
           <button
             type="button"
             className="billing-secondary-button"
@@ -1917,6 +1989,19 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
         </div>
       </header>
 
+      {portalSource === "admin" && (
+        <section className="billing-studio-summary" aria-label="Current document summary">
+          {studioMetrics.map((metric) => (
+            <article className={`billing-studio-metric ${metric.tone}`} key={metric.label}>
+              <span className="billing-studio-metric-icon"><BillingStudioMetricIcon type={metric.type} /></span>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+              <small>{metric.detail}</small>
+            </article>
+          ))}
+        </section>
+      )}
+
       {feedbackMessage && (
         <div className="ui-toast-container">
           <Toast
@@ -1932,16 +2017,40 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
       )}
 
       <div className="billing-documents-workspace">
-        <aside className="billing-document-list" aria-label="Billing documents">
+        {portalSource === "admin" && isDocumentListOpen && (
+          <button
+            type="button"
+            className="billing-document-drawer-backdrop"
+            onClick={() => setIsDocumentListOpen(false)}
+            aria-label="Close document library"
+          />
+        )}
+        <aside
+          id="billing-document-library"
+          className={`billing-document-list ${isDocumentListOpen ? "is-open" : ""}`}
+          aria-label="Billing documents"
+        >
           <div className="billing-list-header">
-            <strong>Documents</strong>
-            <span>
-              {loading
-                ? "Loading"
-                : documents.length
-                  ? `${visibleDocuments.length} of ${documents.length} shown`
-                  : "0 shown"}
-            </span>
+            <div>
+              <strong>Document library</strong>
+              <span>
+                {loading
+                  ? "Loading"
+                  : documents.length
+                    ? `${visibleDocuments.length} of ${documents.length} shown`
+                    : "0 shown"}
+              </span>
+            </div>
+            {portalSource === "admin" && (
+              <button
+                type="button"
+                className="billing-list-close"
+                onClick={() => setIsDocumentListOpen(false)}
+                aria-label="Close document library"
+              >
+                ×
+              </button>
+            )}
           </div>
           <section className="billing-documents-toolbar">
             <label className="billing-list-search">
@@ -2785,22 +2894,28 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
               )}
             </form>
 
-            <div
-              className={`billing-preview-pane ${
-                formMeta.kind === "waybill" ? "waybill-preview" : ""
-              }`}
-            >
-              {activePreview === "receipt" && formMeta.kind === "invoice" ? (
-                <BillingReceiptPreview
-                  receipt={receiptForm}
-                  invoice={form}
-                />
-              ) : formMeta.kind === "waybill" ? (
-                <BillingWaybillPreview form={form} />
-              ) : (
-                <BillingPreview form={form} totals={totals} />
-              )}
-            </div>
+            <aside className="billing-preview-shell">
+              <div className="billing-preview-toolbar">
+                <span><i /> Live document sheet</span>
+                <small>{activePreview === "receipt" ? "Receipt preview" : `${formMeta.label} preview`}</small>
+              </div>
+              <div
+                className={`billing-preview-pane ${
+                  formMeta.kind === "waybill" ? "waybill-preview" : ""
+                }`}
+              >
+                {activePreview === "receipt" && formMeta.kind === "invoice" ? (
+                  <BillingReceiptPreview
+                    receipt={receiptForm}
+                    invoice={form}
+                  />
+                ) : formMeta.kind === "waybill" ? (
+                  <BillingWaybillPreview form={form} />
+                ) : (
+                  <BillingPreview form={form} totals={totals} />
+                )}
+              </div>
+            </aside>
           </div>
         </section>
       </div>
