@@ -22669,7 +22669,8 @@ async function getClientIntelligence(req, res) {
         "details.deliveryDate", "projectLeadId", "invoice", "paymentVerifications",
         "billingOverrides", "feedbacks", "challenges", "productionRisks", "hold",
         "statusChangedAt", "statusHistory", "orderRevisionCount", "versionNumber",
-        "departments", "acknowledgements",
+        "departments", "acknowledgements", "cancellation.isCancelled",
+        "postProjectReview.metrics.deliveredOnTime",
       ].join(" "))
       .populate("projectLeadId", "firstName lastName name employeeId")
       .sort({ createdAt: -1 })
@@ -22699,7 +22700,11 @@ async function getClientIntelligence(req, res) {
 
     const accounts = Array.from(buckets.values()).map((account) => {
       const projectCount = account.projects.length;
-      const activeProjects = account.projects.filter((project) => !activeStatuses.has(project.status));
+      const activeProjects = account.projects.filter(
+        (project) =>
+          !activeStatuses.has(project.status) &&
+          project?.cancellation?.isCancelled !== true,
+      );
       const completedProjects = account.projects.filter((project) => ["Completed", "Finished", "Feedback Completed"].includes(project.status));
       const deliveredProjects = account.projects.filter((project) => project.postProjectReview?.metrics?.deliveredOnTime !== null && project.postProjectReview?.metrics?.deliveredOnTime !== undefined);
       const onTimeProjects = deliveredProjects.filter((project) => project.postProjectReview.metrics.deliveredOnTime === true);
