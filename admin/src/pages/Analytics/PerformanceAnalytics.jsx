@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import "./PerformanceAnalytics.css";
@@ -388,6 +388,7 @@ const PerformanceAnalytics = () => {
       },
     },
   );
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
   const itemsPerPage = 15;
 
   const stageStats = useMemo(() => data?.stages || [], [data]);
@@ -415,15 +416,14 @@ const PerformanceAnalytics = () => {
     return ["All", ...Array.from(new Set(statuses)).sort()];
   }, [projectRows]);
 
-  useEffect(() => {
-    if (!statusOptions.includes(statusFilter)) {
-      setStatusFilter("All");
-    }
-  }, [statusOptions, statusFilter]);
+  const effectiveStatusFilter = statusOptions.includes(statusFilter)
+    ? statusFilter
+    : "All";
   const filteredProjects = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
     return projectRows.filter((row) => {
-      if (statusFilter !== "All" && row.status !== statusFilter) return false;
+      if (effectiveStatusFilter !== "All" && row.status !== effectiveStatusFilter)
+        return false;
       if (!term) return true;
       const haystack = [
         row.projectName,
@@ -435,21 +435,38 @@ const PerformanceAnalytics = () => {
         .map((value) => String(value).toLowerCase());
       return haystack.some((value) => value.includes(term));
     });
-  }, [projectRows, searchQuery, statusFilter]);
+  }, [effectiveStatusFilter, projectRows, searchQuery]);
   const totalPages = Math.max(
     1,
     Math.ceil(filteredProjects.length / itemsPerPage),
   );
+  const activePage = Math.min(currentPage, totalPages);
   const paginatedProjects = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
+    const start = (activePage - 1) * itemsPerPage;
     return filteredProjects.slice(start, start + itemsPerPage);
-  }, [filteredProjects, currentPage, itemsPerPage]);
+  }, [activePage, filteredProjects, itemsPerPage]);
 
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
+  const selectedProject =
+    projectRows.find((row) => row.projectId === selectedProjectId) ||
+    paginatedProjects[0] ||
+    null;
+  const slowestStage = visibleStages
+    .filter((stage) => !stage.isProcess && stage.avgHours !== null)
+    .sort((left, right) => right.avgHours - left.avgHours)[0] || null;
+  const endToEndDistribution = endToEndStage?.distribution;
+  const outlierThreshold =
+    endToEndDistribution?.q3 !== null &&
+    endToEndDistribution?.q3 !== undefined &&
+    endToEndDistribution?.iqr !== null &&
+    endToEndDistribution?.iqr !== undefined
+      ? endToEndDistribution.q3 + 1.5 * endToEndDistribution.iqr
+      : null;
+  const outlierProjects = outlierThreshold === null
+    ? []
+    : projectRows.filter((row) => Number(row.totalHours) > outlierThreshold);
+  const completedProjects = projectRows.filter((row) =>
+    /completed|finished|delivered/i.test(String(row.status || "")),
+  );
 
   const handleExportStageCSV = () => {
     if (!data) return;
@@ -579,254 +596,63 @@ const PerformanceAnalytics = () => {
 
   return (
     <div className="performance-page">
-      <div className="performance-header">
+      <header className="performance-hero">
         <div>
-          <h1>Performance Analytics</h1>
-          <p>Stage and end-to-end duration tracking for the project lifecycle.</p>
+          <span>Operations Core / Intelligence / Fabrication Stage Analytics</span>
+          <div className="performance-title-line"><h1>Performance &amp; Fabrication Stage Analytics</h1><em>Live data</em></div>
+          <p>Real project duration tracking, stage latency diagnostics, distribution analysis, and workflow bottleneck telemetry.</p>
         </div>
-        <div className="header-actions">
-          <div className="date-controls">
-            <label>
-              From
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-              />
-            </label>
-            <label>
-              To
-              <input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-              />
-            </label>
-          </div>
-          <button
-            type="button"
-            className="export-button"
-            onClick={handleExportCSV}
-            disabled={!data || loading}
-          >
-            Export CSV
-          </button>
-          <button
-            type="button"
-            className="export-button export-button--secondary"
-            onClick={handleExportStageCSV}
-            disabled={!data || loading}
-          >
-            Export Stage Breakdown
-          </button>
+        <div className="performance-actions">
+          <div className="date-controls"><label><span>From</span><input type="date" value={fromDate} onChange={(event) => { setFromDate(event.target.value); setCurrentPage(1); }} /></label><i>to</i><label><span>To</span><input type="date" value={toDate} onChange={(event) => { setToDate(event.target.value); setCurrentPage(1); }} /></label></div>
+          <button type="button" onClick={handleExportCSV} disabled={!data || loading}>Export CSV</button>
+          <button type="button" className="primary" onClick={handleExportStageCSV} disabled={!data || loading}>Export stage breakdown</button>
         </div>
-      </div>
+      </header>
 
-      {loading ? (
-        <div className="performance-loading">Loading analytics...</div>
-      ) : error ? (
-        <div className="performance-error">{error}</div>
-      ) : (
+      {loading ? <div className="performance-state">Loading analytics…</div> : error ? <div className="performance-state error">{error}</div> : (
         <>
-          <div className="chart-card">
-            <div className="chart-header">
-              <div>
-                <h2>End-to-End Duration Trend</h2>
-                <p>
-                  Average end-to-end duration per{" "}
-                  {formatBucketUnit(endToEndStage?.trend?.bucketLabel)}.
-                </p>
-              </div>
-            </div>
-            <LineChart
-              points={endToEndStage?.trend?.points || []}
-              label="End-to-end duration over time"
-            />
-          </div>
-          <div className="stat-grid">
-            {visibleStages.map((stage) => (
-              <div
-                key={stage.key}
-                className={`stat-card${stage.isProcess ? " stat-card--process" : ""}`}
-              >
-                <div className="stat-label">{stage.label}</div>
-                {stage.description ? (
-                  <div className="stat-caption">{stage.description}</div>
-                ) : null}
-                {stage.rangeLabel ? (
-                  <div className="stat-range">From {stage.rangeLabel}</div>
-                ) : null}
-                <div className="stat-metric">
-                  {formatDuration(stage.avgHours)}
-                </div>
-                <div className="stat-meta">
-                  <span>Typical (Median): {formatDuration(stage.medianHours)}</span>
-                  <span>Fastest: {formatDuration(stage.minHours)}</span>
-                  <span>Slowest: {formatDuration(stage.maxHours)}</span>
-                  <span>Projects analyzed: {stage.count}</span>
-                </div>
-                <div className="stat-section">
-                  <div className="stat-section-title">
-                    Average duration per {formatBucketUnit(stage.trend?.bucketLabel)}
-                  </div>
-                  <Sparkline points={stage.trend?.points || []} />
-                </div>
-                <div className="stat-section">
-                  <div className="stat-section-title">Distribution (projects by duration)</div>
-                  <Distribution
-                    distribution={stage.distribution}
-                    median={stage.medianHours}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+          <section className="performance-overview-grid">
+            <article className="duration-trend-card">
+              <header><div><span>Cycle telemetry</span><h2>End-to-End Duration Trend</h2><p>Average turnaround time per {formatBucketUnit(endToEndStage?.trend?.bucketLabel)}.</p></div><div><em>Peak: {formatDuration(endToEndStage?.maxHours)}</em><strong>Median: {formatDuration(endToEndStage?.medianHours)}</strong></div></header>
+              <LineChart points={endToEndStage?.trend?.points || []} label="End-to-end duration over time" />
+            </article>
+            <aside className="queue-friction-card">
+              <header><span>Latency intelligence</span><h2>Queue Friction Monitor</h2><p>Signals calculated from measured stage and project-duration records.</p></header>
+              <div className="queue-signal danger"><span>Slowest average stage</span><strong>{slowestStage?.label || "Not enough data"}</strong><em>{formatDuration(slowestStage?.avgHours)}</em></div>
+              <div className="queue-signal warning"><span>Statistical outliers</span><strong>{outlierProjects.length} projects</strong><em>{outlierThreshold === null ? "No threshold" : `Above ${formatDuration(outlierThreshold)}`}</em></div>
+              <div className="queue-signal success"><span>Completed in range</span><strong>{completedProjects.length} projects</strong><em>{projectRows.length ? `${Math.round((completedProjects.length / projectRows.length) * 100)}% of measured records` : "No records"}</em></div>
+              <footer><button type="button" onClick={() => slowestStage && document.getElementById(`stage-${slowestStage.key}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} disabled={!slowestStage}>Review slowest stage</button><button type="button" className="primary" onClick={() => (outlierProjects[0] || projectRows[0]) && navigate(`/analytics/projects/${(outlierProjects[0] || projectRows[0]).projectId}`)} disabled={!projectRows.length}>Open highest latency project</button></footer>
+            </aside>
+          </section>
 
-          <div className="table-card">
-            <div className="table-header">
-              <div>
-                <h2>Project Durations</h2>
-                <p>{projectRows.length} projects in range</p>
-              </div>
-            </div>
-            {projectRows.length === 0 ? (
-              <div className="empty-state">No project durations found.</div>
-            ) : (
-              <>
-                <div className="table-controls admin-table-toolbar">
-                  <div className="table-search admin-table-search">
-                    <input
-                      type="text"
-                      placeholder="Search by project, order ID, status..."
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                    />
-                  </div>
-                  <div className="table-filters">
-                    <label className="admin-table-filter">
-                      Status
-                      <select
-                        value={statusFilter}
-                        onChange={(e) => {
-                          setStatusFilter(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                      >
-                        {statusOptions.map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <div className="table-count admin-table-count">
-                    Showing {paginatedProjects.length} of {filteredProjects.length}
-                  </div>
-                </div>
-                {filteredProjects.length === 0 ? (
-                  <div className="empty-state">No projects match your filters.</div>
-                ) : (
-                  <>
-                    <div className="table-scroll admin-data-table-scroll admin-data-table-scroll--embedded admin-data-table-scroll--cards">
-                      <table
-                        className="admin-data-table admin-data-table--cards admin-data-table--interactive"
-                        style={{ "--admin-table-min-width": "760px" }}
-                      >
-                        <thead>
-                          <tr>
-                            <th>Project</th>
-                            <th>Status</th>
-                            <th>End-to-End</th>
-                            <th>Mockup</th>
-                            <th>Production</th>
-                            <th>Packaging</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paginatedProjects.map((row) => (
-                            <tr
-                              key={row.projectId}
-                              className="clickable-row"
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => navigate(`/analytics/projects/${row.projectId}`)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  navigate(`/analytics/projects/${row.projectId}`);
-                                }
-                              }}
-                            >
-                              <td data-label="Project" data-table-primary="true">
-                                <div className="project-cell admin-table-identity">
-                                  <span className="project-id admin-table-code">
-                                    #{row.orderId || row.projectId.slice(-6).toUpperCase()}
-                                  </span>
-                                  <span className="project-name admin-table-title">
-                                    {renderProjectName(
-                                      row.projectName,
-                                      row.projectIndicator,
-                                      "Untitled Project",
-                                    )}
-                                  </span>
-                                </div>
-                              </td>
-                              <td data-label="Status">
-                                <span className={`admin-table-status ${getTableStatusTone(row.status)}`}>
-                                  {row.status}
-                                </span>
-                              </td>
-                              <td data-label="End-to-End">
-                                <span className="admin-table-metric-value">{formatDuration(row.endToEnd?.hours)}</span>
-                              </td>
-                              <td data-label="Mockup">
-                                <span className="admin-table-metric-value">{formatDuration(row.stages.mockup?.hours)}</span>
-                              </td>
-                              <td data-label="Production">
-                                <span className="admin-table-metric-value">{formatDuration(row.stages.production?.hours)}</span>
-                              </td>
-                              <td data-label="Packaging">
-                                <span className="admin-table-metric-value">{formatDuration(row.stages.packaging?.hours)}</span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {totalPages > 1 ? (
-                      <div className="table-pagination">
-                        <button
-                          type="button"
-                          className="pagination-btn"
-                          disabled={currentPage === 1}
-                          onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                        >
-                          Prev
-                        </button>
-                        <span>
-                          Page {currentPage} of {totalPages}
-                        </span>
-                        <button
-                          type="button"
-                          className="pagination-btn"
-                          disabled={currentPage === totalPages}
-                          onClick={() =>
-                            setCurrentPage((page) => Math.min(totalPages, page + 1))
-                          }
-                        >
-                          Next
-                        </button>
-                      </div>
-                    ) : null}
-                  </>
-                )}
-              </>
-            )}
-          </div>
+          <section className="stage-performance-grid" aria-label="Stage performance summary">
+            {visibleStages.map((stage) => (
+              <article id={`stage-${stage.key}`} key={stage.key} className={`stage-performance-card ${stage.key} ${stage.isProcess ? "process" : ""}`}>
+                <header><div><span>{stage.isProcess ? "Full lifecycle" : "Fabrication stage"}</span><h3>{stage.label}</h3><p>{stage.rangeLabel}</p></div><em>{stage.count} analyzed</em></header>
+                <strong className="stage-average">{formatDuration(stage.avgHours)}</strong><span className="stage-average-label">Average duration</span>
+                <div className="stage-stat-strip"><span>Typical <strong>{formatDuration(stage.medianHours)}</strong></span><span>Fastest <strong>{formatDuration(stage.minHours)}</strong></span><span>Slowest <strong>{formatDuration(stage.maxHours)}</strong></span></div>
+                <div className="stage-mini-chart"><span>Average duration per {formatBucketUnit(stage.trend?.bucketLabel)}</span><Sparkline points={stage.trend?.points || []} /></div>
+                <Distribution distribution={stage.distribution} median={stage.medianHours} />
+              </article>
+            ))}
+          </section>
+
+          <section className="performance-detail-grid">
+            <article className="project-duration-card">
+              <header><div><span>Project telemetry</span><h2>Project Durations</h2><p>{projectRows.length} measured projects in the selected range</p></div><em>Showing {paginatedProjects.length} of {filteredProjects.length}</em></header>
+              <div className="performance-table-controls"><input type="search" placeholder="Search project, order ID, client, or status…" value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setCurrentPage(1); }} /><select value={effectiveStatusFilter} onChange={(event) => { setStatusFilter(event.target.value); setCurrentPage(1); }}>{statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}</select></div>
+              {!projectRows.length ? <div className="empty-state">No project durations found.</div> : !filteredProjects.length ? <div className="empty-state">No projects match these filters.</div> : (
+                <div className="table-scroll admin-data-table-scroll admin-data-table-scroll--embedded"><table className="admin-data-table admin-data-table--interactive" style={{ "--admin-table-min-width": "820px" }}><thead><tr><th>Project / order</th><th>Status</th><th>End-to-end</th><th>Mockup</th><th>Production</th><th>Packaging</th><th>Action</th></tr></thead><tbody>{paginatedProjects.map((row) => <tr key={row.projectId} className={selectedProject?.projectId === row.projectId ? "is-selected" : ""} onClick={() => setSelectedProjectId(row.projectId)}><td data-label="Project" data-table-primary="true"><div className="project-cell admin-table-identity"><span className="project-id admin-table-code">#{row.orderId || row.projectId.slice(-6).toUpperCase()}</span><span className="project-name admin-table-title">{renderProjectName(row.projectName, row.projectIndicator, "Untitled Project")}</span><small>{row.client || "Client not recorded"}</small></div></td><td data-label="Status"><span className={`admin-table-status ${getTableStatusTone(row.status)}`}>{row.status}</span></td><td data-label="End-to-end"><span className="admin-table-metric-value">{formatDuration(row.endToEnd?.hours)}</span></td><td data-label="Mockup">{formatDuration(row.stages.mockup?.hours)}</td><td data-label="Production">{formatDuration(row.stages.production?.hours)}</td><td data-label="Packaging">{formatDuration(row.stages.packaging?.hours)}</td><td data-label="Action"><button type="button" className="open-analysis-button" onClick={(event) => { event.stopPropagation(); navigate(`/analytics/projects/${row.projectId}`); }}>Open</button></td></tr>)}</tbody></table></div>
+              )}
+              <nav className="performance-pagination"><span>Page {activePage} of {totalPages}</span><div><button type="button" disabled={activePage === 1} onClick={() => setCurrentPage(Math.max(1, activePage - 1))}>Previous</button><button type="button" disabled={activePage === totalPages} onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))}>Next</button></div></nav>
+            </article>
+
+            <aside className="selected-project-analytics">
+              {selectedProject ? <><header><span>Selected project</span><h2>{renderProjectName(selectedProject.projectName, selectedProject.projectIndicator, "Untitled Project")}</h2><p>Order #{selectedProject.orderId || selectedProject.projectId.slice(-6).toUpperCase()} · {selectedProject.client || "Client not recorded"}</p></header><div className="selected-project-kpis"><article><span>End-to-end cycle</span><strong>{formatDuration(selectedProject.endToEnd?.hours)}</strong><small>{selectedProject.status}</small></article><article className="danger"><span>Longest measured stage</span><strong>{Object.entries(selectedProject.stages || {}).sort(([, left], [, right]) => (right?.hours || 0) - (left?.hours || 0))[0]?.[0] || "Not available"}</strong><small>{formatDuration(Object.entries(selectedProject.stages || {}).sort(([, left], [, right]) => (right?.hours || 0) - (left?.hours || 0))[0]?.[1]?.hours)}</small></article></div><div className="selected-stage-list">{["mockup", "production", "packaging"].map((key) => <div key={key}><span>{key}</span><strong>{formatDuration(selectedProject.stages?.[key]?.hours)}</strong></div>)}</div><button type="button" className="selected-project-open" onClick={() => navigate(`/analytics/projects/${selectedProject.projectId}`)}>Open full project analysis</button></> : <div className="empty-state">Select a project to inspect its stage durations.</div>}
+            </aside>
+          </section>
+
+          <footer className="analytics-method-note"><strong>Measurement methodology</strong><span>Durations are calculated from actual project status-change timestamps. Blank values indicate that a stage has not completed within the selected reporting range.</span></footer>
         </>
       )}
     </div>

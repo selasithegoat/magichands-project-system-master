@@ -353,256 +353,65 @@ const ProjectAnalytics = () => {
     downloadCSV(rows, filename);
   };
 
+  const handleExportTimelineCSV = () => {
+    if (!timeline.length) return;
+    const rows = [
+      ["Timestamp", "From Status", "To Status", "Changed By", "Description"].map(
+        escapeCSV,
+      ),
+      ...timeline.map((event) =>
+        [
+          formatDateTimeISO(event.at),
+          event.from || "",
+          event.to || "",
+          event.by?.name || "System",
+          event.description || "",
+        ].map(escapeCSV),
+      ),
+    ];
+    downloadCSV(
+      rows,
+      `project-workflow-audit-${project?.orderId || project?.id || "analytics"}.csv`,
+    );
+  };
+
   return (
     <div className="project-analytics-page">
-      <div className="project-analytics-header">
-        <div>
-          <h1>{project?.name || "Project Analytics"}</h1>
-          <p>
-            Order {project?.orderId || project?.id || "-"} - {project?.status || "-"}
-          </p>
-        </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            className="back-button"
-            onClick={() => navigate("/analytics")}
-          >
-            Back to Analytics
-          </button>
-          <button
-            type="button"
-            className="export-button"
-            onClick={handleExportStageCSV}
-            disabled={!data || loading}
-          >
-            Export Stage Breakdown
-          </button>
-        </div>
-      </div>
+      <header className="project-analytics-hero">
+        <div><span>Analytics / Individual Project Intelligence</span><div><h1>{project?.name || "Project Analytics"}</h1><em>{project?.status || "Loading"}</em></div><p>Order #{project?.orderId || project?.id || "-"} · {project?.client || "Client not recorded"}</p></div>
+        <div className="project-analytics-actions"><button type="button" onClick={() => navigate("/analytics")}>Back to analytics</button><button type="button" onClick={() => project?.id && navigate(`/projects/${project.id}`)} disabled={!project?.id}>Open project</button><button type="button" className="primary" onClick={handleExportStageCSV} disabled={!data || loading}>Export stage breakdown</button></div>
+      </header>
 
-      {loading ? (
-        <div className="project-analytics-loading">Loading project analytics...</div>
-      ) : error ? (
-        <div className="project-analytics-error">{error}</div>
-      ) : (
+      {loading ? <div className="project-analytics-state">Loading project analytics…</div> : error ? <div className="project-analytics-state error">{error}</div> : (
         <>
-          <div className="summary-grid">
-            <div className="summary-card">
-              <div className="summary-label">End-to-End</div>
-              <div className="summary-value">{formatDuration(endToEnd?.hours)}</div>
-              <div className="summary-meta">
-                {endToEnd?.start && endToEnd?.end
-                  ? `${formatDateTime(endToEnd.start)} to ${formatDateTime(endToEnd.end)}`
-                  : "Not completed yet"}
-              </div>
-              <div className="summary-sub">
-                Benchmark avg: {formatDuration(endToEndBenchmark?.avgHours)}
-              </div>
-            </div>
-            <div className="summary-card">
-              <div className="summary-label">Bottleneck Stage</div>
-              <div className="summary-value">
-                {data?.bottleneck?.label || "-"}
-              </div>
-              <div className="summary-meta">
-                {formatDuration(data?.bottleneck?.hours)}
-              </div>
-            </div>
-            <div className="summary-card">
-              <div className="summary-label">Total Stage Time</div>
-              <div className="summary-value">{formatDuration(totalStageHours)}</div>
-              <div className="summary-meta">Sum of completed stages</div>
-            </div>
-            <div className="summary-card">
-              <div className="summary-label">Last Status Change</div>
-              <div className="summary-value">{lastEvent?.to || "-"}</div>
-              <div className="summary-meta">
-                {lastEvent ? formatDateTime(lastEvent.at) : "No status changes yet"}
-              </div>
-            </div>
-          </div>
+          <section className="project-summary-grid">
+            <article><span>End-to-end cycle</span><strong>{formatDuration(endToEnd?.hours)}</strong><p>{endToEnd?.start && endToEnd?.end ? `${formatDate(endToEnd.start)} – ${formatDate(endToEnd.end)}` : "Not completed yet"}</p><em>Benchmark: {formatDuration(endToEndBenchmark?.avgHours)}</em></article>
+            <article className="danger"><span>Bottleneck stage</span><strong>{data?.bottleneck?.label || "Not available"}</strong><p>{formatDuration(data?.bottleneck?.hours)}</p><em>Longest completed phase</em></article>
+            <article><span>Total stage time</span><strong>{formatDuration(totalStageHours)}</strong><p>{stages.filter((stage) => stage.hours !== null).length} of {stages.length} stages measured</p><em>Completed phases only</em></article>
+            <article><span>Last status change</span><strong>{lastEvent?.to || "No event"}</strong><p>{lastEvent ? formatDateTime(lastEvent.at) : "No status changes yet"}</p><em>{lastEvent?.by?.name || "System"}</em></article>
+          </section>
 
-          <div className="chart-card">
-            <div className="chart-header">
-              <div>
-                <h2>End-to-End Progress</h2>
-                <p>Cumulative duration since the first status change.</p>
-              </div>
-            </div>
-            <LineChart
-              points={progressPoints}
-              label="End-to-end duration progression"
-            />
-          </div>
+          <section className="project-analytics-overview">
+            <article className="project-progress-card"><header><div><span>Lifecycle telemetry</span><h2>End-to-End Cumulative Progress</h2><p>Elapsed duration from the first recorded status transition.</p></div><em>{progressPoints.length} events</em></header><LineChart points={progressPoints} label="End-to-end duration progression" /></article>
+            <aside className="project-snapshot-card"><header><span>Project snapshot</span><h2>Operational Context</h2></header><div>{[
+              ["Order ID", project?.orderId || "-"],
+              ["Client", project?.client || "-"],
+              ["Project type", project?.type || "-"],
+              ["Priority", project?.priority || "-"],
+              ["Project lead", project?.lead || "-"],
+              ["Assistant lead", project?.assistantLead || "-"],
+              ["Order date", formatDate(project?.orderDate)],
+              ["Delivery date", formatDate(project?.deliveryDate)],
+            ].map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}</div></aside>
+          </section>
 
-          <div className="analytics-card">
-            <h2>Project Snapshot</h2>
-            <div className="snapshot-grid">
-              <div className="snapshot-item">
-                <span className="snapshot-label">Project Name</span>
-                <span className="snapshot-value">{project?.name || "-"}</span>
-              </div>
-              <div className="snapshot-item">
-                <span className="snapshot-label">Order ID</span>
-                <span className="snapshot-value">{project?.orderId || "-"}</span>
-              </div>
-              <div className="snapshot-item">
-                <span className="snapshot-label">Client</span>
-                <span className="snapshot-value">{project?.client || "-"}</span>
-              </div>
-              <div className="snapshot-item">
-                <span className="snapshot-label">Project Type</span>
-                <span className="snapshot-value">{project?.type || "-"}</span>
-              </div>
-              <div className="snapshot-item">
-                <span className="snapshot-label">Priority</span>
-                <span className="snapshot-value">{project?.priority || "-"}</span>
-              </div>
-              <div className="snapshot-item">
-                <span className="snapshot-label">Lead</span>
-                <span className="snapshot-value">{project?.lead || "-"}</span>
-              </div>
-              <div className="snapshot-item">
-                <span className="snapshot-label">Assistant Lead</span>
-                <span className="snapshot-value">{project?.assistantLead || "-"}</span>
-              </div>
-              <div className="snapshot-item">
-                <span className="snapshot-label">Created</span>
-                <span className="snapshot-value">{formatDate(project?.createdAt)}</span>
-              </div>
-              <div className="snapshot-item">
-                <span className="snapshot-label">Order Date</span>
-                <span className="snapshot-value">{formatDate(project?.orderDate)}</span>
-              </div>
-              <div className="snapshot-item">
-                <span className="snapshot-label">Delivery Date</span>
-                <span className="snapshot-value">{formatDate(project?.deliveryDate)}</span>
-              </div>
-            </div>
-          </div>
+          <section className="project-analytics-detail-grid">
+            <article className="project-stage-breakdown"><header><div><span>Benchmark comparison</span><h2>Stage Breakdown</h2><p>Actual elapsed time versus the global average for every measurable stage.</p></div><button type="button" onClick={handleExportStageCSV}>Export CSV</button></header>{!stages.length ? <div className="empty-state">No stage data available yet.</div> : <div className="table-scroll admin-data-table-scroll admin-data-table-scroll--embedded"><table className="admin-data-table" style={{ "--admin-table-min-width": "780px" }}><thead><tr><th>Stage</th><th>Window</th><th>Duration</th><th>% total</th><th>Benchmark</th><th>Delta</th></tr></thead><tbody>{stages.map((stage) => { const benchmark = benchmarkMap.get(stage.key); const delta = stage.hours !== null && stage.hours !== undefined && benchmark?.avgHours !== null && benchmark?.avgHours !== undefined ? stage.hours - benchmark.avgHours : null; return <tr key={stage.key} className={data?.bottleneck?.key === stage.key ? "is-bottleneck" : ""}><td data-label="Stage" data-table-primary="true"><div className="stage-cell admin-table-identity"><span className="stage-label admin-table-title">{stage.label}</span><span className="stage-range admin-table-subtitle">{stage.startStatus} → {stage.endStatus}</span></div></td><td data-label="Window"><span>{formatDateTime(stage.start)}</span><small>{stage.end ? ` to ${formatDateTime(stage.end)}` : "Not completed"}</small></td><td data-label="Duration"><strong>{formatDuration(stage.hours)}</strong></td><td data-label="% total">{stage.percentOfTotal !== null && stage.percentOfTotal !== undefined ? `${stage.percentOfTotal.toFixed(1)}%` : "-"}</td><td data-label="Benchmark">{formatDuration(benchmark?.avgHours)}</td><td data-label="Delta"><span className={`admin-table-status ${delta === null ? "is-neutral" : delta > 0 ? "is-danger" : "is-success"}`}>{formatDelta(delta)}</span></td></tr>; })}</tbody></table></div>}</article>
 
-          <div className="analytics-card">
-            <div className="card-header">
-              <div>
-                <h2>Stage Breakdown</h2>
-                <p>How long each phase took, versus the global average.</p>
-              </div>
-            </div>
-            {stages.length === 0 ? (
-              <div className="empty-state">No stage data available yet.</div>
-            ) : (
-              <div className="table-scroll admin-data-table-scroll admin-data-table-scroll--embedded admin-data-table-scroll--cards">
-                <table
-                  className="analytics-table admin-data-table admin-data-table--cards"
-                  style={{ "--admin-table-min-width": "760px" }}
-                >
-                  <thead>
-                    <tr>
-                      <th>Stage</th>
-                      <th>Start</th>
-                      <th>End</th>
-                      <th>Duration</th>
-                      <th>% of Total</th>
-                      <th>Benchmark Avg</th>
-                      <th>Delta</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stages.map((stage) => {
-                      const benchmark = benchmarkMap.get(stage.key);
-                      const delta =
-                        stage.hours !== null &&
-                        stage.hours !== undefined &&
-                        benchmark?.avgHours !== null &&
-                        benchmark?.avgHours !== undefined
-                          ? stage.hours - benchmark.avgHours
-                          : null;
-                      return (
-                        <tr key={stage.key}>
-                          <td data-label="Stage" data-table-primary="true">
-                            <div className="stage-cell admin-table-identity">
-                              <span className="stage-label admin-table-title">{stage.label}</span>
-                              <span className="stage-range admin-table-subtitle">
-                                {stage.startStatus} to {stage.endStatus}
-                              </span>
-                            </div>
-                          </td>
-                          <td data-label="Start">{formatDateTime(stage.start)}</td>
-                          <td data-label="End">{formatDateTime(stage.end)}</td>
-                          <td data-label="Duration">
-                            <span className="admin-table-metric-value">{formatDuration(stage.hours)}</span>
-                          </td>
-                          <td data-label="% of Total">
-                            <span className="admin-table-metric-value">
-                              {stage.percentOfTotal !== null &&
-                              stage.percentOfTotal !== undefined
-                                ? `${stage.percentOfTotal.toFixed(1)}%`
-                                : "-"}
-                            </span>
-                          </td>
-                          <td data-label="Benchmark Avg">
-                            <span className="admin-table-metric-value">{formatDuration(benchmark?.avgHours)}</span>
-                          </td>
-                          <td
-                            data-label="Delta"
-                            className={
-                              delta === null
-                                ? ""
-                                : delta > 0
-                                  ? "delta-up"
-                                  : "delta-down"
-                            }
-                          >
-                            <span
-                              className={`admin-table-status ${
-                                delta === null
-                                  ? "is-neutral"
-                                  : delta > 0
-                                    ? "is-danger"
-                                    : "is-success"
-                              }`}
-                            >
-                              {formatDelta(delta)}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+            <aside className="project-workflow-timeline"><header><div><span>Workflow audit</span><h2>Status Event Chain</h2><p>Recorded status changes and responsible users.</p></div><button type="button" onClick={handleExportTimelineCSV} disabled={!timeline.length}>Export audit log</button></header>{!timeline.length ? <div className="empty-state">No status changes logged yet.</div> : <div className="timeline-list">{timeline.map((event, index) => <article key={`${event.at}-${index}`} className={index === timeline.length - 1 ? "latest" : ""}><i /><div><strong>{event.from || "Project created"} → {event.to || "Unknown status"}</strong><span>{formatDateTime(event.at)} · {event.by?.name || "System"}</span>{event.description ? <p>{event.description}</p> : null}</div></article>)}</div>}</aside>
+          </section>
 
-          <div className="analytics-card">
-            <div className="card-header">
-              <div>
-                <h2>Workflow Timeline</h2>
-                <p>Status changes across the lifecycle.</p>
-              </div>
-            </div>
-            {timeline.length === 0 ? (
-              <div className="empty-state">No status changes logged yet.</div>
-            ) : (
-              <div className="timeline-list">
-                {timeline.map((event, index) => (
-                  <div key={`${event.at}-${index}`} className="timeline-item">
-                    <div className="timeline-title">
-                      {event.from || "-"} to {event.to || "-"}
-                    </div>
-                    <div className="timeline-meta">
-                      <span>{formatDateTime(event.at)}</span>
-                      <span>{event.by?.name || "System"}</span>
-                    </div>
-                    {event.description ? (
-                      <div className="timeline-description">{event.description}</div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <footer className="project-analytics-method"><strong>Analytics source</strong><span>All durations and audit entries are calculated from actual project status-change records. Missing values indicate incomplete or unrecorded transitions.</span></footer>
         </>
       )}
     </div>

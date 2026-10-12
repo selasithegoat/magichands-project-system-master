@@ -226,7 +226,7 @@ const getStageDurations = async (req, res) => {
 
     const projectIds = Array.from(byProject.keys());
     const projects = await Project.find({ _id: { $in: projectIds } }).select(
-      "orderId details.projectName details.projectIndicator status",
+      "orderId details.projectName details.projectIndicator details.client status",
     );
     const projectMap = new Map(
       projects.map((project) => [project._id.toString(), project]),
@@ -329,6 +329,7 @@ const getStageDurations = async (req, res) => {
         orderId: project?.orderId || null,
         projectName: project?.details?.projectName || "Untitled",
         projectIndicator: project?.details?.projectIndicator || "",
+        client: project?.details?.client || null,
         status: project?.status || "Unknown",
         totalHours: endToEnd?.hours ?? stageHoursTotal,
         endToEnd,
