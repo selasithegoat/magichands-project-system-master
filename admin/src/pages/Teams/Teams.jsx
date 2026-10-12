@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import "./Teams.css";
 import Modal from "../../components/Modal/Modal";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
-import { UserIcon, LockIcon, PencilIcon, TrashIcon } from "../../icons/Icons";
+import { PencilIcon, TrashIcon } from "../../icons/Icons";
 
 const normalizeDepartmentId = (value) =>
   ["outside-production", "outside production"].includes(
@@ -12,6 +12,30 @@ const normalizeDepartmentId = (value) =>
   )
     ? "local-outsourcing"
     : value;
+
+const PAGE_SIZE = 8;
+
+const getEmployeeName = (employee) =>
+  [employee?.firstName, employee?.lastName].filter(Boolean).join(" ") ||
+  employee?.name ||
+  "Unnamed employee";
+
+const getInitials = (employee) =>
+  [employee?.firstName, employee?.lastName]
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "?";
+
+const DirectoryIcon = ({ type }) => {
+  const paths = {
+    people: <><circle cx="9" cy="8" r="3" /><path d="M3.5 20v-2a5.5 5.5 0 0 1 11 0v2M16 5.5a3 3 0 0 1 0 5.8M17 14a5 5 0 0 1 3.5 4.8V20" /></>,
+    production: <><path d="M4 20V9l5 3V8l5 3V4h6v16H4Z" /><path d="M8 16h2m4 0h2" /></>,
+    training: <><path d="m3 8 9-5 9 5-9 5-9-5Z" /><path d="M7 11v5c3 2 7 2 10 0v-5M21 8v6" /></>,
+    access: <><path d="M12 3 5 6v5c0 4.6 2.8 8.1 7 10 4.2-1.9 7-5.4 7-10V6l-7-3Z" /><path d="m9 12 2 2 4-5" /></>,
+  };
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">{paths[type] || paths.people}</svg>;
+};
 
 const Teams = () => {
   const queryClient = useQueryClient();
@@ -38,6 +62,14 @@ const Teams = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [search, setSearch] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [accessFilter, setAccessFilter] = useState("all");
+  const [cohortFilter, setCohortFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("name");
+  const [viewMode, setViewMode] = useState("grid");
+  const [page, setPage] = useState(1);
   const [deleteModal, setDeleteModal] = useState({
     isOpen: false,
     employeeId: null,
@@ -198,6 +230,24 @@ const Teams = () => {
     setSelectedEmployee(null);
   };
 
+  const employeeToFormData = (employee) => ({
+    firstName: employee?.firstName || "",
+    lastName: employee?.lastName || "",
+    employeeId: employee?.employeeId || "",
+    email: employee?.email || "",
+    password: "",
+    confirmPassword: "",
+    department: normalizeDepartments(
+      Array.isArray(employee?.department)
+        ? employee.department
+        : [employee?.department],
+    ),
+    position: employee?.position || "Member",
+    employeeType: employee?.employeeType || "Staff",
+    productionAccess:
+      employee?.productionAccess || "Departmental Production",
+  });
+
   const openAddModal = () => {
     resetForm();
     setShowAddModal(true);
@@ -205,21 +255,7 @@ const Teams = () => {
 
   const openEditModal = (emp) => {
     setSelectedEmployee(emp);
-    setFormData({
-      firstName: emp.firstName,
-      lastName: emp.lastName,
-      employeeId: emp.employeeId,
-      email: emp.email || "",
-      password: "", // Password not editable here
-      confirmPassword: "",
-      department: normalizeDepartments(
-        Array.isArray(emp.department) ? emp.department : [emp.department],
-      ),
-      position: emp.position,
-      employeeType: emp.employeeType,
-      productionAccess: emp.productionAccess || "Departmental Production",
-    });
-    setShowAddModal(true);
+    setFormData(employeeToFormData(emp));
   };
 
   const openDeletePrompt = (emp) => {
@@ -241,6 +277,9 @@ const Teams = () => {
       });
       if (res.ok) {
         setEmployees(employees.filter((e) => e._id !== employeeId));
+        if (selectedEmployee?._id === employeeId) {
+          resetForm();
+        }
       } else {
         alert("Failed to delete user");
       }
@@ -326,9 +365,10 @@ const Teams = () => {
         if (res.ok) {
           setEmployees(
             employees.map((emp) =>
-              emp._id === selectedEmployee._id ? data : emp,
+              emp._id === selectedEmployee._id ? { ...emp, ...data } : emp,
             ),
           );
+          setSelectedEmployee((current) => ({ ...current, ...data }));
           setShowAddModal(false);
           alert("Employee Updated Successfully");
         } else {
@@ -372,131 +412,317 @@ const Teams = () => {
     }
   };
 
+  const employeeDepartments = (employee) =>
+    normalizeDepartments(
+      Array.isArray(employee?.department)
+        ? employee.department
+        : [employee?.department],
+    );
+
+  const isTrainingEmployee = (employee) =>
+    ["Trainee", "Intern", "NSP"].includes(employee?.employeeType) ||
+    employee?.productionAccess === "Production Trainee";
+
+  const productionEmployees = employees.filter((employee) =>
+    employeeDepartments(employee).includes("Production"),
+  );
+  const trainingEmployees = employees.filter(isTrainingEmployee);
+  const readyProfiles = employees.filter((employee) => {
+    const depts = employeeDepartments(employee);
+    return Boolean(
+      employee?.employeeId &&
+        employee?.firstName &&
+        employee?.lastName &&
+        employee?.position &&
+        employee?.employeeType &&
+        depts.length,
+    );
+  });
+  const readinessRate = employees.length
+    ? Math.round((readyProfiles.length / employees.length) * 1000) / 10
+    : 100;
+
+  const cohortCounts = {
+    all: employees.length,
+    production: productionEmployees.length,
+    design: employees.filter((employee) =>
+      employeeDepartments(employee).includes("Graphics/Design"),
+    ).length,
+    administration: employees.filter((employee) => {
+      const depts = employeeDepartments(employee);
+      return depts.includes("Administration") || depts.includes("Stores");
+    }).length,
+    training: trainingEmployees.length,
+  };
+
+  const filteredEmployees = (() => {
+    const query = search.trim().toLowerCase();
+    return employees
+      .filter((employee) => {
+        const depts = employeeDepartments(employee);
+        if (departmentFilter !== "all" && !depts.includes(departmentFilter)) {
+          return false;
+        }
+        if (roleFilter !== "all" && employee.position !== roleFilter) {
+          return false;
+        }
+        if (
+          accessFilter !== "all" &&
+          (employee.productionAccess || "Departmental Production") !==
+            accessFilter
+        ) {
+          return false;
+        }
+        if (cohortFilter === "production" && !depts.includes("Production")) {
+          return false;
+        }
+        if (cohortFilter === "design" && !depts.includes("Graphics/Design")) {
+          return false;
+        }
+        if (
+          cohortFilter === "administration" &&
+          !depts.some((dept) => ["Administration", "Stores"].includes(dept))
+        ) {
+          return false;
+        }
+        if (cohortFilter === "training" && !isTrainingEmployee(employee)) {
+          return false;
+        }
+        if (!query) return true;
+        return [
+          getEmployeeName(employee),
+          employee.employeeId,
+          employee.email,
+          employee.position,
+          employee.employeeType,
+          employee.productionAccess,
+          ...depts,
+          ...depts.map(getDepartmentLabel),
+        ].some((value) => String(value || "").toLowerCase().includes(query));
+      })
+      .sort((left, right) => {
+        if (sortMode === "newest") {
+          return new Date(right.createdAt || 0) - new Date(left.createdAt || 0);
+        }
+        if (sortMode === "department") {
+          return String(employeeDepartments(left)[0] || "").localeCompare(
+            String(employeeDepartments(right)[0] || ""),
+          );
+        }
+        if (sortMode === "role") {
+          return String(left.position || "").localeCompare(
+            String(right.position || ""),
+          );
+        }
+        return getEmployeeName(left).localeCompare(getEmployeeName(right));
+      });
+  })();
+
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const visibleEmployees = filteredEmployees.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+  const inspectorEmployee = selectedEmployee || visibleEmployees[0] || null;
+  const inspectorValues = selectedEmployee
+    ? formData
+    : inspectorEmployee
+      ? employeeToFormData(inspectorEmployee)
+      : formData;
+
+  const exportRoster = () => {
+    if (!filteredEmployees.length) return;
+    const escape = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+    const rows = filteredEmployees.map((employee) => [
+      employee.employeeId,
+      getEmployeeName(employee),
+      employee.email || "",
+      employeeDepartments(employee).map(getDepartmentLabel).join("; "),
+      employee.position || "",
+      employee.employeeType || "",
+      employee.productionAccess || "Departmental Production",
+    ]);
+    const csv = [
+      ["Employee ID", "Name", "Email", "Departments", "Role", "Type", "Production Access"],
+      ...rows,
+    ]
+      .map((row) => row.map(escape).join(","))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `magichands-team-roster-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const summaryCards = [
+    {
+      icon: "people",
+      tone: "violet",
+      label: "Workforce headcount",
+      value: employees.length,
+      meta: `${employees.filter((employee) => employee.role === "admin").length} ${employees.filter((employee) => employee.role === "admin").length === 1 ? "administrator" : "administrators"}`,
+      detail: "Registered employee profiles",
+      progress: 100,
+    },
+    {
+      icon: "production",
+      tone: "green",
+      label: "Production specialists",
+      value: productionEmployees.length,
+      meta: `${new Set(productionEmployees.flatMap(employeeDepartments).filter((dept) => productionSubDeptIds.includes(dept))).size} active units`,
+      detail: "Assigned to Production",
+      progress: employees.length
+        ? (productionEmployees.length / employees.length) * 100
+        : 0,
+    },
+    {
+      icon: "training",
+      tone: "amber",
+      label: "Training cohort",
+      value: trainingEmployees.length,
+      meta: "Supervised access",
+      detail: "NSP, interns and trainees",
+      progress: employees.length
+        ? (trainingEmployees.length / employees.length) * 100
+        : 0,
+    },
+    {
+      icon: "access",
+      tone: "blue",
+      label: "Directory readiness",
+      value: `${readinessRate}%`,
+      meta: `${employees.length - readyProfiles.length} incomplete`,
+      detail: "Required profile fields present",
+      progress: readinessRate,
+    },
+  ];
+
   return (
     <div className="teams-page">
-      <div className="teams-header">
+      <header className="teams-hero">
         <div>
-          <h1>Teams Management</h1>
-          <p style={{ color: "var(--text-secondary)" }}>
-            Manage employees, credentials, and roles
-          </p>
+          <span>Operations Core / Workforce &amp; Access</span>
+          <h1>Team Profiles &amp; Workforce Directory</h1>
+          <p>Manage employee credentials, department assignments, production authorizations, and administrative access across active teams.</p>
         </div>
-        <button className="add-btn" onClick={openAddModal}>
-          + Register Employee
-        </button>
+        <div className="teams-hero-actions">
+          <button type="button" onClick={exportRoster} disabled={!filteredEmployees.length}>Export roster (CSV)</button>
+          <button type="button" className="primary" onClick={openAddModal}>+ Register new employee</button>
+        </div>
+      </header>
+
+      <section className="teams-summary" aria-label="Workforce summary">
+        {summaryCards.map((card) => (
+          <article className={`team-summary-card ${card.tone}`} key={card.label}>
+            <span className="team-summary-icon"><DirectoryIcon type={card.icon} /></span>
+            <span className="team-summary-meta">{card.meta}</span>
+            <small>{card.label}</small>
+            <strong>{card.value}</strong>
+            <p>{card.detail}</p>
+            <div><span style={{ width: `${Math.max(0, Math.min(100, card.progress))}%` }} /></div>
+          </article>
+        ))}
+      </section>
+
+      <section className="teams-controls">
+        <div className="teams-filter-row">
+          <label className="teams-search-field"><span>Search directory</span><input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Staff name, employee ID, email, department, or unit…" /></label>
+          <label><span>Department</span><select value={departmentFilter} onChange={(event) => { setDepartmentFilter(event.target.value); setPage(1); }}><option value="all">All departments</option>{departments.map((department) => <option key={department} value={department}>{department}</option>)}</select></label>
+          <label><span>Role</span><select value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value); setPage(1); }}><option value="all">All roles</option><option value="Leader">Leaders</option><option value="Member">Members</option></select></label>
+          <label><span>Access</span><select value={accessFilter} onChange={(event) => { setAccessFilter(event.target.value); setPage(1); }}><option value="all">All access levels</option><option value="Departmental Production">Departmental Production</option><option value="Production Trainee">Production Trainee</option></select></label>
+          <div className="teams-view-toggle" aria-label="Directory view"><button type="button" className={viewMode === "grid" ? "active" : ""} onClick={() => setViewMode("grid")}>Grid</button><button type="button" className={viewMode === "list" ? "active" : ""} onClick={() => setViewMode("list")}>List</button></div>
+        </div>
+        <div className="teams-cohort-row">
+          <nav aria-label="Workforce cohorts">
+            {[
+              ["all", "All personnel"],
+              ["production", "Production floor"],
+              ["design", "Design & Prepress"],
+              ["administration", "Admin & Stores"],
+              ["training", "Trainees & Apprentices"],
+            ].map(([key, label]) => <button type="button" key={key} className={cohortFilter === key ? "active" : ""} onClick={() => { setCohortFilter(key); setPage(1); }}>{label} <span>{cohortCounts[key]}</span></button>)}
+          </nav>
+          <label><span>Sort by</span><select value={sortMode} onChange={(event) => { setSortMode(event.target.value); setPage(1); }}><option value="name">Name</option><option value="newest">Recently added</option><option value="department">Department</option><option value="role">Role</option></select></label>
+        </div>
+      </section>
+
+      <div className="team-directory-workspace">
+        <section className="team-directory-results">
+          {loading ? (
+            <div className="team-directory-state">Loading workforce directory…</div>
+          ) : visibleEmployees.length ? (
+            <div className={`teams-grid ${viewMode}`}>
+              {visibleEmployees.map((emp) => {
+                const employeeDepts = employeeDepartments(emp);
+                const primaryDepts = employeeDepts.filter((dept) => !productionSubDeptIds.includes(dept));
+                const machineUnits = employeeDepts.filter((dept) => productionSubDeptIds.includes(dept));
+                const isSelected = selectedEmployee?._id === emp._id;
+                return (
+                  <article
+                    className={`employee-card ${isSelected ? "is-selected" : ""}`}
+                    key={emp._id}
+                    onClick={() => openEditModal(emp)}
+                    onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) openEditModal(emp); }}
+                    role="button"
+                    tabIndex="0"
+                  >
+                    <header className="employee-card-header">
+                      <span className="initials">{getInitials(emp)}</span>
+                      <div className="employee-card-identity"><h3>{getEmployeeName(emp)} <i /></h3><p>ID: {emp.employeeId || "Not assigned"} <span className={`employee-type ${String(emp.employeeType || "staff").toLowerCase()}`}>{emp.employeeType || "Staff"}</span><span className="employee-position">{emp.position || "Member"}</span></p></div>
+                      <div className="employee-card-tools">
+                        <button type="button" className="icon-btn edit-btn" onClick={(event) => { event.stopPropagation(); openEditModal(emp); }} title="Edit employee"><PencilIcon width="15" height="15" /></button>
+                        <button type="button" className="icon-btn delete-btn" onClick={(event) => { event.stopPropagation(); openDeletePrompt(emp); }} title="Remove employee"><TrashIcon width="15" height="15" /></button>
+                      </div>
+                    </header>
+
+                    <div className="employee-card-section"><span>Departments &amp; production units ({employeeDepts.length})</span><div>{primaryDepts.map((dept) => <em className="dept-tag" key={dept}>{getDepartmentLabel(dept)}</em>)}{machineUnits.map((dept) => <em className="dept-tag machine" key={dept}>{getDepartmentLabel(dept)}</em>)}{!employeeDepts.length && <em className="dept-tag warning">Unassigned</em>}</div></div>
+                    <div className="employee-access-panel"><span>Production access level</span><strong>{employeeDepts.includes("Production") ? (emp.productionAccess || "Departmental Production") : "Standard workforce access"}</strong><em>{emp.role === "admin" ? "Administrator" : emp.position === "Leader" ? "Team lead" : "Team member"}</em></div>
+                    <footer className="employee-card-footer"><span>{emp.email || `Added ${emp.createdAt ? new Date(emp.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "to the directory"}`}</span><button type="button" onClick={(event) => { event.stopPropagation(); setSelectedEmployee(emp); setShowPasswordModal(true); }}>Change password</button></footer>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="team-directory-state"><strong>No employees match these filters.</strong><span>Try another department, cohort, role, or search term.</span></div>
+          )}
+
+          <nav className="teams-pagination" aria-label="Employee directory pages"><span>Showing {visibleEmployees.length} of {filteredEmployees.length} employees</span><div><button type="button" onClick={() => setPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>Previous</button><em>Page {currentPage} of {totalPages}</em><button type="button" onClick={() => setPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>Next</button></div></nav>
+        </section>
+
+        <aside className="team-profile-inspector">
+          {inspectorEmployee ? (
+            <>
+              <header><span>{selectedEmployee ? "Live inspector" : "Profile preview"}</span><h2>{selectedEmployee ? "Edit employee credentials" : "Employee credentials"}</h2><p>{getEmployeeName(inspectorEmployee)} ({inspectorEmployee.employeeId || "No ID"})</p></header>
+              <form onSubmit={selectedEmployee ? handleSubmit : (event) => { event.preventDefault(); openEditModal(inspectorEmployee); }}>
+                <div className="inspector-form-grid">
+                  <label><span>First name</span><input name="firstName" value={inspectorValues.firstName} onChange={handleChange} disabled={!selectedEmployee} /></label>
+                  <label><span>Last name</span><input name="lastName" value={inspectorValues.lastName} onChange={handleChange} disabled={!selectedEmployee} /></label>
+                  <label><span>Employee ID</span><input name="employeeId" value={inspectorValues.employeeId} onChange={handleChange} disabled={!selectedEmployee} /></label>
+                  <label><span>Company email</span><input name="email" type="email" value={inspectorValues.email} onChange={handleChange} disabled={!selectedEmployee} /></label>
+                </div>
+
+                <fieldset disabled={!selectedEmployee}><legend>Select department(s) <em>{inspectorValues.department.filter((dept) => !productionSubDeptIds.includes(dept)).length} active</em></legend><div className="inspector-check-grid">{departments.map((department) => <label className={inspectorValues.department.includes(department) ? "selected" : ""} key={department}><input type="checkbox" checked={inspectorValues.department.includes(department)} onChange={() => handleDepartmentToggle(department)} />{department}</label>)}</div></fieldset>
+
+                {(inspectorValues.department.includes("Production") || inspectorValues.department.some((dept) => productionSubDeptIds.includes(dept))) && <fieldset disabled={!selectedEmployee}><legend>Production unit matrix <em>{inspectorValues.department.filter((dept) => productionSubDeptIds.includes(dept)).length} authorized</em></legend><p>Select the production units this employee is assigned to support.</p><div className="inspector-check-grid machine-grid">{productionSubDepartments.map((unit) => <label className={inspectorValues.department.includes(unit.id) ? "selected" : ""} key={unit.id}><input type="checkbox" checked={inspectorValues.department.includes(unit.id)} onChange={() => handleProductionSubToggle(unit.id)} />{unit.label}</label>)}</div></fieldset>}
+
+                <div className="inspector-form-grid selects">
+                  <label><span>Position / role</span><select name="position" value={inspectorValues.position} onChange={handleChange} disabled={!selectedEmployee}><option value="Member">Member</option><option value="Leader">Leader</option></select></label>
+                  <label><span>Employee type</span><select name="employeeType" value={inspectorValues.employeeType} onChange={handleChange} disabled={!selectedEmployee}><option value="Staff">Staff</option><option value="NSP">NSP</option><option value="Intern">Intern</option><option value="Trainee">Trainee</option></select></label>
+                  {inspectorValues.department.includes("Production") && <label className="wide"><span>Production access level</span><select name="productionAccess" value={inspectorValues.productionAccess} onChange={handleChange} disabled={!selectedEmployee}><option value="Departmental Production">Departmental Production</option><option value="Production Trainee">Production Trainee</option></select></label>}
+                </div>
+                <div className="inspector-actions">{selectedEmployee ? <><button type="button" onClick={resetForm}>Discard</button><button type="submit" className="primary">Update employee</button></> : <button type="submit" className="primary">Edit credentials</button>}</div>
+              </form>
+            </>
+          ) : <div className="team-directory-state"><strong>No employee selected.</strong><span>Add an employee or adjust the current filters.</span></div>}
+        </aside>
       </div>
 
-      {loading ? (
-        <div>Loading...</div>
-      ) : (
-        <div className="teams-grid">
-          {employees.map((emp) => (
-            <div className="employee-card" key={emp._id}>
-              <div className="card-header">
-                <div className="initials">
-                  {emp.firstName?.[0]}
-                  {emp.lastName?.[0]}
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button
-                    className="icon-btn edit-btn"
-                    onClick={() => openEditModal(emp)}
-                    title="Edit Details"
-                  >
-                    <PencilIcon width="16" height="16" />
-                  </button>
-                  <button
-                    className="icon-btn delete-btn"
-                    onClick={() => openDeletePrompt(emp)}
-                    title="Remove User"
-                  >
-                    <TrashIcon width="16" height="16" />
-                  </button>
-                </div>
-              </div>
-              <div className="employee-info">
-                <h3>
-                  {emp.firstName} {emp.lastName}
-                </h3>
-                <p className="employee-id">ID: {emp.employeeId}</p>
-              </div>
-              <div
-                className="info-row"
-                style={{ flexDirection: "column", gap: "0.5rem" }}
-              >
-                <span className="info-label">Departments & Role</span>
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "6px",
-                    alignItems: "center",
-                  }}
-                >
-                  {(Array.isArray(emp.department)
-                    ? emp.department
-                    : [emp.department]
-                  ).map((d, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        fontSize: "0.75rem",
-                        padding: "2px 8px",
-                        background: "var(--bg-secondary)",
-                        borderRadius: "4px",
-                        border: "1px solid var(--border-color)",
-                        color: "var(--text-primary)",
-                      }}
-                    >
-                      {getDepartmentLabel(d)}
-                    </span>
-                  ))}
-                  {/* Position Badge next to departments */}
-                  <span className={`role-badge ${emp.position}`}>
-                    {emp.position}
-                  </span>
-                </div>
-              </div>
-              <div className="info-row">
-                <span className="info-label">Type</span>
-                <span
-                  className="role-badge"
-                  style={{
-                    color: "#64748b",
-                    border: "1px solid #e2e8f0",
-                    background: "#f8fafc",
-                  }}
-                >
-                  {emp.employeeType}
-                </span>
-              </div>
-              {(Array.isArray(emp.department)
-                ? emp.department
-                : [emp.department]
-              ).includes("Production") && (
-                <div className="info-row">
-                  <span className="info-label">Production Access</span>
-                  <span className="role-badge">
-                    {emp.productionAccess || "Departmental Production"}
-                  </span>
-                </div>
-              )}
-
-              <div className="card-actions">
-                <button
-                  className="action-btn"
-                  onClick={() => {
-                    setSelectedEmployee(emp);
-                    setShowPasswordModal(true);
-                  }}
-                >
-                  Change Password
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <footer className="team-directory-footer"><span className="team-summary-icon"><DirectoryIcon type="access" /></span><div><strong>Employee directory controls active</strong><p>{readyProfiles.length} of {employees.length} profiles contain all required identity, role, and department fields.</p></div><em>{employees.filter((employee) => employee.email).length} company email records</em></footer>
 
       {/* Register/Edit Modal */}
       <Modal

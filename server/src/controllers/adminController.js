@@ -73,11 +73,17 @@ const registerEmployee = async (req, res) => {
       res.status(201).json({
         _id: user._id,
         name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
         employeeId: user.employeeId,
         department: user.department,
         position: user.position,
         employeeType: user.employeeType,
         productionAccess: user.productionAccess,
+        role: user.role,
+        avatarUrl: user.avatarUrl,
+        createdAt: user.createdAt,
       });
     } else {
       res.status(400).json({ message: "Invalid user data" });
@@ -147,11 +153,17 @@ const updateEmployee = async (req, res) => {
     res.json({
       _id: updatedUser._id,
       name: updatedUser.name,
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      email: updatedUser.email,
       employeeId: updatedUser.employeeId,
       department: updatedUser.department,
       position: updatedUser.position,
       employeeType: updatedUser.employeeType,
       productionAccess: updatedUser.productionAccess,
+      role: updatedUser.role,
+      avatarUrl: updatedUser.avatarUrl,
+      createdAt: updatedUser.createdAt,
     });
   } catch (error) {
     console.error("Error updating employee:", error);
