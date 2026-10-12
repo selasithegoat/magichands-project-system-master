@@ -30,9 +30,4 @@ export const adminNavigationItems = [
   { to: "/clients", label: "Client Intelligence", icon: "clients" },
   { to: "/teams", label: "Team", icon: "team" },
   { to: "/analytics", label: "Analytics", icon: "analytics" },
-  {
-    to: "/health-performance",
-    label: "Project Performance",
-    icon: "performance",
-  },
 ];

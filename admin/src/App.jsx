@@ -29,9 +29,6 @@ const PerformanceAnalytics = lazy(
 const ProjectAnalytics = lazy(
   () => import("./pages/Analytics/ProjectAnalytics"),
 );
-const HealthPerformance = lazy(
-  () => import("./pages/HealthPerformance/HealthPerformance"),
-);
 const Teams = lazy(() => import("./pages/Teams/Teams"));
 const Clients = lazy(() => import("./pages/Clients/Clients"));
 const OrdersManagement = lazy(
@@ -395,15 +392,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/health-performance"
-            element={
-              <ProtectedRoute>
-                <HealthPerformance />
-              </ProtectedRoute>
-            }
-          />
-
           {/* Fallback */}
           <Route
             path="*"
