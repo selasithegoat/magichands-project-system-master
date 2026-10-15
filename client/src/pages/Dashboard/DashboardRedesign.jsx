@@ -1375,7 +1375,11 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
       )}
 
       {isProductionDashboardUser && (
-        <section className="dashboard-production-queue" aria-live="polite">
+        <section
+          id="production-queue"
+          className="dashboard-production-queue"
+          aria-live="polite"
+        >
           <div className="dashboard-production-queue-header">
             <div>
               <span className="dashboard-production-kicker">

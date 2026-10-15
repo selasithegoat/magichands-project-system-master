@@ -54,6 +54,22 @@ const CHAT_DEFAULT_REACTIONS = [
   "1f62e",
   "1f389",
 ];
+
+const resolveChatTheme = (fallbackTheme, portalSource) => {
+  if (typeof document === "undefined") {
+    return fallbackTheme === "dark" ? "dark" : "light";
+  }
+
+  const attributeName =
+    portalSource === "admin" ? "data-admin-theme" : "data-theme";
+  const documentTheme = document.documentElement.getAttribute(attributeName);
+
+  if (documentTheme === "dark" || documentTheme === "light") {
+    return documentTheme;
+  }
+
+  return fallbackTheme === "dark" ? "dark" : "light";
+};
 const CHAT_ATTACHMENT_ACCEPT =
   "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
 const CHAT_SAFE_IMAGE_EXTENSIONS = new Set([
@@ -181,6 +197,28 @@ const SmileIcon = ({ width = 18, height = 18 }) => (
   </svg>
 );
 
+const LinkIcon = ({ width = 16, height = 16 }) => (
+  <svg width={width} height={height} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.5 13.5 13.5 10.5" />
+    <path d="M7.4 15.6 5.8 17.2a3.4 3.4 0 0 1-4.8-4.8l3.1-3.1a3.4 3.4 0 0 1 4.8 0" />
+    <path d="m16.6 8.4 1.6-1.6a3.4 3.4 0 1 1 4.8 4.8l-3.1 3.1a3.4 3.4 0 0 1-4.8 0" />
+  </svg>
+);
+
+const BoltIcon = ({ width = 16, height = 16 }) => (
+  <svg width={width} height={height} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M13 2 4.5 13H11l-1 9 8.5-11H12Z" />
+  </svg>
+);
+
+const MicrophoneIcon = ({ width = 16, height = 16 }) => (
+  <svg width={width} height={height} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0" />
+    <path d="M12 18v3M9 21h6" />
+  </svg>
+);
+
 const toIdString = (value) => {
   if (!value) return "";
   if (typeof value === "string" || typeof value === "number") {
@@ -203,6 +241,64 @@ const toIdString = (value) => {
 };
 
 const toText = (value) => String(value || "").trim();
+
+const PRODUCTION_DEPARTMENT_TOKENS = new Set([
+  "production",
+  "dtf",
+  "uv-dtf",
+  "uv-printing",
+  "engraving",
+  "large-format",
+  "digital-press",
+  "digital-heat-press",
+  "offset-press",
+  "screen-printing",
+  "embroidery",
+  "sublimation",
+  "digital-cutting",
+  "pvc-id",
+  "business-cards",
+  "installation",
+  "overseas",
+  "woodme",
+  "fabrication",
+  "signage",
+  "local-outsourcing",
+  "outside-production",
+]);
+
+const CHAT_QUICK_COMMANDS = [
+  { key: "help", label: "Command help", description: "Show every command available to you.", group: "Workspace" },
+  { key: "project", label: "Link project", description: "Find and attach an accessible project.", group: "Workspace", project: true },
+  { key: "open", label: "Open project", description: "Open an authorized project workspace.", group: "Workspace", project: true },
+  { key: "status", label: "Share status", description: "Attach a project with its live status.", group: "Workspace", project: true },
+  { key: "files", label: "Add files", description: "Choose files to attach to this message.", group: "Workspace" },
+  { key: "reply", label: "Reply to latest", description: "Reply to the latest incoming message.", group: "Workspace" },
+  { key: "unread", label: "First unread", description: "Jump to the first unread message.", group: "Workspace" },
+  { key: "queue", label: "My production queue", description: "Open your current production workload.", group: "Production" },
+  { key: "specs", label: "Production specs", description: "Find an order and open its authorized workspace.", group: "Production", project: true },
+  { key: "start", label: "Start production", description: "Start an eligible assigned production job.", group: "Production", project: true, productionOnly: true },
+  { key: "complete", label: "Completion workflow", description: "Open the guarded production completion flow.", group: "Production", project: true, productionOnly: true },
+  { key: "issue", label: "Report issue", description: "Open the project challenge workflow.", group: "Production", project: true },
+  { key: "update", label: "Production update", description: "Open the project workflow to record an update.", group: "Production", project: true },
+  { key: "remind", label: "Remind owner", description: "Send the Production owner a guarded reminder.", group: "Lead tools", project: true },
+  { key: "assign", label: "Assign project", description: "Open the project assignment workspace.", group: "Admin tools", project: true, adminOnly: true },
+  { key: "ack", label: "Acknowledge", description: "Insert an editable acknowledgement reply.", group: "Canned replies", template: "Acknowledged. I’m reviewing this now and will update you shortly." },
+  { key: "ontrack", label: "On-track update", description: "Insert an editable on-track update.", group: "Canned replies", template: "Production is on track. I’ll share the next update at the next milestone." },
+  { key: "delay", label: "Delay notice", description: "Insert an editable delay notice.", group: "Canned replies", template: "There is a production delay due to [reason]. The revised completion time is [time]." },
+  { key: "ready", label: "Ready notice", description: "Insert an editable review or dispatch notice.", group: "Canned replies", template: "The order is ready for review. Please confirm the next step when convenient." },
+];
+
+const normalizeUserDepartments = (user) =>
+  (Array.isArray(user?.department) ? user.department : user?.department ? [user.department] : [])
+    .map((entry) => toText(entry).toLowerCase().replace(/\s+/g, "-"))
+    .filter(Boolean);
+
+const hasProductionCommandAccess = (user) =>
+  user?.role === "admin" ||
+  normalizeUserDepartments(user).some((entry) => PRODUCTION_DEPARTMENT_TOKENS.has(entry));
+
+const escapeCsvCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
 
 const CHAT_TWEMOJI_FOLDER = "svg";
 const CHAT_TWEMOJI_EXTENSION = ".svg";
@@ -322,6 +418,19 @@ const formatMessageDay = (value) => {
     weekday: "short",
     month: "short",
     day: "numeric",
+  }).format(date);
+};
+
+const formatMessageTimestamp = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   }).format(date);
 };
 
@@ -537,6 +646,16 @@ const getThreadActivityTimestamp = (thread) => {
 
 const compareThreadsByActivityDesc = (left, right) =>
   getThreadActivityTimestamp(right) - getThreadActivityTimestamp(left);
+
+const getPriorityChatThreadId = (threads = []) => {
+  const sortedThreads = [...(Array.isArray(threads) ? threads : [])].sort(
+    compareThreadsByActivityDesc,
+  );
+  const unreadThread = sortedThreads.find(
+    (thread) => (Number(thread?.unreadCount) || 0) > 0,
+  );
+  return toIdString(unreadThread?._id || sortedThreads[0]?._id);
+};
 
 const clampChatMessageFetchLimit = (limit = CHAT_MESSAGE_PAGE_SIZE) => {
   const safeLimit = Number(limit) || CHAT_MESSAGE_PAGE_SIZE;
@@ -1037,7 +1156,10 @@ const ChatDock = ({ user, theme = "light" }) => {
   const currentUserId = toIdString(user?._id || user?.id);
   const portalSource = useMemo(() => resolvePortalSource(), []);
   const portalPositionClass = portalSource === "admin" ? "portal-admin" : "";
-  const pickerTheme = theme === "dark" ? Theme.DARK : Theme.LIGHT;
+  const [resolvedTheme, setResolvedTheme] = useState(() =>
+    resolveChatTheme(theme, portalSource),
+  );
+  const pickerTheme = resolvedTheme === "dark" ? Theme.DARK : Theme.LIGHT;
   const [isOpen, setIsOpen] = useState(false);
   const [threads, setThreads] = useState([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
@@ -1064,6 +1186,12 @@ const ChatDock = ({ user, theme = "light" }) => {
   const [pendingAttachments, setPendingAttachments] = useState([]);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [composerEmojiPickerOpen, setComposerEmojiPickerOpen] = useState(false);
+  const [activeQuickCommand, setActiveQuickCommand] = useState("");
+  const [highlightedQuickCommandIndex, setHighlightedQuickCommandIndex] =
+    useState(0);
+  const [quickCommandAction, setQuickCommandAction] = useState(null);
+  const [quickCommandActionBusy, setQuickCommandActionBusy] = useState(false);
+  const [quickCommandNotice, setQuickCommandNotice] = useState("");
   const [typingThreads, setTypingThreads] = useState({});
   const [error, setError] = useState("");
   const [incomingPreview, setIncomingPreview] = useState(null);
@@ -1119,6 +1247,7 @@ const ChatDock = ({ user, theme = "light" }) => {
   const prependScrollStateRef = useRef(null);
   const projectRouteCacheRef = useRef(new Map());
   const attachmentInputRef = useRef(null);
+  const audioAttachmentInputRef = useRef(null);
   const composerTextareaRef = useRef(null);
   const pendingAttachmentsRef = useRef([]);
   const typingStateRef = useRef({
@@ -1131,6 +1260,7 @@ const ChatDock = ({ user, theme = "light" }) => {
     threadId: "",
     unreadCount: 0,
   });
+  const lastUnreadMessageIdRef = useRef("");
   const typingIdleTimerRef = useRef(null);
   const typingIndicatorTimersRef = useRef(new Map());
   const incomingPreviewHideTimerRef = useRef(null);
@@ -1145,6 +1275,79 @@ const ChatDock = ({ user, theme = "light" }) => {
   );
   const isPublicThread = activeThread?.type === "public";
   const isDirectThread = activeThread?.type === "direct";
+  const availableQuickCommands = useMemo(() => {
+    const isAdmin = user?.role === "admin";
+    const canRunProductionCommands = hasProductionCommandAccess(user);
+    return CHAT_QUICK_COMMANDS.filter(
+      (command) =>
+        (!command.adminOnly || isAdmin) &&
+        (!command.productionOnly || canRunProductionCommands),
+    );
+  }, [user]);
+  const quickCommandInput = useMemo(() => {
+    if (!composer.startsWith("/") || composer.includes("\n")) return null;
+    const raw = composer.slice(1);
+    const firstSpaceIndex = raw.indexOf(" ");
+    return {
+      command:
+        firstSpaceIndex >= 0 ? raw.slice(0, firstSpaceIndex) : raw,
+      argument:
+        firstSpaceIndex >= 0 ? raw.slice(firstSpaceIndex + 1).trim() : "",
+    };
+  }, [composer]);
+  const quickCommandMatches = useMemo(() => {
+    if (!quickCommandInput) return [];
+    const query = quickCommandInput.command.toLowerCase();
+    return availableQuickCommands.filter((command) => {
+      if (!query) return true;
+      return (
+        command.key.includes(query) ||
+        command.label.toLowerCase().includes(query) ||
+        command.description.toLowerCase().includes(query) ||
+        command.group.toLowerCase().includes(query)
+      );
+    });
+  }, [availableQuickCommands, quickCommandInput]);
+  const quickCommandMenuOpen = Boolean(
+    activeThread && quickCommandInput && quickCommandMatches.length > 0,
+  );
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handleOverlayEscape = (event) => {
+      if (event.key !== "Escape") return;
+      const hasOpenComposerOverlay =
+        quickCommandMenuOpen ||
+        projectPickerOpen ||
+        composerEmojiPickerOpen ||
+        Boolean(activeMention);
+      if (!hasOpenComposerOverlay) return;
+
+      event.preventDefault();
+      setComposerEmojiPickerOpen(false);
+      setProjectPickerOpen(false);
+      setProjectQuery("");
+      setActiveQuickCommand("");
+      setActiveMention(null);
+      setMentionResults([]);
+      setHighlightedMentionIndex(0);
+      if (quickCommandMenuOpen || composer.startsWith("#")) {
+        setComposer("");
+      }
+      window.requestAnimationFrame(() => composerTextareaRef.current?.focus());
+    };
+
+    window.addEventListener("keydown", handleOverlayEscape, true);
+    return () => window.removeEventListener("keydown", handleOverlayEscape, true);
+  }, [
+    activeMention,
+    composer,
+    composerEmojiPickerOpen,
+    isOpen,
+    projectPickerOpen,
+    quickCommandMenuOpen,
+  ]);
   const activeTypingThread = activeThreadId ? typingThreads[activeThreadId] || null : null;
   const currentUserSummary = useMemo(
     () => ({
@@ -1160,21 +1363,7 @@ const ChatDock = ({ user, theme = "light" }) => {
           ? [user.department]
           : [],
     }),
-    [
-      currentUserId,
-      user?.avatar,
-      user?.avatarUrl,
-      user?.department,
-      user?.firstName,
-      user?.imageUrl,
-      user?.lastName,
-      user?.name,
-      user?.photo,
-      user?.photoUrl,
-      user?.profileImage,
-      user?.profilePicture,
-      user?.role,
-    ],
+    [currentUserId, user],
   );
   const mentionUserDirectory = useMemo(() => {
     const mentionMap = new Map();
@@ -1301,6 +1490,43 @@ const ChatDock = ({ user, theme = "light" }) => {
         counterpartLastReadAt.getTime() >= messageCreatedAt.getTime(),
     };
   }, [activeThread?.counterpartLastReadAt, currentUserId, isDirectThread, messages]);
+
+  const conversationProjects = useMemo(() => {
+    const seen = new Set();
+    const projects = [];
+    [...messages].reverse().forEach((message) => {
+      (Array.isArray(message?.references) ? message.references : []).forEach(
+        (reference) => {
+          const projectId = toIdString(reference?.projectId || reference?.project);
+          if (!projectId || seen.has(projectId)) return;
+          seen.add(projectId);
+          projects.push({ ...reference, projectId });
+        },
+      );
+    });
+    return projects;
+  }, [messages]);
+
+  const conversationAttachments = useMemo(() => {
+    const seen = new Set();
+    const attachments = [];
+    [...messages].reverse().forEach((message) => {
+      (Array.isArray(message?.attachments) ? message.attachments : []).forEach(
+        (attachment, index) => {
+          const url = resolveAttachmentUrl(attachment);
+          if (!url || seen.has(url)) return;
+          seen.add(url);
+          attachments.push({
+            ...attachment,
+            url,
+            name: getAttachmentName(attachment, index),
+            kind: getAttachmentType(attachment, index),
+          });
+        },
+      );
+    });
+    return attachments;
+  }, [messages]);
 
   const updateThreadsState = useCallback((nextValue) => {
     setThreads((prev) => {
@@ -1509,6 +1735,24 @@ const ChatDock = ({ user, theme = "light" }) => {
   }, [portalSource]);
 
   useEffect(() => {
+    const syncTheme = () => {
+      setResolvedTheme(resolveChatTheme(theme, portalSource));
+    };
+
+    syncTheme();
+
+    if (typeof MutationObserver === "undefined") return undefined;
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "data-admin-theme"],
+    });
+
+    return () => observer.disconnect();
+  }, [portalSource, theme]);
+
+  useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
   }, [activeThreadId]);
 
@@ -1521,8 +1765,36 @@ const ChatDock = ({ user, theme = "light" }) => {
   }, [isOpen]);
 
   useEffect(() => {
+    if (!isOpen || typeof document === "undefined") return undefined;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
   }, [pendingAttachments]);
+
+  useEffect(() => {
+    setHighlightedQuickCommandIndex((currentIndex) =>
+      quickCommandMatches.length === 0
+        ? 0
+        : Math.min(currentIndex, quickCommandMatches.length - 1),
+    );
+  }, [quickCommandMatches.length]);
+
+  useEffect(() => {
+    if (!quickCommandNotice) return undefined;
+    const timeoutId = window.setTimeout(() => setQuickCommandNotice(""), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [quickCommandNotice]);
 
   const clearIncomingPreviewTimers = useCallback(() => {
     if (incomingPreviewHideTimerRef.current) {
@@ -1621,6 +1893,9 @@ const ChatDock = ({ user, theme = "light" }) => {
     replacePendingAttachments([]);
     if (attachmentInputRef.current) {
       attachmentInputRef.current.value = "";
+    }
+    if (audioAttachmentInputRef.current) {
+      audioAttachmentInputRef.current.value = "";
     }
   }, [replacePendingAttachments]);
 
@@ -2462,6 +2737,7 @@ const ChatDock = ({ user, theme = "light" }) => {
       threadId: activeThreadId,
       unreadCount: Math.max(0, openingUnreadCount),
     };
+    lastUnreadMessageIdRef.current = "";
     setMessages([]);
     setMessagesHasOlder(false);
     messageScrollActionRef.current = "";
@@ -2488,43 +2764,46 @@ const ChatDock = ({ user, theme = "light" }) => {
       prependScrollStateRef.current = null;
       return;
     }
-
-    if (messageScrollActionRef.current === "bottom") {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const scrollAction = messageScrollActionRef.current;
+    if (!messageContainer || !["bottom", "first-unread"].includes(scrollAction)) {
+      return;
     }
 
-    if (messageScrollActionRef.current === "first-unread") {
-      const unreadTarget = unreadScrollTargetRef.current;
-      const unreadCount = Math.max(0, Number(unreadTarget?.unreadCount) || 0);
-      const firstUnreadIndex = Math.max(messages.length - unreadCount, 0);
-      const firstUnreadMessageId = toIdString(messages[firstUnreadIndex]?._id);
-      const firstUnreadMessageNode = firstUnreadMessageId
-        ? document.getElementById(`chat-dock-message-${firstUnreadMessageId}`)
-        : null;
+    const frameId = window.requestAnimationFrame(() => {
+      if (scrollAction === "first-unread") {
+        const unreadTarget = unreadScrollTargetRef.current;
+        const unreadCount = Math.max(0, Number(unreadTarget?.unreadCount) || 0);
+        const firstUnreadIndex = Math.max(messages.length - unreadCount, 0);
+        const firstUnreadMessageId = toIdString(messages[firstUnreadIndex]?._id);
+        lastUnreadMessageIdRef.current = firstUnreadMessageId;
+        const firstUnreadMessageNode = firstUnreadMessageId
+          ? document.getElementById(`chat-dock-message-${firstUnreadMessageId}`)
+          : null;
 
-      if (
-        firstUnreadMessageNode &&
-        unreadTarget.threadId === activeThreadId &&
-        unreadCount > 0
-      ) {
-        firstUnreadMessageNode.scrollIntoView({
-          behavior: "auto",
-          block: "start",
-        });
+        if (
+          firstUnreadMessageNode &&
+          unreadTarget.threadId === activeThreadId &&
+          unreadCount > 0
+        ) {
+          const containerRect = messageContainer.getBoundingClientRect();
+          const messageRect = firstUnreadMessageNode.getBoundingClientRect();
+          messageContainer.scrollTop = Math.max(
+            messageContainer.scrollTop + messageRect.top - containerRect.top - 18,
+            0,
+          );
+        } else {
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+        unreadScrollTargetRef.current = { threadId: "", unreadCount: 0 };
       } else {
-        messagesEndRef.current?.scrollIntoView({
-          behavior: "auto",
-          block: "end",
-        });
+        messageContainer.scrollTop = messageContainer.scrollHeight;
       }
-      unreadScrollTargetRef.current = {
-        threadId: "",
-        unreadCount: 0,
-      };
-    }
 
-    messageScrollActionRef.current = "";
-    prependScrollStateRef.current = null;
+      messageScrollActionRef.current = "";
+      prependScrollStateRef.current = null;
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
   }, [activeThreadId, isOpen, messages]);
 
   useEffect(() => {
@@ -2810,18 +3089,25 @@ const ChatDock = ({ user, theme = "light" }) => {
     };
   }, [activeMention, fetchChatUsers, isPublicThread, publicMentionUsers]);
 
-  const handleOpen = () => {
+  const handleOpen = async () => {
     dismissIncomingPreview(true);
     setIsOpen(true);
     setSidebarMode("threads");
-    setActiveThreadId("");
     setError("");
     setOpenReactionPickerId("");
     clearMentionState();
-    setMobilePanelView("sidebar");
-    if (threads.length === 0) {
-      void fetchThreads({ preserveSelection: false, showLoading: true });
-    }
+    setActiveQuickCommand("");
+    const availableThreads =
+      threads.length > 0
+        ? threads
+        : await fetchThreads({
+            preserveSelection: false,
+            force: true,
+            showLoading: true,
+          });
+    const priorityThreadId = getPriorityChatThreadId(availableThreads);
+    setActiveThreadId(priorityThreadId);
+    setMobilePanelView(priorityThreadId ? "thread" : "sidebar");
   };
 
   const handleClose = useCallback(() => {
@@ -2837,6 +3123,8 @@ const ChatDock = ({ user, theme = "light" }) => {
     setEditingMessageId("");
     setEditDraft("");
     setReplyTarget(null);
+    setActiveQuickCommand("");
+    setQuickCommandAction(null);
     clearMentionState();
     resetProjectRoutePicker();
   }, [clearMentionState, resetProjectRoutePicker]);
@@ -2884,6 +3172,7 @@ const ChatDock = ({ user, theme = "light" }) => {
     setEditingMessageId("");
     setEditDraft("");
     setReplyTarget(null);
+    setActiveQuickCommand("");
     clearMentionState();
     resetProjectRoutePicker();
   };
@@ -3068,7 +3357,47 @@ const ChatDock = ({ user, theme = "light" }) => {
     };
   }, [currentUserId, handleOpenPublicThread, handleStartDirectThread]);
 
-  const handleAddProjectReference = (project) => {
+  const resolveAuthorizedProjectRoute = async (project, commandKey = "open") => {
+    const projectId = toIdString(project?._id || project?.projectId);
+    if (!projectId) {
+      throw new Error("Choose a valid project.");
+    }
+
+    const res = await fetch(
+      appendPortalSource(`/api/chat/projects/${projectId}/routes`, portalSource),
+      { credentials: "include" },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.message || "You do not have an authorized project route.");
+    }
+
+    const routes = Array.isArray(data?.routes) ? data.routes : [];
+    if (routes.length === 0) {
+      throw new Error("You do not have an authorized project route.");
+    }
+
+    const preferredKeys =
+      commandKey === "assign"
+        ? ["admin-detail", "frontdesk", "detail", "engaged"]
+        : ["engaged", "admin-detail", "detail", "frontdesk"];
+    return (
+      preferredKeys.map((key) => routes.find((route) => route.key === key)).find(Boolean) ||
+      routes[0]
+    );
+  };
+
+  const handleOpenDossierProject = async (project) => {
+    try {
+      const route = await resolveAuthorizedProjectRoute(project);
+      handleClose();
+      navigate(route.path);
+    } catch (routeError) {
+      setError(routeError.message || "The shared project could not be opened.");
+    }
+  };
+
+  const addProjectToComposer = (project) => {
     const projectId = toIdString(project?._id);
     if (!projectId) return;
 
@@ -3080,6 +3409,49 @@ const ChatDock = ({ user, theme = "light" }) => {
     });
     setProjectPickerOpen(false);
     setProjectQuery("");
+  };
+
+  const handleAddProjectReference = async (project) => {
+    const commandKey = activeQuickCommand;
+    if (!commandKey || commandKey === "project") {
+      addProjectToComposer(project);
+      setActiveQuickCommand("");
+      setComposer("");
+      return;
+    }
+
+    if (commandKey === "status") {
+      addProjectToComposer(project);
+      setComposer(
+        `Status update for ${buildProjectLabel(project)}: ${
+          toText(project?.status) || "status unavailable"
+        }.`,
+      );
+      setActiveQuickCommand("");
+      window.requestAnimationFrame(() => composerTextareaRef.current?.focus());
+      return;
+    }
+
+    if (["start", "remind"].includes(commandKey)) {
+      setQuickCommandAction({ commandKey, project });
+      setProjectPickerOpen(false);
+      setProjectQuery("");
+      setActiveQuickCommand("");
+      setComposer("");
+      return;
+    }
+
+    try {
+      const route = await resolveAuthorizedProjectRoute(project, commandKey);
+      setProjectPickerOpen(false);
+      setProjectQuery("");
+      setActiveQuickCommand("");
+      setComposer("");
+      handleClose();
+      navigate(route.path);
+    } catch (commandError) {
+      setError(commandError.message || "The project workspace could not be opened.");
+    }
   };
 
   const handleRemoveProjectReference = (projectId) => {
@@ -3095,13 +3467,31 @@ const ChatDock = ({ user, theme = "light" }) => {
 
   const handleToggleProjectPicker = useCallback(() => {
     setComposerEmojiPickerOpen(false);
-    setProjectPickerOpen((prev) => !prev);
+    setProjectPickerOpen((prev) => {
+      const nextOpen = !prev;
+      setActiveQuickCommand(nextOpen ? "project" : "");
+      setProjectQuery("");
+      setComposer((currentComposer) => {
+        if (nextOpen) {
+          return currentComposer.trim() ? currentComposer : "#";
+        }
+        return currentComposer === "#" ? "" : currentComposer;
+      });
+      if (nextOpen) {
+        window.requestAnimationFrame(() => composerTextareaRef.current?.focus());
+      }
+      return nextOpen;
+    });
   }, []);
 
   const handleToggleComposerEmojiPicker = useCallback(() => {
     setProjectPickerOpen(false);
+    setActiveQuickCommand("");
+    if (quickCommandMenuOpen || composer.startsWith("#")) {
+      setComposer("");
+    }
     setComposerEmojiPickerOpen((prev) => !prev);
-  }, []);
+  }, [composer, quickCommandMenuOpen]);
 
   const handleSelectComposerEmoji = useCallback(
     (emojiData) => {
@@ -3181,6 +3571,20 @@ const ChatDock = ({ user, theme = "light" }) => {
     const nextValue = event.target.value;
     const nextCaretPosition = event.target.selectionStart;
     setComposer(nextValue);
+    if (nextValue.startsWith("/")) {
+      setHighlightedQuickCommandIndex(0);
+    }
+    const projectShortcutMatch = nextValue.match(/^#([^\n]*)$/);
+    if (projectShortcutMatch) {
+      setActiveQuickCommand("project");
+      setProjectQuery(projectShortcutMatch[1].trim());
+      setProjectPickerOpen(true);
+      setComposerEmojiPickerOpen(false);
+    } else if (composer.startsWith("#") && activeQuickCommand === "project") {
+      setActiveQuickCommand("");
+      setProjectQuery("");
+      setProjectPickerOpen(false);
+    }
     syncComposerMentionState(nextValue, nextCaretPosition);
     syncOwnTypingState(nextValue, {
       threadId: activeThreadId,
@@ -3344,6 +3748,10 @@ const ChatDock = ({ user, theme = "light" }) => {
     if (!activeThreadId || sending) return;
 
     const trimmedComposer = composer.trim();
+    if (trimmedComposer.startsWith("/")) {
+      setError("Choose a quick command from the menu or press Escape to write a normal message.");
+      return;
+    }
     if (
       !trimmedComposer &&
       selectedProjects.length === 0 &&
@@ -3422,7 +3830,192 @@ const ChatDock = ({ user, theme = "light" }) => {
     }
   };
 
+  const handleSelectQuickCommand = (command) => {
+    if (!command) return;
+    setError("");
+    setQuickCommandNotice("");
+
+    if (command.project) {
+      setActiveQuickCommand(command.key);
+      setProjectQuery(quickCommandInput?.argument || "");
+      setProjectPickerOpen(true);
+      setComposerEmojiPickerOpen(false);
+      setComposer("");
+      return;
+    }
+
+    if (command.template) {
+      setComposer(command.template);
+      window.requestAnimationFrame(() => {
+        const textarea = composerTextareaRef.current;
+        textarea?.focus();
+        textarea?.setSelectionRange(command.template.length, command.template.length);
+      });
+      return;
+    }
+
+    if (command.key === "help") {
+      setComposer("/");
+      setHighlightedQuickCommandIndex(0);
+      window.requestAnimationFrame(() => composerTextareaRef.current?.focus());
+      return;
+    }
+
+    setComposer("");
+    if (command.key === "files") {
+      attachmentInputRef.current?.click();
+      return;
+    }
+    if (command.key === "reply") {
+      const latestIncomingMessage = [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            !message?.isDeleted &&
+            toIdString(message?.sender?._id || message?.sender) !== currentUserId,
+        );
+      if (latestIncomingMessage) {
+        handleStartReply(latestIncomingMessage);
+      } else {
+        setQuickCommandNotice("There is no incoming message to reply to yet.");
+      }
+      return;
+    }
+    if (command.key === "unread") {
+      const unreadNode = lastUnreadMessageIdRef.current
+        ? document.getElementById(
+            `chat-dock-message-${lastUnreadMessageIdRef.current}`,
+          )
+        : null;
+      if (unreadNode && messagesContainerRef.current) {
+        const container = messagesContainerRef.current;
+        const containerRect = container.getBoundingClientRect();
+        const messageRect = unreadNode.getBoundingClientRect();
+        container.scrollTop = Math.max(
+          container.scrollTop + messageRect.top - containerRect.top - 18,
+          0,
+        );
+      } else {
+        setQuickCommandNotice("No unread message remains in this conversation.");
+      }
+      return;
+    }
+    if (command.key === "queue") {
+      handleClose();
+      navigate(
+        portalSource === "admin"
+          ? "/production-oversight"
+          : "/client#production-queue",
+      );
+    }
+  };
+
+  const handleConfirmQuickCommandAction = async () => {
+    const commandKey = quickCommandAction?.commandKey;
+    const projectId = toIdString(quickCommandAction?.project?._id);
+    if (!commandKey || !projectId || quickCommandActionBusy) return;
+
+    setQuickCommandActionBusy(true);
+    setError("");
+    try {
+      const isStartCommand = commandKey === "start";
+      const response = await fetch(
+        `/api/projects/${projectId}/production/${
+          isStartCommand ? "start" : "remind-owner"
+        }`,
+        {
+          method: isStartCommand ? "PATCH" : "POST",
+          credentials: "include",
+          ...(isStartCommand
+            ? { headers: { "Content-Type": "application/json" } }
+            : {}),
+        },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          payload.message ||
+            (isStartCommand
+              ? "Production could not be started."
+              : "The Production owner could not be reminded."),
+        );
+      }
+
+      setQuickCommandNotice(
+        payload.message ||
+          (isStartCommand
+            ? "Production started. Actual time is now being tracked."
+            : "The Production owner has been reminded."),
+      );
+      setQuickCommandAction(null);
+    } catch (actionError) {
+      setError(actionError.message || "The quick command could not be completed.");
+    } finally {
+      setQuickCommandActionBusy(false);
+    }
+  };
+
+  const handleExportConversation = () => {
+    if (!activeThread || messages.length === 0) return;
+    const rows = [
+      ["Timestamp", "Sender", "Message", "Projects", "Attachments"],
+      ...messages.map((message) => [
+        message?.createdAt || "",
+        message?.sender?.name || "Unknown user",
+        message?.isDeleted ? "[Deleted]" : message?.body || "",
+        (Array.isArray(message?.references) ? message.references : [])
+          .map((reference) => buildProjectLabel(reference))
+          .join(" | "),
+        (Array.isArray(message?.attachments) ? message.attachments : [])
+          .map((attachment, index) => getAttachmentName(attachment, index))
+          .join(" | "),
+      ]),
+    ];
+    const csv = rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${toText(activeThread.name).replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "chat"}-history.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleComposerKeyDown = (event) => {
+    if (quickCommandMenuOpen) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setHighlightedQuickCommandIndex(
+          (currentIndex) => (currentIndex + 1) % quickCommandMatches.length,
+        );
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setHighlightedQuickCommandIndex(
+          (currentIndex) =>
+            (currentIndex - 1 + quickCommandMatches.length) %
+            quickCommandMatches.length,
+        );
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        handleSelectQuickCommand(
+          quickCommandMatches[highlightedQuickCommandIndex] ||
+            quickCommandMatches[0],
+        );
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setComposer("");
+        return;
+      }
+    }
+
     if (isPublicThread && activeMention) {
       if (event.key === "ArrowDown" && mentionResults.length > 0) {
         event.preventDefault();
@@ -3907,6 +4500,7 @@ const ChatDock = ({ user, theme = "light" }) => {
       {isOpen && (
         <div
           className={`chat-dock-shell ${portalPositionClass}`}
+          data-chat-theme={resolvedTheme}
           role="dialog"
           aria-modal="false"
         >
@@ -3920,9 +4514,9 @@ const ChatDock = ({ user, theme = "light" }) => {
             <div className="chat-dock-sidebar">
               <div className="chat-dock-sidebar-head">
                 <div>
-                  <span className="chat-dock-eyebrow">Workspace</span>
-                  <h2>Messages</h2>
-                  <p>{unreadTotal > 0 ? `${unreadTotal} unread messages` : "You’re all caught up"}</p>
+                  <span className="chat-dock-eyebrow">MagicHands</span>
+                  <h2>Workspace Messages</h2>
+                  <p>{unreadTotal > 0 ? `${unreadTotal} unread dispatches` : "You’re all caught up"}</p>
                 </div>
                 <button
                   type="button"
@@ -3951,7 +4545,7 @@ const ChatDock = ({ user, theme = "light" }) => {
                   }`}
                   onClick={() => handleSidebarModeChange("users")}
                 >
-                  <span aria-hidden="true">+</span> New chat
+                  <span aria-hidden="true">+</span> New
                 </button>
               </div>
 
@@ -4025,7 +4619,7 @@ const ChatDock = ({ user, theme = "light" }) => {
                         type="search"
                         value={threadQuery}
                         onChange={(event) => setThreadQuery(event.target.value)}
-                        placeholder="Search conversations"
+                        placeholder="Search conversations (⌘K)..."
                         aria-label="Search conversations"
                       />
                     </div>
@@ -4041,7 +4635,12 @@ const ChatDock = ({ user, theme = "light" }) => {
                           className={threadFilter === value ? "active" : ""}
                           onClick={() => setThreadFilter(value)}
                         >
-                          {label}
+                          <span>{label}</span>
+                          {value === "unread" && unreadTotal > 0 && (
+                            <em className="chat-dock-filter-count">
+                              {unreadTotal > 99 ? "99+" : unreadTotal}
+                            </em>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -4165,29 +4764,60 @@ const ChatDock = ({ user, theme = "light" }) => {
                                 )}
                               </span>
                               <div className="chat-dock-counterpart-copy">
-                                <strong>{activeThread.counterpart.name}</strong>
-                                <small
-                                  className={`chat-dock-user-presence ${
-                                    activeTypingThread
-                                      ? "typing"
-                                      : presenceMeta.isOnline
-                                        ? "online"
-                                        : ""
-                                  }`}
-                                  title={
-                                    activeTypingThread
-                                      ? "Typing now"
-                                      : presenceMeta.title || undefined
-                                  }
-                                >
-                                  {activeTypingThread
-                                    ? getTypingLabel(activeTypingThread.userName)
-                                    : presenceMeta.label}
-                                </small>
+                                <span className="chat-dock-counterpart-name-row">
+                                  <strong>{activeThread.counterpart.name}</strong>
+                                  {activeThread.counterpart?.role && (
+                                    <em>{activeThread.counterpart.role}</em>
+                                  )}
+                                </span>
+                                <span className="chat-dock-counterpart-status-row">
+                                  <small
+                                    className={`chat-dock-user-presence ${
+                                      activeTypingThread
+                                        ? "typing"
+                                        : presenceMeta.isOnline
+                                          ? "online"
+                                          : ""
+                                    }`}
+                                    title={
+                                      activeTypingThread
+                                        ? "Typing now"
+                                        : presenceMeta.title || undefined
+                                    }
+                                  >
+                                    {activeTypingThread
+                                      ? getTypingLabel(activeTypingThread.userName)
+                                      : presenceMeta.label}
+                                  </small>
+                                  {conversationProjects[0] && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void handleOpenDossierProject(
+                                          conversationProjects[0],
+                                        )
+                                      }
+                                    >
+                                      Viewing {buildProjectLabel(conversationProjects[0])}
+                                    </button>
+                                  )}
+                                </span>
                               </div>
                             </div>
                           );
                         })()}
+                      {conversationProjects[0] && (
+                        <button
+                          type="button"
+                          className="chat-dock-header-project"
+                          onClick={() =>
+                            void handleOpenDossierProject(conversationProjects[0])
+                          }
+                        >
+                          <FolderIcon width="14" height="14" />
+                          {buildProjectLabel(conversationProjects[0])} Specs
+                        </button>
+                      )}
                       <div className="chat-dock-thread-menu-wrap">
                         <button
                           type="button"
@@ -4323,8 +4953,8 @@ const ChatDock = ({ user, theme = "light" }) => {
                           <div
                             id={`chat-dock-message-${message._id}`}
                             className={`chat-dock-message-row ${isMine ? "mine" : ""} ${
-                              startsMessageGroup ? "group-start" : "group-continuation"
-                            }`}
+                              replyReference ? "has-reply" : ""
+                            } ${startsMessageGroup ? "group-start" : "group-continuation"}`}
                           >
                             {!isMine && startsMessageGroup && (
                               <span className="chat-dock-user-avatar-wrap chat-dock-message-avatar">
@@ -4336,19 +4966,24 @@ const ChatDock = ({ user, theme = "light" }) => {
                                 />
                               </span>
                             )}
-                            <div
-                              className={`chat-dock-message-bubble ${
-                                isMine ? "mine" : ""
-                              } ${isDeleted ? "deleted" : ""}`}
-                            >
-                              <div className="chat-dock-message-meta">
-                                {startsMessageGroup && (
-                                  <strong>{isMine ? "You" : message?.sender?.name || "User"}</strong>
-                                )}
-                                <div className="chat-dock-message-meta-actions">
-                                  <span>{formatThreadTime(message.createdAt)}</span>
+                            <div className="chat-dock-message-stack">
+                              {!isMine && (
+                                <div className="chat-dock-message-meta">
+                                  {startsMessageGroup && (
+                                    <strong>{message?.sender?.name || "User"}</strong>
+                                  )}
+                                  <div className="chat-dock-message-meta-actions">
+                                    <span>{formatThreadTime(message.createdAt)}</span>
+                                  </div>
                                 </div>
-                              </div>
+                              )}
+                              <div
+                                className={`chat-dock-message-bubble ${
+                                  isMine ? "mine" : ""
+                                } ${replyReference ? "has-reply" : ""} ${
+                                  isDeleted ? "deleted" : ""
+                                }`}
+                              >
                               {replyReference && (
                                 <button
                                   type="button"
@@ -4359,8 +4994,10 @@ const ChatDock = ({ user, theme = "light" }) => {
                                   disabled={!replyReference.messageId}
                                 >
                                   <span>
-                                    Replying to{" "}
-                                    {getReplySenderLabel(replyReference, currentUserId)}
+                                    <span className="chat-dock-reply-arrow" aria-hidden="true">
+                                      ↪
+                                    </span>
+                                    Replying to {getReplySenderLabel(replyReference, currentUserId)}
                                   </span>
                                   <small>
                                     {renderChatInlineText(
@@ -4513,43 +5150,6 @@ const ChatDock = ({ user, theme = "light" }) => {
                                   })}
                                 </div>
                               )}
-                              {reactions.length > 0 && (
-                                <div className="chat-dock-reaction-bar">
-                                  {reactions.map((reaction) => {
-                                    const reactedByCurrentUser = reaction.userIds.includes(
-                                      currentUserId,
-                                    );
-
-                                    return (
-                                      <button
-                                        key={`${message._id}-reaction-${reaction.emoji}`}
-                                        type="button"
-                                        className={`chat-dock-reaction-chip ${
-                                          reactedByCurrentUser ? "active" : ""
-                                        }`}
-                                        onClick={() =>
-                                          canReactToMessage
-                                            ? void handleToggleReaction(
-                                                message._id,
-                                                reaction.emoji,
-                                              )
-                                            : undefined
-                                        }
-                                        disabled={
-                                          !canReactToMessage ||
-                                          reactingMessageId === message._id
-                                        }
-                                        title={`${reaction.count} reaction${
-                                          reaction.count === 1 ? "" : "s"
-                                        }`}
-                                      >
-                                        <EmojiGlyph emoji={reaction.emoji} size={16} />
-                                        <small>{reaction.count}</small>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              )}
                               {references.length > 0 && (
                                 <div className="chat-dock-reference-stack">
                                   {references.map((reference) => {
@@ -4616,8 +5216,10 @@ const ChatDock = ({ user, theme = "light" }) => {
                                   })}
                                 </div>
                               )}
+                              </div>
                               {(wasEdited ||
                                 isArchivedMessage ||
+                                reactions.length > 0 ||
                                 showReplyAction ||
                                 (isMine && !isDeleted && !isArchivedMessage)) && (
                                 <div className="chat-dock-message-footer">
@@ -4631,6 +5233,50 @@ const ChatDock = ({ user, theme = "light" }) => {
                                     {statusParts.join(" | ")}
                                   </span>
                                   <div className="chat-dock-message-footer-actions">
+                                    {isMine && (
+                                      <time
+                                        className="chat-dock-message-date"
+                                        dateTime={message.createdAt || undefined}
+                                      >
+                                        {formatMessageTimestamp(message.createdAt)}
+                                      </time>
+                                    )}
+                                    {reactions.length > 0 && (
+                                      <div className="chat-dock-reaction-bar">
+                                        {reactions.map((reaction) => {
+                                          const reactedByCurrentUser =
+                                            reaction.userIds.includes(currentUserId);
+
+                                          return (
+                                            <button
+                                              key={`${message._id}-reaction-${reaction.emoji}`}
+                                              type="button"
+                                              className={`chat-dock-reaction-chip ${
+                                                reactedByCurrentUser ? "active" : ""
+                                              }`}
+                                              onClick={() =>
+                                                canReactToMessage
+                                                  ? void handleToggleReaction(
+                                                      message._id,
+                                                      reaction.emoji,
+                                                    )
+                                                  : undefined
+                                              }
+                                              disabled={
+                                                !canReactToMessage ||
+                                                reactingMessageId === message._id
+                                              }
+                                              title={`${reaction.count} reaction${
+                                                reaction.count === 1 ? "" : "s"
+                                              }`}
+                                            >
+                                              <EmojiGlyph emoji={reaction.emoji} size={14} />
+                                              <small>{reaction.count}</small>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
                                     {canReactToMessage && !isEditingMessage && (
                                       <div className="chat-dock-reaction-picker-wrap">
                                         <button
@@ -4772,21 +5418,39 @@ const ChatDock = ({ user, theme = "light" }) => {
                     <div className="chat-dock-composer-toolbar">
                       <button
                         type="button"
-                        className={`chat-dock-toolbar-btn ${
+                        className={`chat-dock-toolbar-btn link-project ${
                           projectPickerOpen ? "active" : ""
                         }`}
                         onClick={handleToggleProjectPicker}
                       >
-                        <FolderIcon width="16" height="16" />
-                        Link Project
+                        <LinkIcon width="14" height="14" />
+                        Link Project (#)
                       </button>
                       <button
                         type="button"
-                        className="chat-dock-toolbar-btn"
+                        className="chat-dock-toolbar-btn add-files"
                         onClick={() => attachmentInputRef.current?.click()}
                       >
-                        <UploadIcon width="16" height="16" />
-                        Add File
+                        <UploadIcon width="14" height="14" />
+                        Add Proofs / Files
+                      </button>
+                      <button
+                        type="button"
+                        className={`chat-dock-toolbar-btn canned-reply ${
+                          quickCommandMenuOpen && quickCommandInput?.command === "canned"
+                            ? "active"
+                            : ""
+                        }`}
+                        onClick={() => {
+                          setComposer("/canned");
+                          setHighlightedQuickCommandIndex(0);
+                          window.requestAnimationFrame(() =>
+                            composerTextareaRef.current?.focus(),
+                          );
+                        }}
+                      >
+                        <BoltIcon width="14" height="14" />
+                        Dispatch Canned Reply
                       </button>
                       <input
                         ref={attachmentInputRef}
@@ -4794,6 +5458,13 @@ const ChatDock = ({ user, theme = "light" }) => {
                         className="chat-dock-hidden-input"
                         accept={CHAT_ATTACHMENT_ACCEPT}
                         multiple
+                        onChange={handleAttachmentInputChange}
+                      />
+                      <input
+                        ref={audioAttachmentInputRef}
+                        type="file"
+                        className="chat-dock-hidden-input"
+                        accept="audio/*"
                         onChange={handleAttachmentInputChange}
                       />
                     </div>
@@ -4916,13 +5587,19 @@ const ChatDock = ({ user, theme = "light" }) => {
 
                     {projectPickerOpen && (
                       <div className="chat-dock-project-picker">
+                        {activeQuickCommand && (
+                          <div className="chat-dock-project-picker-heading">
+                            <span>/{activeQuickCommand}</span>
+                            <small>Choose an authorized project</small>
+                          </div>
+                        )}
                         <div className="chat-dock-search-input">
                           <SearchIcon width="16" height="16" />
                           <input
                             type="text"
                             value={projectQuery}
                             onChange={(event) => setProjectQuery(event.target.value)}
-                            placeholder="Find a project to reference"
+                            placeholder="Search order, project, or client"
                           />
                         </div>
                         <div className="chat-dock-results compact">
@@ -4937,7 +5614,7 @@ const ChatDock = ({ user, theme = "light" }) => {
                               key={project._id}
                               type="button"
                               className="chat-dock-result-item project"
-                              onClick={() => handleAddProjectReference(project)}
+                              onClick={() => void handleAddProjectReference(project)}
                             >
                               <FolderIcon width="16" height="16" />
                               <span>{buildProjectLabel(project)}</span>
@@ -4948,6 +5625,50 @@ const ChatDock = ({ user, theme = "light" }) => {
                     )}
 
                     <div className="chat-dock-compose-row">
+                      {quickCommandMenuOpen && (
+                        <div className="chat-dock-command-menu" role="listbox">
+                          <div className="chat-dock-command-menu-head">
+                            <div>
+                              <strong>Quick commands</strong>
+                              <small>Real actions based on your access</small>
+                            </div>
+                            <kbd>Esc</kbd>
+                          </div>
+                          <div className="chat-dock-command-list">
+                            {quickCommandMatches.map((command, index) => (
+                              <button
+                                key={command.key}
+                                type="button"
+                                className={
+                                  index === highlightedQuickCommandIndex
+                                    ? "active"
+                                    : ""
+                                }
+                                onPointerDown={(event) => {
+                                  event.preventDefault();
+                                  handleSelectQuickCommand(command);
+                                }}
+                                role="option"
+                                aria-selected={index === highlightedQuickCommandIndex}
+                              >
+                                <span className="chat-dock-command-key">
+                                  /{command.key}
+                                </span>
+                                <span className="chat-dock-command-copy">
+                                  <strong>{command.label}</strong>
+                                  <small>{command.description}</small>
+                                </span>
+                                <em>{command.group}</em>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="chat-dock-command-menu-foot">
+                            <span>↑↓ Navigate</span>
+                            <span>Enter Select</span>
+                            <span>Shift + Enter New line</span>
+                          </div>
+                        </div>
+                      )}
                       {isPublicThread && activeMention && (
                         <div className="chat-dock-mention-picker">
                           <div className="chat-dock-mention-picker-head">
@@ -5025,8 +5746,8 @@ const ChatDock = ({ user, theme = "light" }) => {
                         onPaste={handleComposerPaste}
                         onSelect={handleComposerSelect}
                         onKeyDown={handleComposerKeyDown}
-                        placeholder={`Message ${activeThread.name}`}
-                        rows="2"
+                        placeholder={`Message ${activeThread.name} or type "/" for quick production commands...`}
+                        rows="1"
                       />
                       <div className="chat-dock-composer-emoji-wrap">
                         <button
@@ -5060,6 +5781,15 @@ const ChatDock = ({ user, theme = "light" }) => {
                       </div>
                       <button
                         type="button"
+                        className="chat-dock-audio-btn"
+                        onClick={() => audioAttachmentInputRef.current?.click()}
+                        aria-label="Attach an audio message"
+                        title="Attach audio"
+                      >
+                        <MicrophoneIcon width="15" height="15" />
+                      </button>
+                      <button
+                        type="button"
                         className="chat-dock-send-btn"
                         onClick={() => void handleSendMessage()}
                         disabled={
@@ -5073,6 +5803,12 @@ const ChatDock = ({ user, theme = "light" }) => {
                         <SendIcon />
                       </button>
                     </div>
+                    <div className="chat-dock-composer-hint" aria-hidden="true">
+                      <span>
+                        Use <strong>Return</strong> to send, <strong>Shift + Return</strong> for a new line
+                      </span>
+                      <span>End-to-End Encrypted Ops Channel</span>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -5082,15 +5818,152 @@ const ChatDock = ({ user, theme = "light" }) => {
                 </div>
               )}
             </div>
+
+            <aside className="chat-dock-context-panel">
+              <div className="chat-dock-context-head">
+                <strong>Contact &amp; Work Dossier</strong>
+                <button type="button" onClick={handleClose} aria-label="Close chat">
+                  <XIcon width="16" height="16" />
+                </button>
+              </div>
+
+              {activeThread ? (
+                <>
+                  <div className="chat-dock-contact-card">
+                    <span className="chat-dock-user-avatar-wrap">
+                      <UserAvatar
+                        name={activeThread.counterpart?.name || activeThread.name}
+                        src={getChatUserAvatarUrl(activeThread.counterpart)}
+                        width="54px"
+                        height="54px"
+                      />
+                    </span>
+                    <strong>{activeThread.counterpart?.name || activeThread.name}</strong>
+                    <small>
+                      {activeThread.type === "public"
+                        ? "Workspace group conversation"
+                        : [
+                            activeThread.counterpart?.role,
+                            ...(Array.isArray(activeThread.counterpart?.department)
+                              ? activeThread.counterpart.department
+                              : []),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "MagicHands teammate"}
+                    </small>
+                    {activeThread.counterpart && (
+                      <span
+                        className={`chat-dock-context-presence ${
+                          activeThread.counterpart?.presence?.isOnline
+                            ? "online"
+                            : ""
+                        }`}
+                      >
+                        {getChatPresenceMeta(activeThread.counterpart?.presence).label}
+                      </span>
+                    )}
+                  </div>
+
+                  {(activeThread.counterpart?.email || conversationProjects[0]) && (
+                    <div className="chat-dock-context-actions">
+                      {activeThread.counterpart?.email && (
+                        <a href={`mailto:${activeThread.counterpart.email}`}>
+                          Email {activeThread.counterpart.name?.split(" ")[0] || "Contact"}
+                        </a>
+                      )}
+                      {conversationProjects[0] && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleOpenDossierProject(conversationProjects[0])
+                          }
+                        >
+                          Open Active Order
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <section className="chat-dock-context-section">
+                    <div className="chat-dock-context-title">
+                      <strong>Active Assigned Orders</strong>
+                      <span>{conversationProjects.length}</span>
+                    </div>
+                    <div className="chat-dock-context-list">
+                      {conversationProjects.slice(0, 4).map((project) => (
+                        <button
+                          key={project.projectId}
+                          type="button"
+                          onClick={() => void handleOpenDossierProject(project)}
+                        >
+                          <FolderIcon width="15" height="15" />
+                          <span>
+                            <strong>{buildProjectLabel(project)}</strong>
+                            <small>{project.status || project.client || "Shared in chat"}</small>
+                          </span>
+                        </button>
+                      ))}
+                      {conversationProjects.length === 0 && (
+                        <p>No projects have been shared in this conversation.</p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="chat-dock-context-section">
+                    <div className="chat-dock-context-title">
+                      <strong>Shared Proofs &amp; Files</strong>
+                      <span>{conversationAttachments.length}</span>
+                    </div>
+                    <div className="chat-dock-context-files">
+                      {conversationAttachments.slice(0, 6).map((attachment) => (
+                        <a
+                          key={attachment.url}
+                          href={attachment.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={attachment.name}
+                        >
+                          <UploadIcon width="15" height="15" />
+                          <span>{attachment.name}</span>
+                        </a>
+                      ))}
+                      {conversationAttachments.length === 0 && (
+                        <p>No files have been shared in this conversation.</p>
+                      )}
+                    </div>
+                  </section>
+
+                  <button
+                    type="button"
+                    className="chat-dock-export-button"
+                    onClick={handleExportConversation}
+                    disabled={messages.length === 0}
+                  >
+                    Export Chat Audit Log
+                  </button>
+                  <p className="chat-dock-context-footnote">
+                    Exports the messages currently loaded in this secure workspace.
+                  </p>
+                </>
+              ) : (
+                <div className="chat-dock-context-empty">
+                  Select a conversation to view its work context.
+                </div>
+              )}
+            </aside>
           </div>
 
           {error && <div className="chat-dock-error-banner">{error}</div>}
+          {quickCommandNotice && (
+            <div className="chat-dock-command-notice">{quickCommandNotice}</div>
+          )}
         </div>
       )}
 
       {unreadPreviewThreads.length > 0 && (
         <div
           className={`chat-dock-unread-preview-stack ${portalPositionClass}`}
+          data-chat-theme={resolvedTheme}
           aria-label="Unread chat messages"
         >
           {unreadPreviewThreads.map((preview) => (
@@ -5147,6 +6020,7 @@ const ChatDock = ({ user, theme = "light" }) => {
         className={`chat-dock-fab ${portalPositionClass} ${isOpen ? "active" : ""} ${
           incomingPreviewVisible ? "has-preview" : ""
         }`}
+        data-chat-theme={resolvedTheme}
         onClick={isOpen ? handleClose : handleOpen}
         aria-label={isOpen ? "Close chat" : "Open chat"}
       >
@@ -5172,6 +6046,30 @@ const ChatDock = ({ user, theme = "light" }) => {
         confirmText={clearingThreadId ? "Clearing..." : "Clear"}
         onConfirm={handleConfirmClearThread}
         onCancel={handleCancelClearThread}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(quickCommandAction)}
+        title={
+          quickCommandAction?.commandKey === "start"
+            ? "Start Production"
+            : "Remind Production Owner"
+        }
+        message={
+          quickCommandAction?.commandKey === "start"
+            ? `Start production for ${buildProjectLabel(quickCommandAction?.project)}? Actual production time will begin tracking immediately.`
+            : `Send the Production owner a progress reminder for ${buildProjectLabel(quickCommandAction?.project)}?`
+        }
+        confirmText={
+          quickCommandActionBusy
+            ? "Working..."
+            : quickCommandAction?.commandKey === "start"
+              ? "Start Production"
+              : "Send Reminder"
+        }
+        onConfirm={handleConfirmQuickCommandAction}
+        onCancel={() => {
+          if (!quickCommandActionBusy) setQuickCommandAction(null);
+        }}
       />
     </>
   );
