@@ -51,6 +51,7 @@ const materialRequestRoutes = require("./routes/materialRequestRoutes");
 const sampleMovementRoutes = require("./routes/sampleMovementRoutes");
 const helpRoutes = require("./routes/helpRoutes");
 const systemRoutes = require("./routes/systemRoutes");
+const pushRoutes = require("./routes/pushRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
 const { buildRealtimeChangePayload } = require("./utils/realtimeChange");
 const { startChatArchiveScheduler } = require("./utils/chatArchiveScheduler");
@@ -473,6 +474,7 @@ app.use("/api/billing-documents", billingDocumentRoutes);
 app.use("/api/billing-receipts", billingReceiptRoutes);
 app.use("/api/help", helpRoutes);
 app.use("/api/system", systemRoutes);
+app.use("/api/push", pushRoutes);
 
 const resolveDistPath = (value, fallbackPath) => {
   const raw = String(value || "").trim();

@@ -227,13 +227,10 @@ const Layout = ({
   const dismissedReminderNotificationIdsRef = useRef(new Set());
   const reminderSoundIdRef = useRef("");
 
-  // [New] Native Notification Permission Logic
+  // Notification sound is initialized here. Browser notification permission is
+  // only requested after an explicit user action in the notification center.
   useEffect(() => {
     initNotificationSound();
-
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
   }, []);
 
   const dispatchOpenChat = (detail = {}) => {
@@ -322,41 +319,11 @@ const Layout = ({
     return true;
   };
 
-  const showNativeNotification = (notification) => {
-    if ("Notification" in window && Notification.permission === "granted") {
-      const n = new Notification(notification.title, {
-        body: notification.message,
-        icon: "/mhlogo.png", // Optional: use app logo
-      });
-      n.onclick = () => {
-        window.focus();
-        if (openProductionAction(notification)) {
-          n.close();
-          return;
-        }
-        if (handleChatMentionOpen(notification)) {
-          n.close();
-          return;
-        }
-        if (notification.project) {
-          openProjectFromNotification(notification, {
-            onBeforeNavigate: () => {
-              setIsNotificationOpen(false);
-              setIsMobileMenuOpen(false);
-            },
-          });
-        }
-        n.close();
-      };
-    }
-  };
-
   const addToast = (
     notification,
     {
       persistent = false,
       silent = false,
-      showNative = true,
       acknowledgeOnDismiss = false,
       missed = false,
       force = false,
@@ -376,11 +343,6 @@ const Layout = ({
 
     if (!silent && !isChatMentionNotification(notification)) {
       playNotificationSound(notification.type, allowSound).catch(() => {});
-    }
-
-    // Show Native Notification
-    if (showNative) {
-      showNativeNotification(notification);
     }
 
     if (!silent) {
@@ -718,7 +680,6 @@ const Layout = ({
               addToast(notification, {
                 persistent: true,
                 silent: !isNewestAlert,
-                showNative: isNewestAlert,
                 acknowledgeOnDismiss: true,
                 missed: true,
               });

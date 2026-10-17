@@ -4,6 +4,7 @@ const User = require("../models/User");
 const { sendEmail } = require("./emailService");
 const { broadcastNotificationChange } = require("./realtimeHub");
 const { addProductionWorkingHours } = require("./productionActionWorkingTime");
+const { sendWebPushToUser } = require("./webPushService");
 
 const NOTIFICATION_DEDUPE_WINDOW_MS = Number.isFinite(
   Number.parseInt(process.env.NOTIFICATION_DEDUPE_WINDOW_MS, 10),
@@ -205,8 +206,12 @@ const createNotification = async (
       await sendEmail(recipient.email, title, message);
     }
 
-    if (settings.push) {
-      // Stub for Push Notification Service
+    if (settings.push && createdNewNotification && notification) {
+      try {
+        await sendWebPushToUser(recipientKey, notification, deliveryOptions);
+      } catch (pushError) {
+        console.error("Failed to queue browser notification:", pushError);
+      }
     }
 
     return notification;

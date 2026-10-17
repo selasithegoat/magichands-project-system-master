@@ -17,6 +17,11 @@ import {
   getNotificationActionLabel,
   isPendingActionNotification,
 } from "../../utils/notificationActions";
+import {
+  BROWSER_PUSH_STATUS_EVENT,
+  getBrowserPushStatus,
+  requestBrowserPushPermission,
+} from "../../utils/browserPush";
 
 const getNotificationTypeMeta = (notification = {}) => {
   const source = String(notification?.source || "").trim().toLowerCase();
@@ -106,6 +111,29 @@ const NotificationModal = ({
   onMarkRead,
   currentUser,
 }) => {
+  const [pushStatus, setPushStatus] = useState(getBrowserPushStatus);
+  const [pushMessage, setPushMessage] = useState("");
+
+  React.useEffect(() => {
+    const handleStatus = (event) => {
+      setPushStatus(event.detail?.status || getBrowserPushStatus());
+      setPushMessage(event.detail?.message || "");
+    };
+    window.addEventListener(BROWSER_PUSH_STATUS_EVENT, handleStatus);
+    return () => window.removeEventListener(BROWSER_PUSH_STATUS_EVENT, handleStatus);
+  }, []);
+
+  const enableBrowserNotifications = async () => {
+    setPushMessage("");
+    const result = await requestBrowserPushPermission();
+    setPushStatus(result.status);
+    if (result.status === "denied") {
+      setPushMessage("Notifications are blocked in this browser's site settings.");
+    } else if (result.status === "error") {
+      setPushMessage(result.error?.message || "Could not enable browser notifications.");
+    }
+  };
+
   const getUserLabel = (user) => {
     if (!user || typeof user !== "object") return "";
     if (user.name) return user.name;
@@ -256,6 +284,25 @@ const NotificationModal = ({
             </button>
           </div>
         </div>
+
+        {pushStatus !== "unsupported" && pushStatus !== "insecure" && (
+          <div className="notif-browser-push">
+            <div>
+              <strong>Desktop alerts</strong>
+              <span>
+                {pushStatus === "granted" || pushStatus === "subscribed"
+                  ? "Enabled — alerts close automatically."
+                  : "Get alerts even when this portal is closed."}
+              </span>
+            </div>
+            {pushStatus !== "granted" && pushStatus !== "subscribed" && (
+              <button type="button" onClick={enableBrowserNotifications}>
+                Enable
+              </button>
+            )}
+            {pushMessage && <p role="status">{pushMessage}</p>}
+          </div>
+        )}
 
         <div className="notif-tabs" role="tablist" aria-label="Notification attention">
           <button

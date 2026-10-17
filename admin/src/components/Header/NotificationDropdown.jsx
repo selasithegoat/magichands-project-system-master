@@ -1,6 +1,11 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./NotificationDropdown.css";
+import {
+  BROWSER_PUSH_STATUS_EVENT,
+  getBrowserPushStatus,
+  requestBrowserPushPermission,
+} from "@client/utils/browserPush";
 import {
   AssignIcon,
   SupportIcon,
@@ -78,6 +83,19 @@ const NotificationDropdown = ({
 }) => {
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const [pushStatus, setPushStatus] = useState(getBrowserPushStatus);
+  const [pushMessage, setPushMessage] = useState("");
+
+  const enableBrowserNotifications = async () => {
+    setPushMessage("");
+    const result = await requestBrowserPushPermission();
+    setPushStatus(result.status);
+    if (result.status === "denied") {
+      setPushMessage("Notifications are blocked in this browser's site settings.");
+    } else if (result.status === "error") {
+      setPushMessage(result.error?.message || "Could not enable browser notifications.");
+    }
+  };
 
   const openNotification = (notification) => {
     markAsRead(notification._id);
@@ -109,6 +127,15 @@ const NotificationDropdown = ({
     };
   }, [onClose]);
 
+  useEffect(() => {
+    const handleStatus = (event) => {
+      setPushStatus(event.detail?.status || getBrowserPushStatus());
+      setPushMessage(event.detail?.message || "");
+    };
+    window.addEventListener(BROWSER_PUSH_STATUS_EVENT, handleStatus);
+    return () => window.removeEventListener(BROWSER_PUSH_STATUS_EVENT, handleStatus);
+  }, []);
+
   return (
     <div className="notification-dropdown" ref={dropdownRef}>
       <div className="notification-header">
@@ -122,6 +149,25 @@ const NotificationDropdown = ({
           </button>
         </div>
       </div>
+
+      {pushStatus !== "unsupported" && pushStatus !== "insecure" && (
+        <div className="browser-push-row">
+          <div>
+            <strong>Desktop alerts</strong>
+            <span>
+              {pushStatus === "granted" || pushStatus === "subscribed"
+                ? "Enabled — alerts close automatically."
+                : "Get alerts even when this portal is closed."}
+            </span>
+          </div>
+          {pushStatus !== "granted" && pushStatus !== "subscribed" && (
+            <button type="button" onClick={enableBrowserNotifications}>
+              Enable
+            </button>
+          )}
+          {pushMessage && <p role="status">{pushMessage}</p>}
+        </div>
+      )}
 
       <div className="notification-list">
         {loading ? (

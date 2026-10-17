@@ -63,6 +63,9 @@ import {
   Navigate,
 } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
+import BrowserPushManager from "@client/components/BrowserPushManager";
+import { removeBrowserPushSubscription } from "@client/utils/browserPush";
+import { isInactivityLogoutEnabled } from "@client/utils/inactivityPolicy";
 
 const ADMIN_LOGOUT_STORAGE_KEY = "mh:admin-session-logout";
 
@@ -174,6 +177,7 @@ function App() {
   };
 
   const handleLogout = React.useCallback(async () => {
+    await removeBrowserPushSubscription().catch(() => {});
     broadcastAndClearLocalAuthSession();
     try {
       await fetch("/api/auth/logout", {
@@ -190,7 +194,7 @@ function App() {
   useInactivityLogout(
     5 * 60 * 1000,
     broadcastAndClearLocalAuthSession,
-    Boolean(user?._id),
+    Boolean(user?._id) && isInactivityLogoutEnabled(user),
   );
   useRealtimeClient(Boolean(user));
 
@@ -391,6 +395,7 @@ function App() {
         </Routes>
       </Suspense>
       {user && <GlobalSmsPrompt user={user} />}
+      {user?._id && <BrowserPushManager user={user} />}
       {user?._id && (
         <Suspense fallback={null}>
           <ChatDock user={user} />

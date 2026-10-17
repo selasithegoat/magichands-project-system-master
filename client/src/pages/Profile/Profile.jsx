@@ -16,6 +16,8 @@ import {
   getPasswordStrengthScore,
   isPasswordStrongEnough,
 } from "../../utils/passwordPolicy";
+import { requestBrowserPushPermission } from "../../utils/browserPush";
+import { isInactivityLogoutEnabled } from "../../utils/inactivityPolicy";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONTACT_PATTERN = /^\+?[0-9()\-\s]{7,20}$/;
@@ -52,6 +54,7 @@ const buildComparableProfileState = (
   emailNotif,
   pushNotif,
   soundNotif,
+  inactivityLogoutEnabled,
 ) => ({
   firstName: formData.firstName.trim(),
   lastName: formData.lastName.trim(),
@@ -64,6 +67,9 @@ const buildComparableProfileState = (
     email: Boolean(emailNotif),
     push: Boolean(pushNotif),
     sound: Boolean(soundNotif),
+  },
+  sessionSettings: {
+    inactivityLogoutEnabled: Boolean(inactivityLogoutEnabled),
   },
 });
 
@@ -170,6 +176,9 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [soundNotif, setSoundNotif] = useState(
     user?.notificationSettings?.sound ?? true,
   );
+  const [inactivityLogoutEnabled, setInactivityLogoutEnabled] = useState(() =>
+    isInactivityLogoutEnabled(user),
+  );
   const [notificationHint, setNotificationHint] = useState("");
 
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
@@ -261,11 +270,13 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     const nextEmailNotif = user.notificationSettings?.email ?? false;
     const nextPushNotif = user.notificationSettings?.push ?? true;
     const nextSoundNotif = user.notificationSettings?.sound ?? true;
+    const nextInactivityLogoutEnabled = isInactivityLogoutEnabled(user);
 
     setFormData(nextFormData);
     setEmailNotif(nextEmailNotif);
     setPushNotif(nextPushNotif);
     setSoundNotif(nextSoundNotif);
+    setInactivityLogoutEnabled(nextInactivityLogoutEnabled);
     setFieldTouched({});
     setSubmitAttempted(false);
     setAvatarError("");
@@ -276,6 +287,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
         nextEmailNotif,
         nextPushNotif,
         nextSoundNotif,
+        nextInactivityLogoutEnabled,
       ),
     );
     setLoading(false);
@@ -330,8 +342,20 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
 
   const currentComparableState = useMemo(
     () =>
-      buildComparableProfileState(formData, emailNotif, pushNotif, soundNotif),
-    [formData, emailNotif, pushNotif, soundNotif],
+      buildComparableProfileState(
+        formData,
+        emailNotif,
+        pushNotif,
+        soundNotif,
+        inactivityLogoutEnabled,
+      ),
+    [
+      formData,
+      emailNotif,
+      pushNotif,
+      soundNotif,
+      inactivityLogoutEnabled,
+    ],
   );
 
   const hasChanges = useMemo(() => {
@@ -415,12 +439,23 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     setEmailNotif((prev) => !prev);
   };
 
-  const handleTogglePushNotif = () => {
+  const handleTogglePushNotif = async () => {
     if (pushNotif && !emailNotif) {
       setNotificationHint("At least one notification channel must stay enabled.");
       return;
     }
     setNotificationHint("");
+    if (!pushNotif) {
+      const result = await requestBrowserPushPermission();
+      if (result.status !== "subscribed") {
+        setNotificationHint(
+          result.status === "denied"
+            ? "Browser notifications are blocked in this browser's site settings."
+            : "Browser notifications could not be enabled on this device.",
+        );
+        return;
+      }
+    }
     setPushNotif((prev) => !prev);
   };
 
@@ -501,6 +536,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               emailNotif,
               pushNotif,
               soundNotif,
+              inactivityLogoutEnabled,
             ),
       );
       setAvatarPreviewUrl("");
@@ -657,6 +693,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               emailNotif,
               pushNotif,
               soundNotif,
+              inactivityLogoutEnabled,
             ),
       );
       setMessage({ type: "success", text: "Avatar removed." });
@@ -706,6 +743,9 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
             email: emailNotif,
             push: pushNotif,
             sound: soundNotif,
+          },
+          sessionSettings: {
+            inactivityLogoutEnabled,
           },
         }),
       });
@@ -1121,7 +1161,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                 <div>
                   <div className="setting-title">Push Notifications</div>
                   <div className="setting-desc">
-                    Receive real-time push alerts on mobile devices
+                    Receive brief desktop alerts, even when the portal is closed
                   </div>
                 </div>
                 <label className="switch">
@@ -1164,6 +1204,25 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
           <div className="content-card">
             <div className="card-header">
               <h3>Security</h3>
+            </div>
+            <div className="settings-section security-session-settings">
+              <div className="setting-row">
+                <div>
+                  <div className="setting-title">Five-minute inactivity logout</div>
+                  <div className="setting-desc">
+                    Automatically sign out this account after five minutes without activity
+                  </div>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={inactivityLogoutEnabled}
+                    onChange={() => setInactivityLogoutEnabled((current) => !current)}
+                    aria-label="Toggle five-minute inactivity logout"
+                  />
+                  <span className="slider round"></span>
+                </label>
+              </div>
             </div>
             <p className="password-strength-disclaimer">{PASSWORD_STRENGTH_MESSAGE}</p>
             <div className="password-strength-meter" aria-hidden="true">

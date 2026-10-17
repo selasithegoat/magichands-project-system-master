@@ -191,6 +191,7 @@ const loginUser = async (req, res) => {
         email: user.email,
         avatarUrl: user.avatarUrl,
         notificationSettings: user.notificationSettings,
+        sessionSettings: user.sessionSettings,
         themePreference: user.themePreference,
       });
     } else {
@@ -321,6 +322,18 @@ const updateProfile = async (req, res) => {
       user.markModified("notificationSettings");
     }
 
+    if (
+      req.body.sessionSettings &&
+      typeof req.body.sessionSettings.inactivityLogoutEnabled === "boolean"
+    ) {
+      user.sessionSettings = {
+        ...(user.sessionSettings?.toObject?.() || user.sessionSettings || {}),
+        inactivityLogoutEnabled:
+          req.body.sessionSettings.inactivityLogoutEnabled,
+      };
+      user.markModified("sessionSettings");
+    }
+
     const updatedUser = await user.save();
 
     res.json({
@@ -336,6 +349,7 @@ const updateProfile = async (req, res) => {
       contact: updatedUser.contact,
       avatarUrl: updatedUser.avatarUrl,
       notificationSettings: updatedUser.notificationSettings,
+      sessionSettings: updatedUser.sessionSettings,
       themePreference: updatedUser.themePreference,
     });
   } else {

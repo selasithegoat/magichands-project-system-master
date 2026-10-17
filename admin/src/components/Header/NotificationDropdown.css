@@ -223,3 +223,50 @@ html[data-admin-theme="light"] .notification-icon.reminder {
 html[data-admin-theme="light"] .notification-icon.system {
   color: #475569;
 }
+.browser-push-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-alt);
+}
+
+.browser-push-row > div {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.browser-push-row strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.browser-push-row span,
+.browser-push-row p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.browser-push-row button {
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 11px;
+  background: var(--primary-color);
+  color: #fff;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.browser-push-row > p {
+  flex-basis: 100%;
+  color: var(--danger, #dc2626);
+}

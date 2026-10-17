@@ -48,16 +48,3 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
-
-// Retire the old pass-through service worker. It added a worker and a fetch
-// interception hop without providing offline caching.
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .getRegistrations()
-      .then((registrations) =>
-        Promise.all(registrations.map((registration) => registration.unregister())),
-      )
-      .catch(() => {});
-  });
-}

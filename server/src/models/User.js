@@ -90,6 +90,9 @@ const UserSchema = new mongoose.Schema({
     push: { type: Boolean, default: true },
     sound: { type: Boolean, default: true },
   },
+  sessionSettings: {
+    inactivityLogoutEnabled: { type: Boolean, default: null },
+  },
   themePreference: {
     type: String,
     enum: ["light", "dark", "system"],

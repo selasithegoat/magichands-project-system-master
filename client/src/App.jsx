@@ -12,6 +12,9 @@ import { clearPersistedFilterState } from "./utils/filterPersistence";
 import { buildPortalUrl } from "./utils/portalNavigation";
 import { queryClient } from "./utils/queryClient";
 import { setNotificationSoundSessionActive } from "./utils/notificationSound";
+import BrowserPushManager from "./components/BrowserPushManager";
+import { removeBrowserPushSubscription } from "./utils/browserPush";
+import { isInactivityLogoutEnabled } from "./utils/inactivityPolicy";
 import {
   fetchSystemVersionInfo,
   formatVersionDisplay,
@@ -294,11 +297,14 @@ function App() {
     await syncThemePreference(nextTheme);
   }, [accountKey, syncThemePreference, theme, toggleTheme]);
 
-  // Initialize auto-logout (5 minutes)
+  const inactivityLogoutEnabled = Boolean(user?._id) && isInactivityLogoutEnabled(user);
+
+  // Five-minute auto-logout remains available as an account preference. Admin,
+  // Front Desk, and Graphics users default to disabled.
   useInactivityLogout(
     5 * 60 * 1000,
     broadcastAndClearLocalAuthSession,
-    Boolean(user?._id),
+    inactivityLogoutEnabled,
   );
   useRealtimeClient(Boolean(user));
 
@@ -418,6 +424,7 @@ function App() {
   }, [showPostLoginSplash]);
 
   const performLogout = async () => {
+    await removeBrowserPushSubscription().catch(() => {});
     broadcastAndClearLocalAuthSession();
     try {
       await fetch("/api/auth/logout", {
@@ -872,6 +879,7 @@ function App() {
         </Routes>
       </Suspense>
       {user && <GlobalSmsPrompt user={user} />}
+      {user?._id && <BrowserPushManager user={user} />}
       {user?._id && (
         <Suspense fallback={null}>
           <ChatDock user={user} theme={theme} />
