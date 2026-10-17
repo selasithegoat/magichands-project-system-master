@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 import "./Teams.css";
 import Modal from "../../components/Modal/Modal";
@@ -281,11 +282,11 @@ const Teams = () => {
           resetForm();
         }
       } else {
-        alert("Failed to delete user");
+        toast.error("Failed to delete user");
       }
     } catch (err) {
       console.error(err);
-      alert("Error deleting user");
+      toast.error("Error deleting user");
     }
   };
 
@@ -300,21 +301,21 @@ const Teams = () => {
     );
 
     if (normalizedDepartments.length === 0) {
-      alert("Please select at least one department");
+      toast.error("Please select at least one department");
       return;
     }
     if (
       normalizedDepartments.includes("Production") &&
       selectedProductionSubs.length === 0
     ) {
-      alert("Please select at least one Production sub-department");
+      toast.error("Please select at least one Production sub-department");
       return;
     }
 
     if (!selectedEmployee) {
       // Create Mode
       if (formData.password !== formData.confirmPassword) {
-        alert("Passwords do not match");
+        toast.error("Passwords do not match");
         return;
       }
       try {
@@ -332,12 +333,12 @@ const Teams = () => {
         if (res.ok) {
           setEmployees([data, ...employees]);
           setShowAddModal(false);
-          alert("Employee Registered Successfully");
+          toast.success("Employee registered successfully");
         } else {
-          alert(data.message || "Registration Failed");
+          toast.error(data.message || "Registration failed");
         }
       } catch {
-        alert("Error registering employee");
+        toast.error("Error registering employee");
       }
     } else {
       // Edit Mode
@@ -370,12 +371,12 @@ const Teams = () => {
           );
           setSelectedEmployee((current) => ({ ...current, ...data }));
           setShowAddModal(false);
-          alert("Employee Updated Successfully");
+          toast.success("Employee updated successfully");
         } else {
-          alert(data.message || "Update Failed");
+          toast.error(data.message || "Update failed");
         }
       } catch {
-        alert("Error updating employee");
+        toast.error("Error updating employee");
       }
     }
   };
@@ -384,7 +385,7 @@ const Teams = () => {
   const handleChangePassword = async (e) => {
     e.preventDefault();
     if (passwordData.newPassword !== passwordData.confirmNewPassword) {
-      alert("Passwords do not match");
+      toast.error("Passwords do not match");
       return;
     }
 
@@ -401,14 +402,14 @@ const Teams = () => {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        alert("Password updated successfully");
+        toast.success("Password updated successfully");
         setShowPasswordModal(false);
         setPasswordData({ newPassword: "", confirmNewPassword: "" });
       } else {
-        alert(data.message || "Failed to update password");
+        toast.error(data.message || "Failed to update password");
       }
     } catch {
-      alert("Error updating password");
+      toast.error("Error updating password");
     }
   };
 

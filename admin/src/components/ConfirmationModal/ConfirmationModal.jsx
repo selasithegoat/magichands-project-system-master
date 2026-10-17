@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./ConfirmationModal.css";
 import { XMarkIcon } from "../../icons/Icons";
 import { waitForNextPaint } from "../../utils/mutationFeedback";
@@ -15,6 +15,22 @@ const ConfirmationModal = ({
   pendingText = "Processing…",
 }) => {
   const [isPending, setIsPending] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !isPending) onClose?.();
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, isPending, onClose]);
 
   if (!isOpen) return null;
 
@@ -36,11 +52,21 @@ const ConfirmationModal = ({
   };
 
   return (
-    <div className="admin-confirmation-overlay">
-      <div className="admin-confirmation-content" aria-busy={isPending}>
+    <div className="admin-confirmation-overlay" onClick={handleClose}>
+      <div
+        className="admin-confirmation-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-confirmation-title"
+        aria-busy={isPending}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="admin-confirmation-header">
-          <h3 className="admin-confirmation-title">{title}</h3>
+          <h3 className="admin-confirmation-title" id="admin-confirmation-title">
+            {title}
+          </h3>
           <button
+            type="button"
             className="admin-confirmation-close"
             onClick={handleClose}
             disabled={isPending}
@@ -54,6 +80,7 @@ const ConfirmationModal = ({
         </div>
         <div className="admin-confirmation-footer">
           <button
+            type="button"
             className="admin-confirmation-btn cancel"
             onClick={handleClose}
             disabled={isPending}
@@ -61,6 +88,7 @@ const ConfirmationModal = ({
             {cancelText}
           </button>
           <button
+            type="button"
             className={`admin-confirmation-btn ${
               isDangerous ? "danger" : "primary"
             }`}

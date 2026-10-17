@@ -14,7 +14,7 @@
 .reactivate-project-modal-meta {
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.22);
+  background: var(--surface-alt);
   padding: 0.75rem 0.8rem;
 }
 
@@ -26,9 +26,9 @@
 
 .reactivate-project-modal-error {
   margin: 0;
-  color: #fca5a5;
-  background: rgba(127, 29, 29, 0.3);
-  border: 1px solid rgba(239, 68, 68, 0.55);
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
   border-radius: 8px;
   padding: 0.6rem 0.7rem;
   font-size: 0.85rem;
@@ -64,4 +64,9 @@
 .reactivate-project-modal-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+.reactivate-project-modal-btn:focus-visible {
+  outline: 3px solid rgba(var(--primary-rgb), 0.2);
+  outline-offset: 2px;
 }

@@ -3,7 +3,7 @@
   --sidebar-muted: #667085;
   --sidebar-line: #eaecf0;
   --sidebar-primary: #5957e8;
-  width: 260px;
+  width: var(--admin-sidebar-collapsed, 76px);
   height: 100dvh;
   background: #ffffff;
   border-right: 1px solid var(--sidebar-line);
@@ -15,7 +15,16 @@
   z-index: 12000;
   color: var(--sidebar-ink);
   box-shadow: 4px 0 18px rgba(15, 23, 42, 0.025);
-  transition: transform 220ms ease, box-shadow 220ms ease;
+  overflow: hidden;
+  transition: width 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 700ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sidebar:hover,
+.sidebar:focus-within {
+  width: var(--admin-sidebar-expanded, 260px);
+  box-shadow: 8px 0 28px rgba(15, 23, 42, 0.09);
 }
 
 .sidebar-brand {
@@ -26,6 +35,7 @@
   gap: 10px;
   padding: 12px 6px 10px;
   flex: 0 0 auto;
+  transition: padding 700ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .sidebar-brand-link {
@@ -60,8 +70,26 @@
 
 .sidebar-brand-copy {
   min-width: 0;
+  max-width: 0;
   display: grid;
   gap: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 700ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sidebar:hover .sidebar-brand-copy,
+.sidebar:focus-within .sidebar-brand-copy {
+  max-width: 180px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.sidebar:not(:hover):not(:focus-within) .sidebar-brand {
+  justify-content: center;
 }
 
 .sidebar-brand-copy strong {
@@ -74,7 +102,7 @@
 
 .sidebar-brand-copy span {
   color: #7b8191;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 650;
   line-height: 1.25;
   letter-spacing: 0.025em;
@@ -121,11 +149,26 @@
 .sidebar-nav-label {
   padding: 0 12px 7px;
   color: #98a2b3;
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   font-weight: 750;
   letter-spacing: 0.09em;
   line-height: 1.4;
   text-transform: uppercase;
+  white-space: nowrap;
+  max-height: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    padding 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 700ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sidebar:hover .sidebar-nav-label,
+.sidebar:focus-within .sidebar-nav-label {
+  max-height: 32px;
+  padding-bottom: 7px;
+  opacity: 1;
 }
 
 .sidebar .nav-item {
@@ -137,12 +180,39 @@
   border: 1px solid transparent;
   border-radius: 10px;
   color: #515969;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 560;
   line-height: 1.25;
   text-decoration: none;
-  transition: color 140ms ease, background-color 140ms ease,
-    border-color 140ms ease, transform 140ms ease;
+  white-space: nowrap;
+  transition: color 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    background-color 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    border-color 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    padding 700ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sidebar:not(:hover):not(:focus-within) .nav-item {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 0;
+}
+
+.sidebar .nav-item > span {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: max-width 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 700ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sidebar:hover .nav-item > span,
+.sidebar:focus-within .nav-item > span {
+  max-width: 180px;
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .sidebar .nav-item:hover {
@@ -172,9 +242,9 @@
 }
 
 .sidebar-nav-icon {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
 }
 
 .sidebar-footer {
@@ -195,9 +265,24 @@
   border-radius: 999px;
   background: #eafbf4;
   color: #087a5b;
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 650;
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: margin 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    padding 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    width 700ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sidebar:not(:hover):not(:focus-within) .sidebar-status {
+  width: 28px;
+  margin-inline: auto;
+  padding-inline: 10px;
+}
+
+.sidebar:not(:hover):not(:focus-within) .sidebar-status > span:last-child {
+  display: none;
 }
 
 .sidebar-status-dot {
@@ -214,6 +299,14 @@
   align-items: center;
   gap: 9px;
   padding: 3px 4px;
+  transition: gap 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    padding 700ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sidebar:not(:hover):not(:focus-within) .sidebar-account {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 0;
 }
 
 .sidebar-avatar {
@@ -225,7 +318,7 @@
   border-radius: 50%;
   background: linear-gradient(145deg, #263247, #111827);
   color: #ffffff;
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 750;
   letter-spacing: 0.03em;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.14);
@@ -233,9 +326,23 @@
 
 .sidebar-account-copy {
   min-width: 0;
-  flex: 1;
+  max-width: 0;
+  flex: 0 0 0;
   display: grid;
   gap: 2px;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 700ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sidebar:hover .sidebar-account-copy,
+.sidebar:focus-within .sidebar-account-copy {
+  max-width: 170px;
+  flex: 1 1 auto;
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .sidebar-account-copy strong,
@@ -247,14 +354,14 @@
 
 .sidebar-account-copy strong {
   color: #283044;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.25;
 }
 
 .sidebar-account-copy span {
   color: #7b8191;
-  font-size: 0.61rem;
+  font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.25;
 }
@@ -271,8 +378,19 @@
   background: transparent;
   color: #7b8191;
   cursor: pointer;
-  transition: color 140ms ease, background-color 140ms ease,
-    border-color 140ms ease;
+  transition: color 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    background-color 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    border-color 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 700ms cubic-bezier(0.32, 0.72, 0, 1),
+    width 700ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sidebar:not(:hover):not(:focus-within) .sidebar-logout-btn {
+  width: 0;
+  flex-basis: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .sidebar-logout-btn svg {
@@ -288,8 +406,14 @@
 
 @media (max-width: 1024px) {
   .sidebar {
+    width: min(280px, calc(100vw - 42px));
     transform: translateX(-102%);
     box-shadow: 16px 0 40px rgba(15, 23, 42, 0.18);
+  }
+
+  .sidebar:hover,
+  .sidebar:focus-within {
+    width: min(280px, calc(100vw - 42px));
   }
 
   .sidebar.sidebar-mobile-open {
@@ -298,6 +422,57 @@
 
   .mobile-close-btn {
     display: flex;
+  }
+
+  .sidebar-brand-copy,
+  .sidebar-nav-label,
+  .sidebar .nav-item > span,
+  .sidebar-account-copy {
+    max-width: 180px;
+    opacity: 1;
+    transform: none;
+  }
+
+  .sidebar-brand {
+    justify-content: space-between;
+  }
+
+  .sidebar-nav-label {
+    max-height: 32px;
+    padding-bottom: 7px;
+  }
+
+  .sidebar-account-copy {
+    flex: 1 1 auto;
+  }
+
+  .sidebar:not(:hover):not(:focus-within) .nav-item {
+    justify-content: flex-start;
+    gap: 11px;
+    padding-inline: 11px;
+  }
+
+  .sidebar:not(:hover):not(:focus-within) .sidebar-status {
+    width: auto;
+    margin: 0 1px 10px;
+    padding-inline: 10px;
+  }
+
+  .sidebar:not(:hover):not(:focus-within) .sidebar-status > span:last-child {
+    display: inline;
+  }
+
+  .sidebar:not(:hover):not(:focus-within) .sidebar-account {
+    justify-content: flex-start;
+    gap: 9px;
+    padding-inline: 4px;
+  }
+
+  .sidebar:not(:hover):not(:focus-within) .sidebar-logout-btn {
+    width: 34px;
+    flex-basis: 34px;
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 

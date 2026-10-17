@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
+import toast from "react-hot-toast";
 import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
 import { downloadGroupProjectBrief } from "../../utils/groupProjectBriefDownload";
 import { getLeadDisplay } from "../../utils/leadDisplay";
@@ -451,7 +452,9 @@ const OrderGroupDetails = ({ user }) => {
       });
     } catch (downloadError) {
       console.error("Failed to download group project brief:", downloadError);
-      alert(downloadError.message || "Failed to download group project brief.");
+      toast.error(
+        downloadError.message || "Failed to download group project brief.",
+      );
     } finally {
       setBriefDownloading(false);
     }

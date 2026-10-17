@@ -201,3 +201,91 @@
   .sample-auth-items dl { grid-template-columns: repeat(2, 1fr); }
   .sample-auth-panel-actions .reject-link { margin-left: 0; }
 }
+
+html[data-admin-theme="light"] .sample-authorizations-page {
+  --sa-panel: var(--bg-card);
+  --sa-panel-solid: var(--bg-card);
+  --sa-border: var(--border-color);
+  --sa-muted: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+html[data-admin-theme="light"] .sample-auth-hero,
+html[data-admin-theme="light"] .sample-auth-workspace,
+html[data-admin-theme="light"] .sample-auth-summary button {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+html[data-admin-theme="light"] .sample-auth-search,
+html[data-admin-theme="light"] .sample-auth-table th,
+html[data-admin-theme="light"] .sample-auth-pagination button,
+html[data-admin-theme="light"] .sample-auth-facts > div,
+html[data-admin-theme="light"] .sample-auth-items article,
+html[data-admin-theme="light"] .sample-auth-documents > a,
+html[data-admin-theme="light"] .sample-auth-decision-context {
+  background: var(--surface-alt);
+}
+
+html[data-admin-theme="light"] .sample-auth-search input,
+html[data-admin-theme="light"] .sample-auth-table td strong,
+html[data-admin-theme="light"] .sample-auth-state strong,
+html[data-admin-theme="light"] .sample-auth-facts dd,
+html[data-admin-theme="light"] .sample-auth-items dd,
+html[data-admin-theme="light"] .sample-auth-request-reason,
+html[data-admin-theme="light"] .sample-auth-review-card.decision-record p,
+html[data-admin-theme="light"] .sample-auth-decision-context strong {
+  color: var(--text-primary);
+}
+
+html[data-admin-theme="light"] .sample-auth-tabs button:hover {
+  color: var(--text-primary);
+  background: var(--nav-hover-bg);
+}
+
+html[data-admin-theme="light"] .sample-auth-tabs button.active,
+html[data-admin-theme="light"] .sample-auth-reference,
+html[data-admin-theme="light"] .sample-auth-open,
+html[data-admin-theme="light"] .sample-auth-panel-header > div:first-child span,
+html[data-admin-theme="light"] .sample-auth-facts a {
+  color: var(--primary-color) !important;
+}
+
+html[data-admin-theme="light"] .sample-auth-detail-panel,
+html[data-admin-theme="light"] .sample-auth-decision-dialog {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-lg);
+}
+
+html[data-admin-theme="light"] .sample-auth-panel-header,
+html[data-admin-theme="light"] .sample-auth-panel-actions,
+html[data-admin-theme="light"] .sample-auth-decision-dialog > footer {
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+}
+
+html[data-admin-theme="light"] .sample-auth-icon-button,
+html[data-admin-theme="light"] .sample-auth-button.secondary,
+html[data-admin-theme="light"] .sample-auth-review-card {
+  background: var(--surface-alt);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+html[data-admin-theme="light"] .sample-auth-decision-body label span,
+html[data-admin-theme="light"] .sample-auth-document-icon,
+html[data-admin-theme="light"] .sample-auth-documents em {
+  color: var(--text-secondary);
+}
+
+html[data-admin-theme="light"] .sample-auth-decision-body textarea {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+html[data-admin-theme="light"] .sample-auth-timeline-dot {
+  border-color: var(--bg-card);
+}

@@ -21,6 +21,7 @@ import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/Proj
 import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemindersCard";
 import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
 import Modal from "../../components/Modal/Modal";
+import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 import DeliveryCountdownBadge from "@client/components/features/DeliveryCountdownBadge";
 import ProjectComments from "@client/components/features/ProjectComments";
 import ProjectRevisionHistory, {
@@ -919,6 +920,7 @@ const ProjectDetails = ({ user }) => {
     setQuoteRequirementsValidationSubmitting,
   ] = useState(false);
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
+  const [isQuoteUndoConfirmOpen, setIsQuoteUndoConfirmOpen] = useState(false);
   const [quoteDecisionNoteDraft, setQuoteDecisionNoteDraft] = useState("");
   const [statusConfirmModal, setStatusConfirmModal] = useState({
     open: false,
@@ -1047,7 +1049,7 @@ const ProjectDetails = ({ user }) => {
   const ensureProjectIsEditable = () => {
     const currentlyCancelled = Boolean(project?.cancellation?.isCancelled);
     if (currentlyCancelled) {
-      alert(
+      toast.error(
         "This project is cancelled and frozen. Reactivate it before making changes.",
       );
       return false;
@@ -1056,7 +1058,7 @@ const ProjectDetails = ({ user }) => {
     const currentlyOnHold =
       project?.hold?.isOnHold || project?.status === "On Hold";
     if (currentlyOnHold) {
-      alert("This project is on hold. Release hold before making changes.");
+      toast.error("This project is on hold. Release hold before making changes.");
       return false;
     }
     return true;
@@ -1498,7 +1500,7 @@ const ProjectDetails = ({ user }) => {
       console.error("Error updating status:", err);
       // Revert on error
       setProject({ ...project, status: oldStatus });
-      alert(err.message || "Failed to update status");
+      toast.error(err.message || "Failed to update status");
       return false;
     }
   };
@@ -1777,7 +1779,7 @@ const ProjectDetails = ({ user }) => {
       setIsHoldModalOpen(false);
     } catch (error) {
       console.error("Error toggling project hold:", error);
-      alert(error.message || "Failed to update hold state.");
+      toast.error(error.message || "Failed to update hold state.");
     } finally {
       setIsTogglingHold(false);
     }
@@ -2294,11 +2296,11 @@ const ProjectDetails = ({ user }) => {
         setIsEditingLead(false);
       } else {
         const errorData = await res.json().catch(() => ({}));
-        alert(errorData.message || "Failed to update project assignments");
+        toast.error(errorData.message || "Failed to update project assignments");
       }
     } catch (error) {
       console.error("Error updating lead:", error);
-      alert("Error updating lead");
+      toast.error("Error updating lead");
     }
   };
 
@@ -2342,7 +2344,7 @@ const ProjectDetails = ({ user }) => {
     if (!ensureProjectIsEditable()) return;
     try {
       if (selectedClientMockups.length > 0 && selectedApprovedMockups.length > 0) {
-        alert(
+        toast.error(
           "Choose either Client Mockup or Already Approved Mockup for this revision, not both.",
         );
         return;
@@ -2423,24 +2425,25 @@ const ProjectDetails = ({ user }) => {
         setIsEditing(false);
       } else {
         console.error("Failed to update project");
-        alert("Failed to save changes.");
+        toast.error("Failed to save changes.");
       }
     } catch (err) {
       console.error("Error saving project:", err);
-      alert("Error saving changes.");
+      toast.error("Error saving changes.");
     }
   };
 
-  const handleQuoteRequirementsValidation = async (validated) => {
+  const handleQuoteRequirementsValidation = async (
+    validated,
+    { skipConfirmation = false } = {},
+  ) => {
     if (!ensureProjectIsEditable()) return;
     if (!project || project.projectType !== "Quote") return;
     if (quoteRequirementsValidationSubmitting) return;
 
-    if (!validated) {
-      const confirmed = window.confirm(
-        "Undo quote requirements validation? This moves the quote back to Pending Quote Requirements.",
-      );
-      if (!confirmed) return;
+    if (!validated && !skipConfirmation) {
+      setIsQuoteUndoConfirmOpen(true);
+      return;
     }
 
     setQuoteRequirementsValidationSubmitting(true);
@@ -2509,7 +2512,7 @@ const ProjectDetails = ({ user }) => {
       applyProjectToState(updatedProject);
     } catch (error) {
       console.error("Error validating quote decision:", error);
-      alert(error.message || "Failed to validate quote decision.");
+      toast.error(error.message || "Failed to validate quote decision.");
     } finally {
       setQuoteDecisionSubmitting(false);
     }
@@ -2535,7 +2538,7 @@ const ProjectDetails = ({ user }) => {
       applyProjectToState(updatedProject);
     } catch (err) {
       console.error("Error undoing acknowledgement:", err);
-      alert("Failed to undo acknowledgement");
+      toast.error("Failed to undo acknowledgement");
     } finally {
       setUndoingDept(null);
     }
@@ -3340,15 +3343,18 @@ const ProjectDetails = ({ user }) => {
                 fontSize: "0.875rem",
                 fontWeight: 600,
                 cursor: "pointer",
-                backgroundColor: "rgba(255, 255, 255, 0.2)",
-                color: "inherit",
+                backgroundColor: "var(--primary-soft)",
+                color: "var(--primary-color)",
               }}
             >
               {statusSelectOptions.map((statusOption) => (
                 <option
                   key={`${statusOption.value}-${statusOption.label}`}
                   value={statusOption.value}
-                  style={{ color: "#1e293b" }}
+                  style={{
+                    color: "var(--text-primary)",
+                    backgroundColor: "var(--bg-card)",
+                  }}
                 >
                   {statusOption.label}
                 </option>
@@ -3880,10 +3886,10 @@ const ProjectDetails = ({ user }) => {
                       resize: "vertical",
                       width: "100%",
                       padding: "0.75rem",
-                      background: "rgba(255, 255, 255, 0.03)",
+                      background: "var(--bg-input)",
                       border: "1px solid var(--border-color)",
                       borderRadius: "8px",
-                      color: "#f8fafc",
+                      color: "var(--text-primary)",
                       fontSize: "0.95rem",
                     }}
                   />
@@ -4584,7 +4590,7 @@ const ProjectDetails = ({ user }) => {
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              background: "rgba(255, 255, 255, 0.03)",
+                              background: "var(--surface-alt)",
                               textDecoration: "none",
                               transition: "transform 0.2s",
                             }}
@@ -4624,7 +4630,7 @@ const ProjectDetails = ({ user }) => {
                                     whiteSpace: "nowrap",
                                     textOverflow: "ellipsis",
                                     overflow: "hidden",
-                                    color: "#f8fafc",
+                                    color: "var(--text-primary)",
                                   }}
                                 >
                                   {fileName}
@@ -4637,7 +4643,7 @@ const ProjectDetails = ({ user }) => {
                             download
                             style={{
                               fontSize: "0.75rem",
-                              color: "#38bdf8",
+                              color: "var(--primary-color)",
                               textDecoration: "none",
                               fontWeight: 600,
                             }}
@@ -5414,7 +5420,7 @@ const ProjectDetails = ({ user }) => {
                     key={update._id}
                     style={{
                       padding: "1rem",
-                      background: "rgba(255, 255, 255, 0.03)",
+                      background: "var(--surface-alt)",
                       borderRadius: "8px",
                       border: "1px solid var(--border-color)",
                     }}
@@ -5447,7 +5453,7 @@ const ProjectDetails = ({ user }) => {
                           style={{
                             fontSize: "0.8rem",
                             color: "var(--text-secondary)",
-                            background: "rgba(255,255,255,0.1)",
+                            background: "var(--surface-alt)",
                             padding: "2px 6px",
                             borderRadius: "4px",
                           }}
@@ -5564,13 +5570,20 @@ const ProjectDetails = ({ user }) => {
                       border: "1px solid rgba(239, 68, 68, 0.2)",
                     }}
                   >
-                    <p style={{ fontWeight: 600, color: "#fca5a5" }}>
+                    <p style={{ fontWeight: 600, color: "var(--danger)" }}>
                       {c.title}
                     </p>
-                    <p style={{ fontSize: "0.9rem", color: "#f8fafc" }}>
+                    <p
+                      style={{
+                        fontSize: "0.9rem",
+                        color: "var(--text-primary)",
+                      }}
+                    >
                       {c.description}
                     </p>
-                    <span style={{ fontSize: "0.8rem", color: "#fca5a5" }}>
+                    <span
+                      style={{ fontSize: "0.8rem", color: "var(--danger)" }}
+                    >
                       Status: {c.status}
                     </span>
                   </div>
@@ -6119,6 +6132,19 @@ const ProjectDetails = ({ user }) => {
         onOverrideReasonChange={(overrideReason) =>
           setBillingGuardModal((current) => ({ ...current, overrideReason }))
         }
+      />
+
+      <ConfirmationModal
+        isOpen={isQuoteUndoConfirmOpen}
+        title="Undo Quote Validation"
+        message="This moves the quote back to Pending Quote Requirements."
+        confirmText="Undo Validation"
+        pendingText="Updating..."
+        isDangerous
+        onConfirm={() =>
+          handleQuoteRequirementsValidation(false, { skipConfirmation: true })
+        }
+        onClose={() => setIsQuoteUndoConfirmOpen(false)}
       />
 
       <ProjectHoldModal

@@ -21,7 +21,7 @@
   width: 100%;
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--bg-input);
   color: var(--text-primary);
   padding: 0.65rem 0.75rem;
   resize: vertical;
@@ -30,9 +30,9 @@
 
 .cancel-project-modal-error {
   margin: 0;
-  color: #fca5a5;
-  background: rgba(127, 29, 29, 0.3);
-  border: 1px solid rgba(239, 68, 68, 0.55);
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
   border-radius: 8px;
   padding: 0.6rem 0.7rem;
   font-size: 0.84rem;
@@ -69,4 +69,10 @@
 .cancel-project-modal-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+.cancel-project-modal-textarea:focus-visible,
+.cancel-project-modal-btn:focus-visible {
+  outline: 3px solid rgba(var(--primary-rgb), 0.2);
+  outline-offset: 2px;
 }

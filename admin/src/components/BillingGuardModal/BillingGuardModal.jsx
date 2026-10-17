@@ -17,23 +17,37 @@ const BillingGuardModal = ({
   onOverrideReasonChange,
 }) => {
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
+    if (!isOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !isSubmitting) onClose?.();
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, isSubmitting, onClose]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="billing-guard-modal-overlay">
-      <div className="billing-guard-modal" role="dialog" aria-modal="true">
-        <h3>{title}</h3>
+    <div
+      className="billing-guard-modal-overlay"
+      onClick={() => !isSubmitting && onClose?.()}
+    >
+      <div
+        className="billing-guard-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="billing-guard-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h3 id="billing-guard-title">{title}</h3>
         {(orderId || projectName) && (
           <p className="billing-guard-project">
             <strong>Project:</strong> {orderId || "N/A"}

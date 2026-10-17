@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
+import ConfirmationModal from "../ConfirmationModal/ConfirmationModal";
 import "./OrderMeetingCard.css";
 
 const REMINDER_OPTIONS = [
@@ -137,6 +138,7 @@ const OrderMeetingCard = ({
   );
   const [saving, setSaving] = useState(false);
   const [skipping, setSkipping] = useState(false);
+  const [meetingOverrideToConfirm, setMeetingOverrideToConfirm] = useState(null);
   const [actionId, setActionId] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState(() =>
@@ -293,7 +295,14 @@ const OrderMeetingCard = ({
     }
   };
 
-  const handleMeetingOverride = async (nextSkipped) => {
+  const handleMeetingOverride = (nextSkipped) => {
+    if (!allowSkip || skipping) return;
+    setMeetingOverrideToConfirm(Boolean(nextSkipped));
+  };
+
+  const confirmMeetingOverride = async () => {
+    const nextSkipped = meetingOverrideToConfirm;
+    if (typeof nextSkipped !== "boolean") return;
     if (!allowSkip || skipping) return;
     const targetProjectId =
       project?._id || orderGroupProjects?.[0]?._id || "";
@@ -301,11 +310,6 @@ const OrderMeetingCard = ({
       setError("Project reference is required to update meeting overrides.");
       return;
     }
-
-    const confirmMessage = nextSkipped
-      ? "Skip the departmental meeting requirement? Any project still waiting at the meeting stage will move to Pending Scope Approval."
-      : "Restore the departmental meeting requirement for this order?";
-    if (!window.confirm(confirmMessage)) return;
 
     setSkipping(true);
     setError("");
@@ -630,6 +634,29 @@ const OrderMeetingCard = ({
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={typeof meetingOverrideToConfirm === "boolean"}
+        title={
+          meetingOverrideToConfirm
+            ? "Skip Meeting Requirement"
+            : "Restore Meeting Requirement"
+        }
+        message={
+          meetingOverrideToConfirm
+            ? "Any project still waiting at the meeting stage will move to Pending Scope Approval."
+            : "Restore the departmental meeting requirement for this order?"
+        }
+        confirmText={
+          meetingOverrideToConfirm ? "Skip Requirement" : "Restore Requirement"
+        }
+        pendingText="Saving..."
+        isDangerous={Boolean(meetingOverrideToConfirm)}
+        onConfirm={confirmMeetingOverride}
+        onClose={() => {
+          if (!skipping) setMeetingOverrideToConfirm(null);
+        }}
+      />
     </div>
   );
 };

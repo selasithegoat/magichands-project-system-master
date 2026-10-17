@@ -12,8 +12,8 @@
 
 .admin-reminder-btn {
   border: 1px solid rgba(148, 163, 184, 0.45);
-  background: rgba(15, 23, 42, 0.45);
-  color: #cbd5e1;
+  background: var(--surface-alt);
+  color: var(--text-primary);
   border-radius: 8px;
   padding: 0.4rem 0.72rem;
   font-size: 0.76rem;
@@ -58,9 +58,9 @@
 }
 
 .admin-reminder-btn.success {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(52, 211, 153, 0.6);
-  color: #6ee7b7;
+  background: var(--success-soft);
+  border-color: color-mix(in srgb, var(--success) 38%, transparent);
+  color: var(--success);
 }
 
 .admin-reminder-btn.success:hover:not(:disabled) {
@@ -68,9 +68,9 @@
 }
 
 .admin-reminder-btn.danger {
-  background: rgba(239, 68, 68, 0.16);
-  border-color: rgba(252, 165, 165, 0.65);
-  color: #fecaca;
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
 }
 
 .admin-reminder-btn.danger:hover:not(:disabled) {
@@ -79,7 +79,7 @@
 
 .admin-reminder-error {
   margin: 0 0 0.75rem;
-  color: #fecaca;
+  color: var(--danger);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -100,7 +100,7 @@
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 10px;
   padding: 0.7rem 0.8rem;
-  background: rgba(15, 23, 42, 0.34);
+  background: var(--surface-alt);
 }
 
 .admin-reminder-item-head {
@@ -112,7 +112,7 @@
 
 .admin-reminder-item-title {
   margin: 0;
-  color: #f8fafc;
+  color: var(--text-primary);
   font-size: 0.9rem;
   font-weight: 700;
 }
@@ -144,7 +144,7 @@
 
 .admin-reminder-message {
   margin: 0.4rem 0 0;
-  color: #cbd5e1;
+  color: var(--text-secondary);
   font-size: 0.82rem;
   line-height: 1.35;
   white-space: pre-wrap;
@@ -155,7 +155,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem 0.85rem;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -173,7 +173,7 @@
 
 .admin-reminder-history summary {
   cursor: pointer;
-  color: #cbd5e1;
+  color: var(--text-primary);
   font-size: 0.79rem;
   font-weight: 700;
 }
@@ -185,7 +185,7 @@
 .admin-reminder-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1300;
+  z-index: 15000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -199,14 +199,14 @@
   overflow-y: auto;
   border: 1px solid rgba(148, 163, 184, 0.5);
   border-radius: 12px;
-  background: #0f172a;
-  box-shadow: 0 24px 55px rgba(2, 6, 23, 0.5);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
   padding: 1rem;
 }
 
 .admin-reminder-modal-title {
   margin: 0 0 1rem;
-  color: #f8fafc;
+  color: var(--text-primary);
   font-size: 1rem;
   font-weight: 700;
 }
@@ -218,7 +218,7 @@
 .admin-reminder-field label {
   display: block;
   margin-bottom: 0.4rem;
-  color: #cbd5e1;
+  color: var(--text-secondary);
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -229,8 +229,8 @@
   width: 100%;
   border: 1px solid rgba(148, 163, 184, 0.45);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.7);
-  color: #f8fafc;
+  background: var(--bg-input);
+  color: var(--text-primary);
   padding: 0.6rem 0.7rem;
   font-size: 0.86rem;
   font-family: inherit;
@@ -243,8 +243,8 @@
 }
 
 .admin-reminder-input option {
-  background: #0f172a;
-  color: #f8fafc;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .admin-reminder-row {
@@ -262,7 +262,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.42rem;
-  color: #cbd5e1;
+  color: var(--text-primary);
   font-size: 0.84rem;
 }
 
@@ -281,8 +281,8 @@
   padding: 0.5rem 0.6rem;
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.45);
-  background: rgba(15, 23, 42, 0.55);
-  color: #e2e8f0;
+  background: var(--surface-alt);
+  color: var(--text-primary);
   font-size: 0.8rem;
 }
 
@@ -301,13 +301,13 @@
 
 .admin-reminder-recipient-count {
   grid-column: 2;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 0.74rem;
 }
 
 .admin-reminder-recipient-subtitle {
   margin: 0 0 0.45rem;
-  color: #cbd5e1;
+  color: var(--text-secondary);
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -322,8 +322,8 @@
 
 .admin-reminder-subdept-btn {
   border: 1px solid rgba(148, 163, 184, 0.45);
-  background: rgba(15, 23, 42, 0.4);
-  color: #cbd5e1;
+  background: var(--surface-alt);
+  color: var(--text-primary);
   border-radius: 999px;
   padding: 0.3rem 0.7rem;
   font-size: 0.72rem;
@@ -344,20 +344,20 @@
 
 .admin-reminder-recipient-note {
   grid-column: 2;
-  color: #fca5a5;
+  color: var(--danger);
   font-size: 0.72rem;
   font-weight: 600;
 }
 
 .admin-reminder-recipient-help {
   margin: 0.35rem 0 0;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 0.76rem;
 }
 
 .admin-reminder-recipient-error {
   margin: 0.4rem 0 0;
-  color: #fecaca;
+  color: var(--danger);
   font-size: 0.78rem;
   font-weight: 600;
 }

@@ -83,16 +83,7 @@ const hasAdminPortalAccess = (user) =>
 const AdminRouteContext = React.createContext(null);
 
 const LoadingScreen = () => (
-  <div
-    style={{
-      height: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "#0f172a",
-      color: "#94a3b8",
-    }}
-  >
+  <div className="admin-loading-screen" role="status" aria-live="polite">
     Loading...
   </div>
 );
@@ -402,7 +393,7 @@ function App() {
       {user && <GlobalSmsPrompt user={user} />}
       {user?._id && (
         <Suspense fallback={null}>
-          <ChatDock user={user} theme="dark" />
+          <ChatDock user={user} />
         </Suspense>
       )}
       <Toaster
@@ -416,7 +407,14 @@ function App() {
         }}
         toastOptions={{
           duration: 10000,
-          style: { pointerEvents: "none" },
+          className: "admin-hot-toast",
+          style: {
+            pointerEvents: "none",
+            background: "var(--bg-card)",
+            color: "var(--text-primary)",
+            border: "1px solid var(--border-color)",
+            boxShadow: "var(--shadow-lg)",
+          },
         }}
       />
     </AdminRouteContext.Provider>

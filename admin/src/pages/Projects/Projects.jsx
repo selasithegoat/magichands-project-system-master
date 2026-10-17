@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import "./Projects.css";
 import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
@@ -505,11 +506,11 @@ const Projects = ({ user }) => {
       if (res.ok) {
         setDeleteModal({ isOpen: false, projectId: null });
       } else {
-        alert("Failed to delete project");
+        toast.error("Failed to delete project");
       }
     } catch (err) {
       console.error("Error deleting project:", err);
-      alert("Error deleting project");
+      toast.error("Error deleting project");
     }
   };
 

@@ -21,7 +21,7 @@
   width: 100%;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: var(--bg-dark);
+  background: var(--bg-input);
   color: var(--text-primary);
   font-family: inherit;
   font-size: 0.9rem;
@@ -63,7 +63,7 @@
 }
 
 .hold-modal-btn.cancel:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--nav-hover-bg);
 }
 
 .hold-modal-btn.confirm {
@@ -78,4 +78,10 @@
 .hold-modal-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+.hold-modal-textarea:focus-visible,
+.hold-modal-btn:focus-visible {
+  outline: 3px solid rgba(var(--primary-rgb), 0.2);
+  outline-offset: 2px;
 }

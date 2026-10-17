@@ -62,7 +62,7 @@
   border-radius: 999px;
   border: 1px solid rgba(59, 130, 246, 0.35);
   background: rgba(59, 130, 246, 0.14);
-  color: #93c5fd;
+  color: var(--primary-color);
   padding: 0.15rem 0.55rem;
   font-size: 0.72rem;
   font-weight: 700;
@@ -291,7 +291,7 @@
 .hold-toggle-btn.type-change {
   background: rgba(59, 130, 246, 0.14);
   border-color: rgba(147, 197, 253, 0.45);
-  color: #bfdbfe;
+  color: var(--primary-color);
 }
 
 .hold-toggle-btn.corporate {
@@ -379,7 +379,7 @@
 
 .billing-tag.eod-hidden {
   background: rgba(148, 163, 184, 0.18);
-  color: #e2e8f0;
+  color: var(--text-secondary);
   border-color: rgba(148, 163, 184, 0.42);
 }
 
@@ -465,8 +465,8 @@
   flex-direction: column;
   gap: 0.55rem;
   padding: 0.85rem 1rem;
-  background: rgba(15, 23, 42, 0.45);
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: var(--surface-alt);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
 }
 
@@ -478,9 +478,9 @@
 }
 
 .detail-content-tab {
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(30, 41, 59, 0.45);
-  color: #cbd5e1;
+  border: 1px solid var(--border-color);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
   border-radius: 999px;
   padding: 0.4rem 0.8rem;
   font-size: 0.78rem;
@@ -491,14 +491,14 @@
 }
 
 .detail-content-tab:hover {
-  border-color: rgba(147, 197, 253, 0.65);
-  color: #dbeafe;
+  border-color: var(--border-focus);
+  color: var(--text-primary);
 }
 
 .detail-content-tab.active {
-  background: rgba(59, 130, 246, 0.18);
-  border-color: rgba(147, 197, 253, 0.85);
-  color: #bfdbfe;
+  background: var(--primary-soft);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .details-grid {
@@ -559,7 +559,7 @@
   border-radius: 8px;
   border: 1px solid rgba(59, 130, 246, 0.4);
   background: rgba(59, 130, 246, 0.12);
-  color: #bfdbfe;
+  color: var(--primary-color);
   font-weight: 600;
   cursor: pointer;
 }
@@ -643,7 +643,7 @@
   border-radius: 999px;
   background: rgba(59, 130, 246, 0.12);
   border: 1px solid rgba(59, 130, 246, 0.25);
-  color: #93c5fd;
+  color: var(--primary-color);
   font-size: 0.72rem;
   font-weight: 600;
 }
@@ -660,7 +660,7 @@
   border-radius: 10px;
   color: var(--text-secondary);
   font-size: 0.85rem;
-  background: rgba(15, 23, 42, 0.35);
+  background: var(--surface-alt);
   text-align: center;
 }
 
@@ -668,7 +668,7 @@
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 0.85rem;
-  background: rgba(15, 23, 42, 0.35);
+  background: var(--surface-alt);
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -714,25 +714,25 @@
   padding: 0.2rem 0.45rem;
   border-radius: 999px;
   background: rgba(59, 130, 246, 0.12);
-  color: #93c5fd;
+  color: var(--primary-color);
   border: 1px solid rgba(59, 130, 246, 0.35);
 }
 
 .sms-prompt-status.sent {
   background: rgba(34, 197, 94, 0.16);
-  color: #86efac;
+  color: var(--success);
   border-color: rgba(34, 197, 94, 0.35);
 }
 
 .sms-prompt-status.skipped {
   background: rgba(148, 163, 184, 0.2);
-  color: #cbd5f5;
+  color: var(--text-secondary);
   border-color: rgba(148, 163, 184, 0.35);
 }
 
 .sms-prompt-status.failed {
   background: rgba(239, 68, 68, 0.2);
-  color: #fecaca;
+  color: var(--danger);
   border-color: rgba(239, 68, 68, 0.35);
 }
 
@@ -745,7 +745,7 @@
 
 .sms-prompt-error {
   font-size: 0.78rem;
-  color: #fecaca;
+  color: var(--danger);
   background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
@@ -762,7 +762,7 @@
   padding: 0.4rem 0.8rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  background: rgba(15, 23, 42, 0.3);
+  background: var(--surface-alt);
   color: var(--text-primary);
   cursor: pointer;
   font-size: 0.85rem;
@@ -772,19 +772,19 @@
 .sms-action-btn.primary {
   background: rgba(34, 197, 94, 0.15);
   border-color: rgba(34, 197, 94, 0.35);
-  color: #86efac;
+  color: var(--success);
 }
 
 .sms-action-btn.outline {
   background: rgba(59, 130, 246, 0.14);
   border-color: rgba(59, 130, 246, 0.35);
-  color: #93c5fd;
+  color: var(--primary-color);
 }
 
 .sms-action-btn.muted {
   background: rgba(148, 163, 184, 0.2);
   border-color: rgba(148, 163, 184, 0.35);
-  color: #e2e8f0;
+  color: var(--text-secondary);
 }
 
 .sms-action-btn:disabled {
@@ -811,7 +811,7 @@
   padding: 0.5rem 0.75rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--surface-alt);
   color: var(--text-primary);
   font-size: 0.9rem;
 }
@@ -822,7 +822,7 @@
   padding: 0.65rem 0.75rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--bg-input);
   color: var(--text-primary);
   font-size: 0.9rem;
   font-family: inherit;
@@ -867,7 +867,7 @@
   padding: 0.85rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-alt);
 }
 
 .quote-requirement-admin-item.is-required {
@@ -894,7 +894,7 @@
   font-size: 0.72rem;
   color: var(--text-primary);
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-card);
 }
 
 .quote-requirement-admin-toggle.is-required {
@@ -947,7 +947,7 @@
 .quote-requirement-admin-action {
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-card);
   color: var(--text-primary);
   padding: 0.35rem 0.7rem;
   font-size: 0.78rem;
@@ -962,7 +962,7 @@
 
 .quote-requirement-admin-action.validate {
   border-color: rgba(16, 185, 129, 0.3);
-  color: #6ee7b7;
+  color: var(--success);
   background: rgba(16, 185, 129, 0.14);
 }
 
@@ -977,7 +977,7 @@
   border-radius: 10px;
   padding: 0.85rem;
   margin-bottom: 1rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-alt);
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -1003,13 +1003,13 @@
 .quote-decision-admin-status.is-go-ahead {
   background: rgba(16, 185, 129, 0.14);
   border-color: rgba(16, 185, 129, 0.3);
-  color: #6ee7b7;
+  color: var(--success);
 }
 
 .quote-decision-admin-status.is-declined {
   background: rgba(244, 63, 94, 0.14);
   border-color: rgba(244, 63, 94, 0.3);
-  color: #fda4af;
+  color: var(--danger);
 }
 
 .quote-decision-admin-meta {
@@ -1054,7 +1054,7 @@
 .quote-decision-admin-btn {
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-card);
   color: var(--text-primary);
   padding: 0.35rem 0.7rem;
   font-size: 0.78rem;
@@ -1069,13 +1069,13 @@
 
 .quote-decision-admin-btn.go-ahead {
   border-color: rgba(16, 185, 129, 0.3);
-  color: #6ee7b7;
+  color: var(--success);
   background: rgba(16, 185, 129, 0.14);
 }
 
 .quote-decision-admin-btn.declined {
   border-color: rgba(244, 63, 94, 0.3);
-  color: #fda4af;
+  color: var(--danger);
   background: rgba(244, 63, 94, 0.14);
 }
 
@@ -1106,7 +1106,7 @@
 .edit-input {
   width: 100%;
   padding: 0.5rem;
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--bg-input);
   border: 1px solid var(--border-color);
   border-radius: 4px;
   color: var(--text-primary);
@@ -1117,7 +1117,7 @@
 .edit-input:focus {
   outline: none;
   border-color: #3b82f6;
-  background: rgba(15, 23, 42, 0.8);
+  background: var(--bg-input);
 }
 
 /* Items Table */
@@ -1133,7 +1133,7 @@
   text-transform: uppercase;
   color: var(--text-secondary);
   padding: 0.75rem;
-  background: rgba(15, 23, 42, 0.3);
+  background: var(--surface-alt);
   border-radius: 4px;
 }
 
@@ -1141,7 +1141,7 @@
   padding: 0.75rem;
   color: var(--text-primary);
   font-size: 0.9rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .items-table tr:last-child td {
@@ -1178,7 +1178,7 @@
 .batch-admin-create-btn {
   border: 1px solid rgba(34, 197, 94, 0.5);
   background: rgba(34, 197, 94, 0.16);
-  color: #86efac;
+  color: var(--success);
 }
 
 .batch-admin-create-btn:hover:not(:disabled) {
@@ -1216,11 +1216,7 @@
   padding: 1rem;
   border: 1px solid rgba(34, 197, 94, 0.35);
   border-radius: 12px;
-  background: linear-gradient(
-    145deg,
-    rgba(34, 197, 94, 0.09),
-    rgba(15, 23, 42, 0.45)
-  );
+  background: var(--surface-alt);
 }
 
 .batch-admin-form-heading h4,
@@ -1259,7 +1255,7 @@
   padding: 0.7rem;
   border: 1px solid var(--border-color);
   border-radius: 9px;
-  background: rgba(15, 23, 42, 0.42);
+  background: var(--bg-card);
 }
 
 .batch-admin-allocation-row strong,
@@ -1283,7 +1279,7 @@
   padding: 0.48rem 0.6rem;
   border: 1px solid var(--border-color);
   border-radius: 7px;
-  background: rgba(15, 23, 42, 0.65);
+  background: var(--bg-input);
   color: var(--text-primary);
 }
 
@@ -1315,7 +1311,7 @@
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 0.9rem;
-  background: rgba(15, 23, 42, 0.35);
+  background: var(--surface-alt);
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -1350,7 +1346,7 @@
   font-weight: 700;
   border: 1px solid rgba(148, 163, 184, 0.4);
   background: rgba(148, 163, 184, 0.15);
-  color: #94a3b8;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1358,7 +1354,7 @@
 .batch-admin-status.planned {
   border-color: rgba(148, 163, 184, 0.4);
   background: rgba(148, 163, 184, 0.15);
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .batch-admin-status.in_production {
@@ -1436,7 +1432,7 @@
   padding: 0.5rem 0.65rem;
   border-radius: 6px;
   border: 1px solid var(--border-color);
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--bg-input);
   color: var(--text-primary);
   font-size: 0.85rem;
   font-family: inherit;
@@ -1477,7 +1473,7 @@
   border-radius: 10px;
   padding: 0.75rem;
   margin-top: 0.75rem;
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--bg-card);
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -1724,7 +1720,7 @@
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-alt);
 }
 
 .feedback-meta {
@@ -1794,7 +1790,7 @@
 .feedback-media-card {
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-alt);
   padding: 0.5rem;
   display: flex;
   flex-direction: column;
@@ -1811,7 +1807,7 @@
   object-fit: cover;
   border-radius: 6px;
   border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(15, 23, 42, 0.35);
+  background: var(--bg-card);
 }
 
 .feedback-media-video {
@@ -1831,12 +1827,12 @@
   justify-content: center;
   width: fit-content;
   max-width: 100%;
-  border: 1px solid #334155;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 0.35rem 0.55rem;
   font-size: 0.78rem;
-  color: #93c5fd;
-  background: rgba(30, 64, 175, 0.16);
+  color: var(--primary-color);
+  background: var(--primary-soft);
   text-decoration: none;
 }
 
@@ -1945,8 +1941,8 @@
   width: fit-content;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.45);
-  background: #f8fafc;
-  color: #475569;
+  background: var(--surface-alt);
+  color: var(--text-secondary);
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.2rem 0.65rem;
@@ -1992,7 +1988,7 @@
 
 .project-mockup-status.workflow-superseded {
   border-color: rgba(148, 163, 184, 0.45);
-  color: #475569;
+  color: var(--text-secondary);
   background: rgba(148, 163, 184, 0.12);
 }
 
@@ -2010,8 +2006,8 @@
 .project-mockup-chip {
   border: 1px solid rgba(148, 163, 184, 0.45);
   border-radius: 999px;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--surface-alt);
+  color: var(--text-secondary);
   font-size: 0.68rem;
   font-weight: 700;
   padding: 0.14rem 0.5rem;
@@ -2083,7 +2079,7 @@
 .project-mockup-chip.workflow-superseded {
   border-color: rgba(148, 163, 184, 0.45);
   background: rgba(148, 163, 184, 0.12);
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .project-mockup-chip.active.workflow-awaiting_graphics_review,
@@ -2118,7 +2114,7 @@
   border: 1px solid var(--border-color);
   background: var(--bg-card);
   text-decoration: none;
-  color: #38bdf8;
+  color: var(--primary-color);
   font-size: 0.78rem;
   font-weight: 600;
 }
@@ -2158,7 +2154,7 @@
   padding: 0.85rem;
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.26);
+  background: var(--surface-alt);
 }
 
 .admin-mockup-upload-panel.is-locked {
@@ -2200,7 +2196,7 @@
   padding: 0.65rem;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.34);
+  background: var(--bg-card);
 }
 
 .admin-mockup-upload-file strong,
@@ -2229,7 +2225,7 @@
   padding: 0.55rem;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-input);
   color: var(--text-primary);
   font: inherit;
   font-size: 0.82rem;
@@ -2240,7 +2236,7 @@
   border: 1px solid rgba(239, 68, 68, 0.35);
   border-radius: 999px;
   background: rgba(239, 68, 68, 0.1);
-  color: #fca5a5;
+  color: var(--danger);
   font-size: 0.74rem;
   font-weight: 800;
   padding: 0.32rem 0.62rem;
@@ -2275,7 +2271,7 @@
   padding: 0.75rem 0.9rem;
   border-radius: 12px;
   border: 1px solid var(--border-color);
-  background: rgba(15, 23, 42, 0.62);
+  background: var(--surface-alt);
 }
 
 .status-confirm-summary-row {
@@ -2305,7 +2301,7 @@
   border-radius: 10px;
   border: 1px solid rgba(244, 63, 94, 0.4);
   background: rgba(244, 63, 94, 0.12);
-  color: #fecaca;
+  color: var(--danger);
   font-size: 0.85rem;
   line-height: 1.4;
 }
@@ -2315,7 +2311,7 @@
   border-radius: 10px;
   border: 1px solid rgba(96, 165, 250, 0.36);
   background: rgba(59, 130, 246, 0.1);
-  color: #dbeafe;
+  color: var(--primary-color);
   font-weight: 700;
   font-size: 0.86rem;
   line-height: 1.5;
@@ -2339,9 +2335,9 @@
   min-height: 42px;
   padding: 0.62rem 0.72rem;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.72);
+  background: var(--bg-input);
   color: var(--text-primary);
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 .status-confirm-input::placeholder {
@@ -2431,7 +2427,7 @@
 }
 
 .admin-item-production-assignment strong {
-  color: #93c5fd;
+  color: var(--primary-color);
   font-size: 0.78rem;
 }
 
@@ -2463,7 +2459,7 @@
   border: 1px solid var(--border-color);
   border-radius: 8px;
   outline: none;
-  background: rgba(15, 23, 42, 0.72);
+  background: var(--bg-input);
   color: var(--text-primary);
   font: inherit;
 }
@@ -2477,4 +2473,92 @@
   color: var(--text-secondary);
   font-size: 0.68rem;
   text-align: right;
+}
+
+/* Light theme refinements for legacy status and countdown surfaces. */
+html[data-admin-theme="light"] .project-details-page {
+  color: var(--text-primary);
+}
+
+html[data-admin-theme="light"]
+  .delivery-countdown-badge:not(.is-near-delivery):not(.is-overdue) {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  box-shadow: var(--shadow-sm);
+}
+
+html[data-admin-theme="light"]
+  .delivery-countdown-badge:not(.is-near-delivery):not(.is-overdue)
+  .delivery-countdown-title,
+html[data-admin-theme="light"]
+  .delivery-countdown-badge:not(.is-near-delivery):not(.is-overdue)
+  .delivery-countdown-ring-label {
+  color: #475569;
+}
+
+html[data-admin-theme="light"]
+  .delivery-countdown-badge:not(.is-near-delivery):not(.is-overdue)
+  .delivery-countdown-ring-track {
+  stroke: #c7d2fe;
+}
+
+html[data-admin-theme="light"]
+  .delivery-countdown-badge:not(.is-near-delivery):not(.is-overdue)
+  .delivery-countdown-ring-progress {
+  stroke: var(--primary-color);
+}
+
+html[data-admin-theme="light"]
+  .delivery-countdown-badge:not(.is-near-delivery):not(.is-overdue)
+  .delivery-countdown-ring-value {
+  color: #312e81;
+}
+
+html[data-admin-theme="light"] .cancelled-alert {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+html[data-admin-theme="light"] .billing-tag.corporate-emergency,
+html[data-admin-theme="light"] .sms-prompt-error {
+  color: var(--danger);
+}
+
+html[data-admin-theme="light"] .revision-badge,
+html[data-admin-theme="light"] .batch-admin-status.in_production,
+html[data-admin-theme="light"] .batch-admin-update-btn,
+html[data-admin-theme="light"] .dept-tag,
+html[data-admin-theme="light"] .feedback-media-download {
+  color: var(--primary-color);
+}
+
+html[data-admin-theme="light"] .quote-requirement-admin-action.undo {
+  color: #c2410c;
+}
+
+html[data-admin-theme="light"] .quote-decision-admin-status.is-pending {
+  color: #a16207;
+}
+
+html[data-admin-theme="light"] .batch-admin-status.produced {
+  color: #0369a1;
+}
+
+html[data-admin-theme="light"] .batch-admin-status.in_packaging {
+  color: #4338ca;
+}
+
+html[data-admin-theme="light"] .batch-admin-status.packaged,
+html[data-admin-theme="light"] .batch-admin-status.delivered,
+html[data-admin-theme="light"] .dept-tag.acknowledged,
+html[data-admin-theme="light"] .dept-ack-user,
+html[data-admin-theme="light"] .dept-undo-btn,
+html[data-admin-theme="light"] .feedback-pill.positive {
+  color: var(--success);
+}
+
+html[data-admin-theme="light"] .batch-admin-status.cancelled,
+html[data-admin-theme="light"] .feedback-pill.negative {
+  color: var(--danger);
 }

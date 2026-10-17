@@ -47,6 +47,7 @@ const CHAT_TYPING_IDLE_TIMEOUT_MS = 3200;
 const CHAT_TYPING_REMOTE_TIMEOUT_MS = 4600;
 const CHAT_DATE_INITIAL_PEEK_MS = 5000;
 const CHAT_DATE_SCROLL_IDLE_MS = 650;
+const CHAT_CONTEXT_PANEL_BREAKPOINT_PX = 1700;
 const CHAT_DEFAULT_REACTIONS = [
   "1f44d",
   "2764-fe0f",
@@ -1176,6 +1177,11 @@ const ChatDock = ({ user, theme = "light" }) => {
   const [threadQuery, setThreadQuery] = useState("");
   const [threadFilter, setThreadFilter] = useState("all");
   const [mobilePanelView, setMobilePanelView] = useState("sidebar");
+  const [isContextPanelOpen, setIsContextPanelOpen] = useState(() =>
+    typeof window !== "undefined"
+      ? window.innerWidth > CHAT_CONTEXT_PANEL_BREAKPOINT_PX
+      : false,
+  );
   const [userQuery, setUserQuery] = useState("");
   const [userResults, setUserResults] = useState([]);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
@@ -3092,6 +3098,11 @@ const ChatDock = ({ user, theme = "light" }) => {
   const handleOpen = async () => {
     dismissIncomingPreview(true);
     setIsOpen(true);
+    setIsContextPanelOpen(
+      typeof window !== "undefined"
+        ? window.innerWidth > CHAT_CONTEXT_PANEL_BREAKPOINT_PX
+        : false,
+    );
     setSidebarMode("threads");
     setError("");
     setOpenReactionPickerId("");
@@ -3128,6 +3139,22 @@ const ChatDock = ({ user, theme = "light" }) => {
     clearMentionState();
     resetProjectRoutePicker();
   }, [clearMentionState, resetProjectRoutePicker]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const contextPanelMedia = window.matchMedia(
+      `(max-width: ${CHAT_CONTEXT_PANEL_BREAKPOINT_PX}px)`,
+    );
+    const syncContextPanel = (event) => {
+      setIsContextPanelOpen(!event.matches);
+    };
+
+    syncContextPanel(contextPanelMedia);
+    contextPanelMedia.addEventListener("change", syncContextPanel);
+    return () =>
+      contextPanelMedia.removeEventListener("change", syncContextPanel);
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -4509,7 +4536,7 @@ const ChatDock = ({ user, theme = "light" }) => {
               mobilePanelView === "thread" && activeThread
                 ? "mobile-thread-view"
                 : "mobile-sidebar-view"
-            }`}
+            } ${isContextPanelOpen ? "context-panel-open" : ""}`}
           >
             <div className="chat-dock-sidebar">
               <div className="chat-dock-sidebar-head">
@@ -4848,6 +4875,32 @@ const ChatDock = ({ user, theme = "light" }) => {
                           </div>
                         )}
                       </div>
+                      <button
+                        type="button"
+                        className="chat-dock-context-toggle"
+                        onClick={() =>
+                          setIsContextPanelOpen((currentValue) => !currentValue)
+                        }
+                        aria-label={
+                          isContextPanelOpen
+                            ? "Hide contact and work dossier"
+                            : "Show contact and work dossier"
+                        }
+                        aria-expanded={isContextPanelOpen}
+                        title="Contact and work dossier"
+                      >
+                        <PersonIcon width="16" height="16" />
+                        <span>Dossier</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-dock-window-close"
+                        onClick={handleClose}
+                        aria-label="Close chat"
+                        title="Close chat"
+                      >
+                        <XIcon width="16" height="16" />
+                      </button>
                     </div>
                   </div>
 
@@ -5819,10 +5872,25 @@ const ChatDock = ({ user, theme = "light" }) => {
               )}
             </div>
 
-            <aside className="chat-dock-context-panel">
+            <button
+              type="button"
+              className="chat-dock-context-backdrop"
+              onClick={() => setIsContextPanelOpen(false)}
+              aria-label="Close contact and work dossier"
+              tabIndex={isContextPanelOpen ? 0 : -1}
+            />
+
+            <aside
+              className="chat-dock-context-panel"
+              aria-hidden={!isContextPanelOpen}
+            >
               <div className="chat-dock-context-head">
                 <strong>Contact &amp; Work Dossier</strong>
-                <button type="button" onClick={handleClose} aria-label="Close chat">
+                <button
+                  type="button"
+                  onClick={() => setIsContextPanelOpen(false)}
+                  aria-label="Hide contact and work dossier"
+                >
                   <XIcon width="16" height="16" />
                 </button>
               </div>

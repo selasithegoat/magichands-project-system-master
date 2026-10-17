@@ -8,12 +8,12 @@
   width: 100%;
   padding: 0.55rem 0.7rem;
   border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
   color: var(--text-primary);
   font-size: 0.9rem;
   font-family: inherit;
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 .order-meeting-card .edit-input:focus {
@@ -83,8 +83,8 @@
 .order-meeting-hint {
   padding: 0.6rem 0.75rem;
   border-radius: 10px;
-  background: rgba(148, 163, 184, 0.12);
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: var(--surface-alt);
+  border: 1px solid var(--border-color);
   color: var(--text-secondary);
   font-size: 0.85rem;
 }
@@ -95,8 +95,8 @@
   font-size: 0.9rem;
   padding: 0.75rem;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid var(--border-color);
+  background: var(--surface-alt);
 }
 
 .order-meeting-label {
@@ -116,7 +116,7 @@
 }
 
 .order-meeting-value a {
-  color: #60a5fa;
+  color: var(--link-color);
   text-decoration: none;
 }
 
@@ -130,8 +130,8 @@
   gap: 0.85rem;
   padding: 1rem;
   border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid var(--border-color);
+  background: var(--surface-alt);
 }
 
 .order-meeting-row {
@@ -184,7 +184,7 @@
 .order-meeting-history {
   margin-top: 0.5rem;
   padding-top: 0.75rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  border-top: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -205,10 +205,10 @@
 }
 
 .order-meeting-history-item {
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 0.6rem 0.75rem;
-  background: rgba(15, 23, 42, 0.35);
+  background: var(--surface-alt);
 }
 
 .order-meeting-history-main {
@@ -233,7 +233,7 @@
 }
 
 .order-meeting-history-meta a {
-  color: #7dd3fc;
+  color: var(--link-color);
   text-decoration: none;
 }
 

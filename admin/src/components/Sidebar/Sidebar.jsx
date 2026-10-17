@@ -189,6 +189,8 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
               key={item.to}
               to={item.to}
               onClick={onClose}
+              aria-label={item.label}
+              title={item.label}
               className={({ isActive }) =>
                 `nav-item ${isActive ? "active" : ""}`
               }
