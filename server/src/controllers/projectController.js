@@ -5,6 +5,7 @@ const Order = require("../models/Order");
 const ActivityLog = require("../models/ActivityLog");
 const ProjectRevision = require("../models/ProjectRevision");
 const ProjectUpdate = require("../models/ProjectUpdate");
+const ProjectComment = require("../models/ProjectComment");
 const SmsPrompt = require("../models/SmsPrompt");
 const OrderMeeting = require("../models/OrderMeeting");
 const Reminder = require("../models/Reminder");
@@ -1707,6 +1708,38 @@ const normalizeDashboardProject = (project) => {
   return project;
 };
 
+const attachProjectCommentCounts = async (projects = []) => {
+  const projectIds = projects
+    .map((project) => project?._id)
+    .filter(Boolean);
+
+  if (projectIds.length === 0) return projects;
+
+  const countRows = await ProjectComment.aggregate([
+    {
+      $match: {
+        project: { $in: projectIds },
+        isDeleted: { $ne: true },
+      },
+    },
+    {
+      $group: {
+        _id: "$project",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+  const countsByProjectId = new Map(
+    countRows.map((row) => [toObjectIdString(row?._id), Number(row?.count) || 0]),
+  );
+
+  projects.forEach((project) => {
+    project.commentCount = countsByProjectId.get(toObjectIdString(project?._id)) || 0;
+  });
+
+  return projects;
+};
+
 const populateDashboardProjectQuery = (query) =>
   query
     .populate("projectLeadId", "firstName lastName avatarUrl")
@@ -2112,6 +2145,9 @@ const buildClientDashboardSummary = async (req) => {
       .filter(Boolean);
   });
 
+  const projectCatalog = Array.from(projectCatalogById.values());
+  await attachProjectCommentCounts(projectCatalog);
+
   const pendingAcceptanceCount = allMetaProjects.filter((project) =>
     isDashboardStatus(project, DASHBOARD_PENDING_ACCEPTANCE_STATUSES),
   ).length;
@@ -2135,7 +2171,7 @@ const buildClientDashboardSummary = async (req) => {
     },
     projects: {
       schemaVersion: 2,
-      catalog: Array.from(projectCatalogById.values()),
+      catalog: projectCatalog,
       recentActiveIds: recentActiveIds.map(toObjectIdString).filter(Boolean),
       recentActiveByDepartmentIds: recentActiveByDepartment,
       upcomingDeadlineIds: upcomingDeadlineIds.map(toObjectIdString).filter(Boolean),
@@ -9850,6 +9886,9 @@ const getProjects = async (req, res) => {
     ).lean();
 
     projects.forEach(normalizeProjectStatusFields);
+    if (summaryMode) {
+      await attachProjectCommentCounts(projects);
+    }
     if (String(req.query.mode || "").toLowerCase() === "report") {
       const nowMs = Date.now();
       projects = projects.filter((project) =>

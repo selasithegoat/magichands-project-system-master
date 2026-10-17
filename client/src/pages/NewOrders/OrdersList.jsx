@@ -58,6 +58,7 @@ const ORDER_LIST_STATUS_OPTIONS = [
   "Pending Departmental Meeting",
   "Pending Departmental Engagement",
   "In Progress",
+  "Pending Delivery/Pickup",
   "Pending Feedback",
   "Feedback Completed",
 ];
@@ -1041,7 +1042,11 @@ const OrdersList = ({ kpiFilter = "all" }) => {
             >
               {ORDER_LIST_STATUS_OPTIONS.map((statusOption) => (
                 <option key={statusOption} value={statusOption}>
-                  {statusOption === "All" ? "All Status" : statusOption}
+                  {statusOption === "All"
+                    ? "All Status"
+                    : statusOption === "Pending Delivery/Pickup"
+                      ? "Pending Delivery"
+                      : statusOption}
                 </option>
               ))}
             </select>

@@ -347,7 +347,6 @@ const buildProjectCommentAccessQuery = (user) => {
 
 const canManageComment = (user, comment) => {
   if (!user || !comment) return false;
-  if (user.role === "admin") return true;
   return toIdString(user._id || user.id) === toIdString(comment.author);
 };
 
@@ -767,7 +766,7 @@ const updateProjectComment = async (req, res) => {
     }
     if (!canManageComment(req.user, comment)) {
       return res.status(403).json({
-        message: "Only the comment author or an admin can edit this comment.",
+        message: "Only the comment author can edit this comment.",
       });
     }
 
@@ -842,7 +841,7 @@ const deleteProjectComment = async (req, res) => {
     }
     if (!canManageComment(req.user, comment)) {
       return res.status(403).json({
-        message: "Only the comment author or an admin can delete this comment.",
+        message: "Only the comment author can delete this comment.",
       });
     }
 

@@ -2,6 +2,7 @@ import "./ProjectCard.css";
 import CalendarIcon from "../icons/CalendarIcon";
 import UserAvatar from "../ui/UserAvatar";
 import FolderIcon from "../icons/FolderIcon";
+import CommentIcon from "../icons/CommentIcon";
 import StatusSlaBadge from "../ui/StatusSlaBadge";
 import ProjectHealthBadge from "../ui/ProjectHealthBadge";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
@@ -45,7 +46,7 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
   return "pending";
 };
 
-const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
+const ProjectCard = ({ project, onDetails, onUpdateStatus, onComments }) => {
   // Helpers
   const formatDate = (dateString) => {
     if (!dateString) return "Pending";
@@ -270,12 +271,30 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     .filter(Boolean)
     .join(" | ");
   const referenceImage = getProjectCardImageUrl(project);
+  const projectTitleText = String(
+    project?.details?.projectName || project?.details?.jobDescription || "project",
+  ).trim();
+  const commentCount = Math.max(0, Number(project?.commentCount) || 0);
+  const commentCountLabel = commentCount > 99 ? "99+" : String(commentCount);
   return (
     <div
       className={`project-card-new project-type-${projectTypeKey} ${
         hasSpecialRequirementTag ? "has-special-awareness" : ""
       }`}
     >
+      <button
+        type="button"
+        className="project-card-comment-button"
+        title={`Open project comments (${commentCount})`}
+        aria-label={`Open ${commentCount} comments for ${projectTitleText}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          onComments?.(project);
+        }}
+      >
+        <CommentIcon width="17" height="17" />
+        <span className="project-card-comment-count">{commentCountLabel}</span>
+      </button>
       {hasSpecialRequirementTag && (
         <div className="special-requirement-watermark" aria-hidden="true">
           {specialRequirementWatermark}

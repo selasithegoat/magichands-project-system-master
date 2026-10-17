@@ -1019,11 +1019,60 @@
     color-mix(in srgb, var(--project-accent) 8%, var(--surface-alt)) 100%
   );
   padding: 0.75rem;
+  position: relative;
   cursor: pointer;
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
     border-color 0.2s ease;
+}
+
+.dashboard-project-comment-button {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  z-index: 6;
+  min-width: 44px;
+  height: 32px;
+  padding: 0 8px;
+  border: 3px solid var(--surface);
+  border-radius: 999px;
+  background: var(--project-accent);
+  color: #fff;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  transition:
+    background-color 0.7s cubic-bezier(0.32, 0.72, 0, 1),
+    border-color 0.7s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.dashboard-project-comment-button:hover {
+  background: color-mix(in srgb, var(--project-accent) 88%, #0f172a);
+}
+
+.dashboard-project-comment-count {
+  min-width: 12px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.dashboard-project-comment-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--project-accent) 34%, transparent);
+  outline-offset: 3px;
+}
+
+.dashboard-project-comment-button:active {
+  transform: translateY(1px);
+}
+
+.dashboard-project-header {
+  padding-right: 16px;
 }
 
 .dashboard-project-item.project-emergency {

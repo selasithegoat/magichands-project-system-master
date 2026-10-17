@@ -16,6 +16,7 @@ import LayoutGridIcon from "../../components/icons/LayoutGridIcon";
 import MenuIcon from "../../components/icons/MenuIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import ThreeDotsIcon from "../../components/icons/ThreeDotsIcon";
+import CommentIcon from "../../components/icons/CommentIcon";
 import XIcon from "../../components/icons/XIcon";
 import FabButton from "../../components/ui/FabButton";
 import Toast from "../../components/ui/Toast";
@@ -740,6 +741,16 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     );
   };
 
+  const handleCommentsClick = (project) => {
+    navigateToProject(project, {
+      detailSearch: "tab=Comments",
+      fallbackPath: "/client",
+      allowGenericEngaged: true,
+      title: "Choose Authorized Page",
+      message: "Project comments are available from an authorized project page.",
+    });
+  };
+
   const handleProductionAction = async (project, action) => {
     const projectId = toEntityId(project?._id);
     if (!projectId || !["start", "complete"].includes(action)) return;
@@ -1136,6 +1147,8 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
       null,
       "Project",
     );
+    const commentCount = Math.max(0, Number(project?.commentCount) || 0);
+    const commentCountLabel = commentCount > 99 ? "99+" : String(commentCount);
 
     return (
       <article
@@ -1151,6 +1164,21 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
           }
         }}
       >
+        <button
+          type="button"
+          className="dashboard-project-comment-button"
+          title={`Open project comments (${commentCount})`}
+          aria-label={`Open ${commentCount} comments for ${projectTitleText}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            handleCommentsClick(project);
+          }}
+        >
+          <CommentIcon width="17" height="17" />
+          <span className="dashboard-project-comment-count">
+            {commentCountLabel}
+          </span>
+        </button>
         <div className="dashboard-project-header">
           <div className="dashboard-project-header-main">
             <div className="dashboard-project-reference" aria-hidden={!referenceImage}>

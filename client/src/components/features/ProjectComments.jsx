@@ -331,7 +331,6 @@ const ProjectComments = ({
 
   const canManageComment = (comment) => {
     if (!comment || comment.isDeleted || !currentUserId) return false;
-    if (currentUser?.role === "admin") return true;
     return toIdString(comment.author) === currentUserId;
   };
 

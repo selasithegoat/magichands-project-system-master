@@ -7,7 +7,6 @@ import ReminderAlertModal from "../features/ReminderAlertModal";
 import DeliveryCalendarFab from "../features/DeliveryCalendarFab";
 import BillingDocumentsFab from "../features/BillingDocumentsFab";
 import MaterialRequestsFab from "../features/MaterialRequestsFab";
-import ProjectCommentsFab from "../features/ProjectCommentsFab";
 import ProductionCompletionPrompt from "../features/ProductionCompletionPrompt";
 import "./Layout.css";
 // Icons
@@ -1450,8 +1449,6 @@ const Layout = ({
       )}
 
       <MaterialRequestsFab user={user} hasFrontDeskStack={isFrontDeskUser} />
-      <ProjectCommentsFab user={user} />
-
       {/* Page Content */}
       <main className="layout-content">{children}</main>
     </div>

@@ -248,6 +248,20 @@ const OngoingProjects = ({
     [navigateToProject],
   );
 
+  const handleProjectCommentsOpen = React.useCallback(
+    (project) => {
+      navigateToProject(project, {
+        detailSearch: "tab=Comments",
+        fallbackPath: "/client",
+        allowGenericEngaged: true,
+        title: "Choose Authorized Page",
+        message:
+          "Project comments are available from an authorized project page.",
+      });
+    },
+    [navigateToProject],
+  );
+
   return (
     <div className={`ongoing-container ${isEmergencyView ? "emergency-theme" : ""}`}>
       {/* Header */}
@@ -294,6 +308,7 @@ const OngoingProjects = ({
               key={p._id}
               project={p}
               onDetails={handleProjectOpen}
+              onComments={handleProjectCommentsOpen}
               onUpdateStatus={handleUpdateStatus}
             />
           ))
