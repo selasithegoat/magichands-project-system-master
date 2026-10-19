@@ -4782,35 +4782,11 @@ const ChatDock = ({ user, theme = "light" }) => {
                                       ? getTypingLabel(activeTypingThread.userName)
                                       : presenceMeta.label}
                                   </small>
-                                  {conversationProjects[0] && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        void handleOpenDossierProject(
-                                          conversationProjects[0],
-                                        )
-                                      }
-                                    >
-                                      Viewing {buildProjectLabel(conversationProjects[0])}
-                                    </button>
-                                  )}
                                 </span>
                               </div>
                             </div>
                           );
                         })()}
-                      {conversationProjects[0] && (
-                        <button
-                          type="button"
-                          className="chat-dock-header-project"
-                          onClick={() =>
-                            void handleOpenDossierProject(conversationProjects[0])
-                          }
-                        >
-                          <FolderIcon width="14" height="14" />
-                          {buildProjectLabel(conversationProjects[0])} Specs
-                        </button>
-                      )}
                       <div className="chat-dock-thread-menu-wrap">
                         <button
                           type="button"

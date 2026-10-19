@@ -6247,35 +6247,13 @@ html body .chat-dock-shell .chat-dock-counterpart-name-row em {
   white-space: nowrap;
 }
 
-html body .chat-dock-shell .chat-dock-counterpart-status-row small,
-html body .chat-dock-shell .chat-dock-counterpart-status-row button {
+html body .chat-dock-shell .chat-dock-counterpart-status-row small {
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
   font-size: 0.5rem;
   line-height: 1.2;
-}
-
-html body .chat-dock-shell .chat-dock-counterpart-status-row button {
-  color: var(--chat-ui-primary);
-  cursor: pointer;
-}
-
-html body .chat-dock-shell .chat-dock-header-project {
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 9px;
-  border: 1px solid var(--chat-ui-border);
-  border-radius: 5px;
-  background: var(--chat-ui-surface);
-  color: var(--text-primary);
-  font-size: 0.57rem;
-  font-weight: 650;
-  white-space: nowrap;
-  cursor: pointer;
 }
 
 html body .chat-dock-shell .chat-dock-thread-menu-trigger {
@@ -6806,10 +6784,6 @@ html body .chat-dock-shell .chat-dock-export-button {
     width: 28px;
     height: 28px;
     display: grid;
-  }
-
-  html body .chat-dock-shell .chat-dock-header-project {
-    display: none;
   }
 
   html body .chat-dock-shell .chat-dock-message-row,
@@ -7850,4 +7824,173 @@ html body
   html body .chat-dock-shell.portal-admin .chat-dock-context-panel {
     width: min(320px, calc(100% - 16px));
   }
+}
+
+/* Readability scale for the shared Client and Admin chat workspace. */
+html body .chat-dock-shell {
+  --chat-type-body: 13px;
+  --chat-type-meta: 12px;
+  --chat-type-title: 14px;
+  --chat-icon-size: 16px;
+  font-size: var(--chat-type-body);
+}
+
+html body .chat-dock-shell :where(
+    button,
+    input,
+    textarea,
+    select,
+    option,
+    p,
+    small,
+    strong,
+    em,
+    span,
+    a,
+    label
+  ) {
+  font-size: var(--chat-type-body) !important;
+}
+
+html body .chat-dock-shell :where(
+    .chat-dock-sidebar-head h2,
+    .chat-dock-thread-title h3,
+    .chat-dock-counterpart-name-row strong,
+    .chat-dock-contact-card > strong,
+    .chat-dock-empty strong,
+    .chat-dock-command-menu-head strong,
+    .chat-dock-project-picker-heading strong
+  ) {
+  font-size: var(--chat-type-title) !important;
+  line-height: 1.35;
+}
+
+html body .chat-dock-shell :where(
+    .chat-dock-sidebar-head p,
+    .chat-dock-thread-copy small,
+    .chat-dock-thread-meta small,
+    .chat-dock-thread-meta em,
+    .chat-dock-counterpart-name-row em,
+    .chat-dock-counterpart-status-row small,
+    .chat-dock-day-divider span,
+    .chat-dock-active-day span,
+    .chat-dock-message-meta strong,
+    .chat-dock-message-meta-actions > span,
+    .chat-dock-message-date,
+    .chat-dock-message-status,
+    .chat-dock-message-footer .chat-dock-inline-btn,
+    .chat-dock-message-footer .chat-dock-message-menu-trigger,
+    .chat-dock-message-footer .chat-dock-reaction-chip small,
+    .chat-dock-composer-hint,
+    .chat-dock-contact-card > small,
+    .chat-dock-context-title strong,
+    .chat-dock-context-title span,
+    .chat-dock-context-list button small,
+    .chat-dock-context-list p,
+    .chat-dock-context-files p,
+    .chat-dock-route-picker-hint,
+    .chat-dock-route-picker-label,
+    .chat-dock-attachment-meta,
+    .chat-dock-pending-meta,
+    .chat-dock-mention-meta
+  ) {
+  font-size: var(--chat-type-meta) !important;
+  line-height: 1.4;
+}
+
+html body .chat-dock-shell :where(
+    .chat-dock-message-bubble > p,
+    .chat-dock-message-bubble.mine.has-reply > p,
+    .chat-dock-reply-quote span,
+    .chat-dock-reply-quote small,
+    .chat-dock-reference-card,
+    .chat-dock-attachment-card,
+    .chat-dock-compose-row textarea
+  ) {
+  font-size: var(--chat-type-body) !important;
+  line-height: 1.5;
+}
+
+html body .chat-dock-shell :where(
+    button,
+    a,
+    .chat-dock-search-input,
+    .chat-dock-reference-card,
+    .chat-dock-attachment-card
+  ) svg {
+  width: var(--chat-icon-size) !important;
+  height: var(--chat-icon-size) !important;
+  flex: 0 0 var(--chat-icon-size);
+}
+
+html body .chat-dock-shell .chat-dock-sidebar-head,
+html body .chat-dock-shell .chat-dock-main-head,
+html body .chat-dock-shell .chat-dock-context-head {
+  min-height: 56px;
+}
+
+html body .chat-dock-shell .chat-dock-sidebar-actions .chat-dock-chip-btn:last-child,
+html body .chat-dock-shell .chat-dock-filter-tabs,
+html body .chat-dock-shell .chat-dock-filter-tabs button,
+html body .chat-dock-shell .chat-dock-context-actions a,
+html body .chat-dock-shell .chat-dock-context-actions button,
+html body .chat-dock-shell .chat-dock-export-button {
+  min-height: 34px;
+}
+
+html body .chat-dock-shell .chat-dock-thread-item {
+  min-height: 66px;
+}
+
+/* Keep the active contact identity legible without colliding with project context. */
+html body .chat-dock-shell .chat-dock-counterpart {
+  flex: 1 1 auto;
+  max-width: min(440px, 48vw);
+  overflow: hidden;
+}
+
+html body .chat-dock-shell .chat-dock-counterpart-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+html body .chat-dock-shell .chat-dock-counterpart-name-row,
+html body .chat-dock-shell .chat-dock-counterpart-status-row {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+html body .chat-dock-shell .chat-dock-counterpart-name-row strong {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body .chat-dock-shell .chat-dock-counterpart-name-row em,
+html body .chat-dock-shell .chat-dock-counterpart-status-row small {
+  flex: 0 0 auto;
+}
+
+html body .chat-dock-shell .chat-dock-composer-toolbar .chat-dock-toolbar-btn {
+  min-height: 32px;
+  height: 32px;
+}
+
+html body .chat-dock-shell .chat-dock-compose-row {
+  min-height: 46px;
+}
+
+html body .chat-dock-shell .chat-dock-composer-emoji-btn,
+html body .chat-dock-shell .chat-dock-audio-btn,
+html body .chat-dock-shell .chat-dock-send-btn,
+html body .chat-dock-shell .chat-dock-send-btn:hover:not(:disabled) {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
 }
