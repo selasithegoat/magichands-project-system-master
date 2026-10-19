@@ -7506,6 +7506,16 @@ html body .chat-dock-incoming-preview.portal-admin {
     opacity 700ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+/* The stack owns the sidebar offset; nested previews must not apply it again. */
+html body
+  .chat-dock-unread-preview-stack.portal-admin
+  > .chat-dock-incoming-preview.portal-admin {
+  left: auto;
+  right: auto;
+  width: 100%;
+  max-width: 100%;
+}
+
 html body .chat-dock-shell.portal-admin {
   top: 50%;
   right: auto;
