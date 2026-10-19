@@ -447,7 +447,7 @@
 .frontdesk-fab {
   position: fixed;
   right: 24px;
-  bottom: 168px;
+  bottom: 96px;
   z-index: 900;
   display: inline-flex;
   align-items: center;
@@ -518,7 +518,7 @@
 @media (max-width: 768px) {
   .frontdesk-fab {
     right: 16px;
-    bottom: 136px;
+    bottom: 76px;
     padding: 0.6rem;
   }
 

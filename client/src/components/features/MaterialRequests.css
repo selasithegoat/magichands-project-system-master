@@ -29,7 +29,7 @@
 .material-request-fab {
   position: fixed;
   right: 24px;
-  bottom: 168px;
+  bottom: 96px;
   z-index: 920;
   display: inline-flex;
   align-items: center;
@@ -55,7 +55,7 @@
 }
 
 .material-request-fab.with-frontdesk-stack {
-  bottom: 384px;
+  bottom: 312px;
 }
 
 .material-request-fab:hover,
@@ -1599,12 +1599,12 @@
 
   .material-request-fab {
     right: 16px;
-    bottom: 136px;
+    bottom: 76px;
     padding: 0.6rem;
   }
 
   .material-request-fab.with-frontdesk-stack {
-    bottom: 316px;
+    bottom: 256px;
   }
 
   .material-request-fab:hover,

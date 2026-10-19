@@ -6,7 +6,6 @@ import StageBottleneckAlert from "../../components/StageBottleneckAlert/StageBot
 import DeliveryCalendarFab from "@client/components/features/DeliveryCalendarFab";
 import BillingDocumentsFab from "@client/components/features/BillingDocumentsFab";
 import MaterialRequestsReviewBanner from "@client/components/features/MaterialRequestsReviewBanner";
-import ProjectCommentsFab from "@client/components/features/ProjectCommentsFab";
 import { useNavigate } from "react-router-dom";
 
 const DashboardLayout = ({ children, user, onLogout }) => {
@@ -45,7 +44,6 @@ const DashboardLayout = ({ children, user, onLogout }) => {
         />
       )}
       {isAdminUser && <BillingDocumentsFab requestSource="admin" />}
-      {isAdminUser && <ProjectCommentsFab user={user} />}
     </div>
   );
 };

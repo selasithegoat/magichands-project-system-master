@@ -6,7 +6,7 @@
 
   position: fixed;
   right: 24px;
-  bottom: 240px;
+  bottom: 168px;
   z-index: 905;
   display: inline-flex;
   align-items: center;
@@ -26,7 +26,7 @@
 }
 
 .billing-documents-fab.with-frontdesk-stack {
-  bottom: 312px;
+  bottom: 240px;
 }
 
 .billing-documents-fab:hover,
@@ -79,12 +79,12 @@
 @media (max-width: 720px) {
   .billing-documents-fab {
     right: 16px;
-    bottom: 196px;
+    bottom: 136px;
     padding: 0.6rem;
   }
 
   .billing-documents-fab.with-frontdesk-stack {
-    bottom: 256px;
+    bottom: 196px;
   }
 
   .billing-documents-fab:hover,
