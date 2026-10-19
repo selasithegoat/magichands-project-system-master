@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import "./ConfirmationModal.css";
 import { XMarkIcon } from "../../icons/Icons";
 import { waitForNextPaint } from "../../utils/mutationFeedback";
+import { lockDocumentScroll } from "@client/utils/documentScrollLock";
 
 const ConfirmationModal = ({
   isOpen,
@@ -19,15 +20,14 @@ const ConfirmationModal = ({
   useEffect(() => {
     if (!isOpen) return undefined;
 
-    const previousOverflow = document.body.style.overflow;
+    const releaseScrollLock = lockDocumentScroll();
     const handleKeyDown = (event) => {
       if (event.key === "Escape" && !isPending) onClose?.();
     };
 
-    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen, isPending, onClose]);

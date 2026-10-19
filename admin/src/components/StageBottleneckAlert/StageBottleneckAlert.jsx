@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import "./StageBottleneckAlert.css";
 import { renderProjectName } from "../../utils/projectName";
 import useAdaptivePolling from "@client/hooks/useAdaptivePolling";
+import { lockDocumentScroll } from "@client/utils/documentScrollLock";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const DEFAULT_THRESHOLD_DAYS = 14;
@@ -156,15 +157,8 @@ const StageBottleneckAlert = () => {
   }, [bottlenecks.length, alertSignature, dismissedAtMap]);
 
   useEffect(() => {
-    if (isModalOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-
-    return () => {
-      document.body.style.overflow = "unset";
-    };
+    if (!isModalOpen) return undefined;
+    return lockDocumentScroll();
   }, [isModalOpen]);
 
   useEffect(() => {

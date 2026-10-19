@@ -22,6 +22,7 @@ import XIcon from "../icons/XIcon";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import { playMessageSound } from "../../utils/notificationSound";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
+import { lockDocumentScroll } from "../../utils/documentScrollLock";
 import "./ChatDock.css";
 
 const THREAD_OPEN_POLL_INTERVAL_MS = 20000;
@@ -1771,20 +1772,6 @@ const ChatDock = ({ user, theme = "light" }) => {
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || typeof document === "undefined") return undefined;
-
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousRootOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousRootOverflow;
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
   }, [pendingAttachments]);
 
@@ -2160,28 +2147,7 @@ const ChatDock = ({ user, theme = "light" }) => {
 
   useEffect(() => {
     if (!isOpen) return undefined;
-
-    const { body, documentElement } = document;
-    const previousBodyOverflow = body.style.overflow;
-    const previousBodyOverscroll = body.style.overscrollBehavior;
-    const previousBodyPaddingRight = body.style.paddingRight;
-    const previousHtmlOverflow = documentElement.style.overflow;
-    const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
-
-    body.style.overflow = "hidden";
-    body.style.overscrollBehavior = "none";
-    documentElement.style.overflow = "hidden";
-
-    if (scrollbarWidth > 0) {
-      body.style.paddingRight = `${scrollbarWidth}px`;
-    }
-
-    return () => {
-      body.style.overflow = previousBodyOverflow;
-      body.style.overscrollBehavior = previousBodyOverscroll;
-      body.style.paddingRight = previousBodyPaddingRight;
-      documentElement.style.overflow = previousHtmlOverflow;
-    };
+    return lockDocumentScroll();
   }, [isOpen]);
 
   useEffect(() => {

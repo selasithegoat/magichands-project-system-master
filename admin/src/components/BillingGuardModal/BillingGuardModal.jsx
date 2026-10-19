@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { lockDocumentScroll } from "@client/utils/documentScrollLock";
 import "./BillingGuardModal.css";
 
 const BillingGuardModal = ({
@@ -19,16 +20,15 @@ const BillingGuardModal = ({
   useEffect(() => {
     if (!isOpen) return undefined;
 
-    const previousOverflow = document.body.style.overflow;
+    const releaseScrollLock = lockDocumentScroll();
     const handleKeyDown = (event) => {
       if (event.key === "Escape" && !isSubmitting) onClose?.();
     };
 
-    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen, isSubmitting, onClose]);
