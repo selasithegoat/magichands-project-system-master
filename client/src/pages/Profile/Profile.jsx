@@ -451,6 +451,8 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
         setNotificationHint(
           result.status === "denied"
             ? "Browser notifications are blocked in this browser's site settings."
+            : result.status === "insecure"
+              ? "Browser notifications require a trusted HTTPS portal address on this network."
             : "Browser notifications could not be enabled on this device.",
         );
         return;

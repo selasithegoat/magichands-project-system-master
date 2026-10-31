@@ -1,21 +1,17 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { clearPersistedFilterState } from "../utils/filterPersistence";
-import { setSessionTimeoutNotice } from "../utils/sessionTimeoutNotice";
+import {
+  setSessionExpiredNotice,
+  setSessionTimeoutNotice,
+} from "../utils/sessionTimeoutNotice";
 
 const ACTIVITY_EVENTS = [
   "pointerdown",
-  "mousedown",
-  "mousemove",
-  "pointermove",
   "keydown",
   "input",
   "wheel",
-  "scroll",
   "touchstart",
-  "touchmove",
-  "focusin",
-  "click",
 ];
 
 const getKeepAliveIntervalMs = (timeout) =>
@@ -25,12 +21,14 @@ const useInactivityLogout = (
   timeout = 5 * 60 * 1000,
   onLoggedOut,
   enabled = true,
+  sessionActive = enabled,
 ) => {
   // Default: 5 minutes
   const navigate = useNavigate();
   const location = useLocation();
   const timeoutRef = useRef(null);
   const enabledRef = useRef(enabled);
+  const sessionActiveRef = useRef(sessionActive);
   const locationPathRef = useRef(location.pathname);
   const onLoggedOutRef = useRef(onLoggedOut);
   const lastActivityAtRef = useRef(Date.now());
@@ -40,10 +38,11 @@ const useInactivityLogout = (
 
   useEffect(() => {
     enabledRef.current = enabled;
-    if (!enabled) {
+    sessionActiveRef.current = sessionActive;
+    if (!sessionActive) {
       isLoggingOutRef.current = false;
     }
-  }, [enabled]);
+  }, [enabled, sessionActive]);
 
   useEffect(() => {
     locationPathRef.current = location.pathname;
@@ -62,13 +61,21 @@ const useInactivityLogout = (
 
   const logout = useCallback(
     async ({ reason = "manual" } = {}) => {
-      if (!enabledRef.current || isLoggingOutRef.current) return;
+      if (
+        !sessionActiveRef.current ||
+        isLoggingOutRef.current ||
+        (reason === "timeout" && !enabledRef.current)
+      ) {
+        return;
+      }
 
       isLoggingOutRef.current = true;
       clearLogoutTimer();
 
       if (reason === "timeout") {
         setSessionTimeoutNotice(timeout);
+      } else if (reason === "expired") {
+        setSessionExpiredNotice();
       }
 
       if (typeof onLoggedOutRef.current === "function") {
@@ -118,7 +125,7 @@ const useInactivityLogout = (
 
   const refreshSession = useCallback(async () => {
     if (
-      !enabledRef.current ||
+      !sessionActiveRef.current ||
       isLoggingOutRef.current ||
       keepAliveInFlightRef.current
     ) {
@@ -131,7 +138,7 @@ const useInactivityLogout = (
         credentials: "include",
         cache: "no-store",
       });
-      if (!enabledRef.current || isLoggingOutRef.current) return;
+      if (!sessionActiveRef.current || isLoggingOutRef.current) return;
 
       const sessionUser = res.ok ? await res.json().catch(() => null) : null;
       if (!res.ok || !sessionUser?._id) {
@@ -157,8 +164,9 @@ const useInactivityLogout = (
     [refreshSession, timeout],
   );
 
-  const registerActivity = useCallback(() => {
+  const registerActivity = useCallback((event) => {
     if (!enabledRef.current || isLoggingOutRef.current) return;
+    if (event?.isTrusted === false) return;
 
     const now = Date.now();
     lastActivityAtRef.current = now;
@@ -167,24 +175,27 @@ const useInactivityLogout = (
   }, [refreshSessionIfNeeded, scheduleLogout]);
 
   const handleWindowReturn = useCallback(() => {
-    if (!enabledRef.current || isLoggingOutRef.current) return;
+    if (!sessionActiveRef.current || isLoggingOutRef.current) return;
 
     const now = Date.now();
     const lastActivityAt = lastActivityAtRef.current || now;
     const idleMs = now - lastActivityAt;
 
-    if (idleMs >= timeout) {
+    if (enabledRef.current && idleMs >= timeout) {
       void logout({ reason: "timeout" });
       return;
     }
 
-    lastActivityAtRef.current = now;
-    scheduleLogout(now);
-    refreshSessionIfNeeded(now);
-  }, [logout, refreshSessionIfNeeded, scheduleLogout, timeout]);
+    if (enabledRef.current) {
+      lastActivityAtRef.current = now;
+      scheduleLogout(now);
+    }
+    lastKeepAliveAtRef.current = now;
+    void refreshSession();
+  }, [logout, refreshSession, scheduleLogout, timeout]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!sessionActive) {
       clearLogoutTimer();
       return undefined;
     }
@@ -192,11 +203,23 @@ const useInactivityLogout = (
     isLoggingOutRef.current = false;
     lastActivityAtRef.current = Date.now();
     lastKeepAliveAtRef.current = Date.now();
-    scheduleLogout(lastActivityAtRef.current);
+    if (enabled) {
+      scheduleLogout(lastActivityAtRef.current);
+    } else {
+      clearLogoutTimer();
+    }
 
-    ACTIVITY_EVENTS.forEach((event) => {
-      window.addEventListener(event, registerActivity, true);
-    });
+    void refreshSession();
+    const heartbeatId = window.setInterval(() => {
+      lastKeepAliveAtRef.current = Date.now();
+      void refreshSession();
+    }, getKeepAliveIntervalMs(timeout));
+
+    if (enabled) {
+      ACTIVITY_EVENTS.forEach((event) => {
+        window.addEventListener(event, registerActivity, true);
+      });
+    }
     window.addEventListener("focus", handleWindowReturn, true);
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
@@ -207,9 +230,12 @@ const useInactivityLogout = (
 
     return () => {
       clearLogoutTimer();
-      ACTIVITY_EVENTS.forEach((event) => {
-        window.removeEventListener(event, registerActivity, true);
-      });
+      window.clearInterval(heartbeatId);
+      if (enabled) {
+        ACTIVITY_EVENTS.forEach((event) => {
+          window.removeEventListener(event, registerActivity, true);
+        });
+      }
       window.removeEventListener("focus", handleWindowReturn, true);
       document.removeEventListener("visibilitychange", handleVisibility, true);
     };
@@ -217,8 +243,11 @@ const useInactivityLogout = (
     clearLogoutTimer,
     enabled,
     handleWindowReturn,
+    refreshSession,
     registerActivity,
     scheduleLogout,
+    sessionActive,
+    timeout,
   ]);
 
   return null;

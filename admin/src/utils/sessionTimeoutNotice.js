@@ -13,6 +13,14 @@ export const setSessionTimeoutNotice = (timeoutMs) => {
   );
 };
 
+export const setSessionExpiredNotice = () => {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(
+    SESSION_TIMEOUT_NOTICE_KEY,
+    "Your session could not be refreshed and has ended. Please sign in again before continuing.",
+  );
+};
+
 export const consumeSessionTimeoutNotice = () => {
   if (typeof window === "undefined") return "";
   const message =

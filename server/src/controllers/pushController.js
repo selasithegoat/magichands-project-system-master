@@ -76,6 +76,13 @@ const sendTest = async (req, res) => {
       },
       { actionUrl: "/" },
     );
+    if (!result.attempted || !result.delivered) {
+      return res.status(409).json({
+        ...result,
+        message:
+          "No active browser subscription received the test notification.",
+      });
+    }
     return res.json(result);
   } catch (error) {
     console.error("Failed to send test browser notification:", error);

@@ -1,5 +1,6 @@
 const express = require("express");
 const fs = require("fs");
+const https = require("https");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
@@ -630,14 +631,41 @@ if (hasAdminBuild || hasClientBuild || hasOpsBuild || hasInventoryBuild) {
   });
 }
 
-// Start Server
-app.listen(PORT, HOST, () => {
-  console.log(`Server is running at http://${HOST}:${PORT}`);
+const startBackgroundSchedulers = () => {
   startChatArchiveScheduler();
   startWeeklyDigestScheduler();
   startReminderScheduler();
   startEndOfDayReportScheduler();
   startProductionTrackingScheduler();
   startSampleRetrievalReminderScheduler();
-});
+};
+
+// Web Push requires a trusted HTTPS origin for every LAN browser. A reverse
+// proxy may terminate TLS, or the API can serve HTTPS directly when certificate
+// paths are supplied. Relative paths resolve from the server directory.
+const httpsKeyPath = resolveEnvPath(process.env.HTTPS_KEY_PATH);
+const httpsCertPath = resolveEnvPath(process.env.HTTPS_CERT_PATH);
+const httpsCaPath = resolveEnvPath(process.env.HTTPS_CA_PATH);
+
+if (Boolean(httpsKeyPath) !== Boolean(httpsCertPath)) {
+  throw new Error(
+    "HTTPS_KEY_PATH and HTTPS_CERT_PATH must be configured together.",
+  );
+}
+
+const handleListening = (protocol) => () => {
+  console.log(`Server is running at ${protocol}://${HOST}:${PORT}`);
+  startBackgroundSchedulers();
+};
+
+if (httpsKeyPath && httpsCertPath) {
+  const tlsOptions = {
+    key: fs.readFileSync(httpsKeyPath),
+    cert: fs.readFileSync(httpsCertPath),
+    ...(httpsCaPath ? { ca: fs.readFileSync(httpsCaPath) } : {}),
+  };
+  https.createServer(tlsOptions, app).listen(PORT, HOST, handleListening("https"));
+} else {
+  app.listen(PORT, HOST, handleListening("http"));
+}
 // Trigger restart to rebuild indexes

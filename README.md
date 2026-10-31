@@ -144,6 +144,13 @@ UPLOAD_MAX_MB=200
 NODE_ENV=development
 COOKIE_SECURE=false
 COOKIE_SAMESITE=lax
+# Server session lifetime. The UI can still enforce its five-minute inactivity lock.
+AUTH_COOKIE_MAX_AGE_MS=43200000
+
+# Optional direct HTTPS. Use certificates trusted by every LAN device.
+HTTPS_KEY_PATH=certs/magichands-key.pem
+HTTPS_CERT_PATH=certs/magichands-cert.pem
+# HTTPS_CA_PATH=certs/magichands-ca.pem
 
 # Email (optional)
 SMTP_USER=your-smtp-user
@@ -189,6 +196,11 @@ path prefixes in addition to subdomains:
 
 This avoids any dependency on `.lan` hostnames and works on any LAN that can
 reach the server IP.
+
+Browser Push is the exception: browsers require a trusted HTTPS origin (or
+`localhost`) for service workers and desktop notifications. For LAN users,
+serve the portal through a trusted HTTPS reverse proxy or configure the direct
+HTTPS certificate paths above, set `COOKIE_SECURE=true`, and open the HTTPS URL.
 
 ## Install
 

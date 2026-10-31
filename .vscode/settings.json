@@ -1,5 +1,6 @@
 {
   "files.autoSave": "afterDelay",
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.allowVariableFontsInAccessibilityMode": false
+  "editor.allowVariableFontsInAccessibilityMode": false,
+  "postman.settings.dotenv-detection-notification-visibility": false
 }

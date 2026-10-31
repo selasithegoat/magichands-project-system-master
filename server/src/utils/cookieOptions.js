@@ -3,18 +3,19 @@ const toPositiveInt = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const DEFAULT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
-const DEFAULT_AUTH_COOKIE_GRACE_MS = 90 * 1000;
+// The browser UI owns the optional five-minute inactivity policy. The server
+// session must outlive that timer because some operational roles explicitly
+// disable inactivity logout and rely on a sliding heartbeat while forms are open.
+const DEFAULT_AUTH_COOKIE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 const getDefaultAuthCookieMaxAgeMs = () =>
-  DEFAULT_INACTIVITY_TIMEOUT_MS +
-  toPositiveInt(process.env.AUTH_COOKIE_GRACE_MS, DEFAULT_AUTH_COOKIE_GRACE_MS);
-
-const getAuthCookieMaxAgeMs = () =>
   toPositiveInt(
     process.env.AUTH_COOKIE_MAX_AGE_MS,
-    getDefaultAuthCookieMaxAgeMs(),
+    DEFAULT_AUTH_COOKIE_MAX_AGE_MS,
   );
+
+const getAuthCookieMaxAgeMs = () =>
+  getDefaultAuthCookieMaxAgeMs();
 
 const resolveCookieOptions = () => {
   const isProduction = process.env.NODE_ENV === "production";

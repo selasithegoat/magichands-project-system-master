@@ -195,6 +195,7 @@ function App() {
     5 * 60 * 1000,
     broadcastAndClearLocalAuthSession,
     Boolean(user?._id) && isInactivityLogoutEnabled(user),
+    Boolean(user?._id),
   );
   useRealtimeClient(Boolean(user));
 
