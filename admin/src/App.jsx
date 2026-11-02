@@ -14,6 +14,7 @@ const ProductionOversight = lazy(
   () => import("./pages/ProductionOversight/ProductionOversight"),
 );
 const Projects = lazy(() => import("./pages/Projects/Projects"));
+const LiveUpdates = lazy(() => import("./pages/LiveUpdates/LiveUpdates"));
 const CancelledOrders = lazy(
   () => import("./pages/CancelledOrders/CancelledOrders"),
 );
@@ -247,6 +248,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Projects user={user} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/live-updates"
+            element={
+              <ProtectedRoute>
+                <LiveUpdates />
               </ProtectedRoute>
             }
           />

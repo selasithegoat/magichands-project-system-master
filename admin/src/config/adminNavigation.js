@@ -1,6 +1,7 @@
 export const adminNavigationItems = [
   { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
   { to: "/projects", label: "Projects", icon: "projects" },
+  { to: "/live-updates", label: "Live Updates", icon: "live" },
   { to: "/deadlines", label: "Deadlines", icon: "deadlines" },
   {
     to: "/production-oversight",

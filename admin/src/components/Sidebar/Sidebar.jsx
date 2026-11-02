@@ -20,6 +20,12 @@ const iconPaths = {
       <path d="M3 10h18" />
     </>
   ),
+  live: (
+    <>
+      <path d="M3 12h4l2.5-5 4.5 10 2.5-5H21" />
+      <circle cx="12" cy="12" r="9" />
+    </>
+  ),
   deadlines: (
     <>
       <rect x="3" y="5" width="18" height="16" rx="2" />

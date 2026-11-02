@@ -632,6 +632,10 @@ if (hasAdminBuild || hasClientBuild || hasOpsBuild || hasInventoryBuild) {
 }
 
 const startBackgroundSchedulers = () => {
+  if (process.env.BACKGROUND_SCHEDULERS_ENABLED === "false") {
+    console.log("Background schedulers are disabled for this instance.");
+    return;
+  }
   startChatArchiveScheduler();
   startWeeklyDigestScheduler();
   startReminderScheduler();
