@@ -11,6 +11,7 @@ const PRODUCTION_SUB_DEPARTMENT_TOKENS = new Set([
   "embroidery",
   "sublimation",
   "digital-cutting",
+  "cnc",
   "pvc-id",
   "business-cards",
   "installation",
@@ -30,9 +31,10 @@ const normalizeProductionDepartmentToken = (value) => {
       ? value.value || value.label || value.name || ""
       : value;
   const normalized = String(raw || "").trim().toLowerCase();
-  return normalized.replace(/\s+/g, "-") === "outside-production"
-    ? "local-outsourcing"
-    : normalized;
+  const token = normalized.replace(/\s+/g, "-");
+  if (token === "outside-production") return "local-outsourcing";
+  if (token === "cnc-machining") return "cnc";
+  return token;
 };
 
 const normalizeDepartments = (departments, normalize) =>

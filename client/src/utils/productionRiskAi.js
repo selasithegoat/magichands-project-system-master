@@ -109,6 +109,7 @@ const buildDepartmentLookup = () => {
   lookup.set("large format printing", "large-format");
   lookup.set("screen print", "screen-printing");
   lookup.set("digital cutting", "digital-cutting");
+  lookup.set("cnc machining", "cnc");
   lookup.set("business card", "business-cards");
   lookup.set("business cards", "business-cards");
   lookup.set("pvc id", "pvc-id");

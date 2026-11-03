@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   hasProductionDepartmentOverlap,
+  normalizeProductionDepartmentToken,
   resolveProductionSubDepartmentTokens,
 } = require("./productionDepartmentAccess");
 
@@ -30,7 +31,23 @@ test("a legacy parent-only production account retains broad access", () => {
     hasProductionDepartmentOverlap(["Production"], ["large-format"]),
     true,
   );
-  assert.equal(resolveProductionSubDepartmentTokens(["Production"]).length, 20);
+  assert.equal(resolveProductionSubDepartmentTokens(["Production"]).length, 21);
+});
+
+test("CNC is a scoped production department", () => {
+  const userDepartments = ["Production", "cnc"];
+
+  assert.deepEqual(resolveProductionSubDepartmentTokens(userDepartments), ["cnc"]);
+  assert.equal(hasProductionDepartmentOverlap(userDepartments, ["cnc"]), true);
+  assert.equal(
+    hasProductionDepartmentOverlap(userDepartments, ["digital-cutting"]),
+    false,
+  );
+  assert.equal(
+    hasProductionDepartmentOverlap(["Production"], ["cnc"]),
+    true,
+  );
+  assert.equal(normalizeProductionDepartmentToken("CNC Machining"), "cnc");
 });
 
 test("generic legacy projects remain available to scoped production users", () => {

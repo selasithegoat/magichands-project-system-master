@@ -115,6 +115,7 @@ const ENGAGED_SUB_DEPARTMENTS = new Set([
   "embroidery",
   "sublimation",
   "digital-cutting",
+  "cnc",
   "pvc-id",
   "business-cards",
   "installation",
@@ -139,6 +140,7 @@ const PRODUCTION_DEPARTMENTS = new Set([
   "embroidery",
   "sublimation",
   "digital-cutting",
+  "cnc",
   "pvc-id",
   "business-cards",
   "installation",
@@ -3287,6 +3289,7 @@ const PRODUCTION_SUGGESTION_DEPARTMENTS = [
   "embroidery",
   "sublimation",
   "digital-cutting",
+  "cnc",
   "pvc-id",
   "business-cards",
   "installation",
@@ -3317,6 +3320,7 @@ const PRODUCTION_DEPARTMENT_LABELS = {
   embroidery: "Embroidery",
   sublimation: "Sublimation",
   "digital-cutting": "Digital Cutting",
+  cnc: "CNC",
   "pvc-id": "PVC ID Cards",
   "business-cards": "Business Cards",
   installation: "Installation",
@@ -3330,6 +3334,28 @@ const PRODUCTION_DEPARTMENT_LABELS = {
 };
 
 const PRODUCTION_DEPARTMENT_PROFILES = {
+  cnc: {
+    category: "precision-machining",
+    description:
+      "CNC handles programmed cutting and shaping of assigned materials against approved dimensions and tolerances.",
+    capabilities: [
+      "toolpath preparation",
+      "material setup and workholding",
+      "machine cutting and shaping",
+      "first-piece inspection",
+      "dimensional checks",
+    ],
+    exclusions: ["artwork creation", "printing", "finishing unless assigned"],
+    riskFocus: [
+      "incorrect program or drawing revision",
+      "material thickness and grade variance",
+      "workholding movement",
+      "tool wear and breakage",
+      "dimension and tolerance drift",
+      "surface finish and edge quality",
+    ],
+    useSharedTemplates: false,
+  },
   graphics: {
     category: "pre-production-design-and-approval",
     description:
@@ -3487,6 +3513,7 @@ const PRODUCTION_DEPARTMENT_ALIASES = {
   "pvc id": "pvc-id",
   "pvc id cards": "pvc-id",
   "business cards": "business-cards",
+  "cnc machining": "cnc",
   "outside production": "local-outsourcing",
   "in house production": "in-house-production",
   "local outsourcing": "local-outsourcing",
@@ -7036,6 +7063,20 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Registration mismatch can offset contour cuts from print guides.",
       preventive:
         "Verify registration marks with a pilot sheet before cutting the full run.",
+    },
+  ],
+  cnc: [
+    {
+      description:
+        "An outdated CNC program may cut parts to superseded dimensions.",
+      preventive:
+        "Match the approved drawing revision to the program and inspect the first part before the full run.",
+    },
+    {
+      description:
+        "Workholding movement or tool wear may push machined parts outside tolerance.",
+      preventive:
+        "Verify the fixture and tool condition, then measure critical dimensions at defined intervals.",
     },
   ],
   "pvc-id": [

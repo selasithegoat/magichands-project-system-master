@@ -71,6 +71,7 @@ const Step2 = ({
     { id: "embroidery", label: "Embroidery", icon: <SewingIcon /> },
     { id: "sublimation", label: "Sublimation", icon: <ShirtIcon /> },
     { id: "digital-cutting", label: "Digital Cutting", icon: <ScissorsIcon /> },
+    { id: "cnc", label: "CNC", icon: <FactoryIcon /> },
     { id: "pvc-id", label: "PVC ID Cards", icon: <CardIcon /> },
     { id: "business-cards", label: "Business Cards", icon: <CardIcon /> },
     { id: "installation", label: "Installation", icon: <ToolsIcon /> },

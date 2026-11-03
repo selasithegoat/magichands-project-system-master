@@ -33,6 +33,7 @@ const DEFAULT_SECTIONS = [
       "Sublimation",
       "Woodme",
       "Engraving",
+      "CNC",
     ],
   },
   {
@@ -112,6 +113,7 @@ const cloneCoreColumn = (column) => ({
 
 const buildDefaultBoardData = () => ({
   boardKey: BOARD_KEY,
+  schemaVersion: 2,
   title: BOARD_TITLE,
   columns: CORE_COLUMNS.map(cloneCoreColumn),
   sections: DEFAULT_SECTIONS.map((section) => ({
@@ -313,6 +315,22 @@ const sanitizeSections = (sections, existingBoard, columns, actorId, now) => {
 const ensureBoardDocument = async () => {
   let board = await DepartmentUpdateBoard.findOne({ boardKey: BOARD_KEY });
   if (board) {
+    if ((board.schemaVersion || 1) < 2) {
+      const productionSection = board.sections.find(
+        (section) => section.id === "production-maintenance",
+      );
+      if (productionSection && !productionSection.rows.some(
+        (row) => toInlineText(row.dept).toLowerCase() === "cnc",
+      )) {
+        productionSection.rows.push({
+          id: createId(),
+          dept: "CNC",
+          values: { deliveryDate: "", itemInformation: "", statusUpdate: "" },
+        });
+      }
+      board.schemaVersion = 2;
+      await board.save();
+    }
     return board;
   }
 

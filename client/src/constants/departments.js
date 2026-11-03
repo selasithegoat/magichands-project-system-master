@@ -1,6 +1,7 @@
 const LEGACY_DEPARTMENT_ID_ALIASES = {
   "outside-production": "local-outsourcing",
   "outside production": "local-outsourcing",
+  "cnc machining": "cnc",
 };
 
 export const DEPARTMENTS = [
@@ -20,6 +21,7 @@ export const DEPARTMENTS = [
   { id: "embroidery", label: "Embroidery" },
   { id: "sublimation", label: "Sublimation" },
   { id: "digital-cutting", label: "Digital Cutting" },
+  { id: "cnc", label: "CNC" },
   { id: "pvc-id", label: "PVC ID Cards" },
   { id: "business-cards", label: "Business Cards" },
   { id: "installation", label: "Installation" },
@@ -43,6 +45,7 @@ export const PRODUCTION_SUB_DEPARTMENTS = [
   "embroidery",
   "sublimation",
   "digital-cutting",
+  "cnc",
   "pvc-id",
   "business-cards",
   "installation",

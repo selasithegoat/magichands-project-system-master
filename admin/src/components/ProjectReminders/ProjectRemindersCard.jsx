@@ -136,6 +136,7 @@ const PRODUCTION_SUB_DEPARTMENT_OPTIONS = [
   { id: "embroidery", label: "Embroidery" },
   { id: "sublimation", label: "Sublimation" },
   { id: "digital-cutting", label: "Digital Cutting" },
+  { id: "cnc", label: "CNC" },
   { id: "pvc-id", label: "PVC ID Cards" },
   { id: "business-cards", label: "Business Cards" },
   { id: "installation", label: "Installation" },
@@ -164,6 +165,7 @@ const PRODUCTION_DEPARTMENTS = new Set([
   "embroidery",
   "sublimation",
   "digital-cutting",
+  "cnc",
   "pvc-id",
   "business-cards",
   "installation",
@@ -234,13 +236,6 @@ const getCanonicalDepartmentSet = (value) =>
     toDepartmentArray(value)
       .map(canonicalizeDepartment)
       .filter(Boolean),
-  );
-
-const getSubDepartmentTokens = (value) =>
-  new Set(
-    getUserDepartmentTokens(value).filter((token) =>
-      PRODUCTION_SUB_DEPARTMENT_IDS.has(token),
-    ),
   );
 
 const hasDepartmentOverlap = (userDepartments, projectDepartments) => {

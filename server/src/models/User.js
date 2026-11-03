@@ -52,6 +52,7 @@ const UserSchema = new mongoose.Schema({
       "embroidery",
       "sublimation",
       "digital-cutting",
+      "cnc",
       "pvc-id",
       "business-cards",
       "installation",

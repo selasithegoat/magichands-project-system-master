@@ -49,6 +49,7 @@ const PRODUCTION_DEPARTMENT_TOKENS = new Set([
   "embroidery",
   "sublimation",
   "digital-cutting",
+  "cnc",
   "pvc-id",
   "business-cards",
   "installation",

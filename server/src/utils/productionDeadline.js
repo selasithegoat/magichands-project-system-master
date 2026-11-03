@@ -29,6 +29,8 @@ const PRODUCTION_RATE_TABLE = Object.freeze({
   embroidery: { setupMinutes: 45, unitsPerHour: 12 },
   sublimation: { setupMinutes: 30, unitsPerHour: 20 },
   "digital-cutting": { setupMinutes: 30, unitsPerHour: 40 },
+  // Use the generic production assumption until CNC throughput is calibrated.
+  cnc: { setupMinutes: 30, unitsPerHour: 20 },
   "pvc-id": { setupMinutes: 30, unitsPerHour: 60 },
   "business-cards": { setupMinutes: 30, unitsPerHour: 250 },
   installation: { setupMinutes: 60, unitsPerHour: 5 },

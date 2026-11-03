@@ -49,6 +49,14 @@ test("production work uses the longest parallel workstream", () => {
   assert.equal(result.estimatedProductionMinutes, 105);
 });
 
+test("CNC work keeps its own workstream and provisional rate", () => {
+  const result = estimateProductionWork({
+    items: [{ qty: 20, productionAssignments: [{ department: "cnc" }] }],
+  });
+
+  assert.deepEqual(result.workstreams, [{ department: "cnc", minutes: 90 }]);
+});
+
 test("production deadline is derived from delivery and remaining stages", () => {
   const result = calculateProductionTracking(
     {

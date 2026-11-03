@@ -92,6 +92,10 @@ const DepartmentUpdateBoardSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    schemaVersion: {
+      type: Number,
+      default: 1,
+    },
     title: {
       type: String,
       default: "Department Updates",

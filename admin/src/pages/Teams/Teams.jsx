@@ -121,6 +121,7 @@ const Teams = () => {
     { id: "embroidery", label: "Embroidery" },
     { id: "sublimation", label: "Sublimation" },
     { id: "digital-cutting", label: "Digital Cutting" },
+    { id: "cnc", label: "CNC" },
     { id: "pvc-id", label: "PVC ID Cards" },
     { id: "business-cards", label: "Business Cards" },
     { id: "installation", label: "Installation" },
