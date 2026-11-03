@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 
 const User = require("../src/models/User");
 const Project = require("../src/models/Project");
+const DisciplinaryReport = require("../src/models/DisciplinaryReport");
 
 const envFile = process.env.DOTENV_FILE || ".env.staging";
 dotenv.config({
@@ -40,6 +41,7 @@ const userFixtures = [
     role: "user",
     department: ["Front Desk"],
     position: "Member",
+    accessTags: ["scrum_lead"],
   },
   {
     employeeId: "STG-LEAD-001",
@@ -622,6 +624,124 @@ const seedProjects = async (usersByEmployeeId) => {
   return { created, updated };
 };
 
+const seedDisciplinaryReports = async (usersByEmployeeId) => {
+  const moderator = usersByEmployeeId.get("STG-FD-001");
+  const admin = usersByEmployeeId.get("STG-ADMIN");
+  const graphics = usersByEmployeeId.get("STG-GFX-001");
+  const production = usersByEmployeeId.get("STG-PROD-001");
+  const project = await Project.findOne({ orderId: "STG-260003" }).lean();
+  if (!project || !moderator || !admin || !graphics || !production) {
+    throw new Error("Staging disciplinary report dependencies are missing.");
+  }
+
+  const snapshot = (user, role = user.position || "Member") => ({
+    user: user._id,
+    name: `${user.firstName} ${user.lastName}`.trim(),
+    employeeId: user.employeeId,
+    department: user.department,
+    role,
+  });
+  const meetingStart = daysAgo(3);
+  meetingStart.setUTCHours(10, 0, 0, 0);
+  const meetingEnd = new Date(meetingStart.getTime() + 70 * 60 * 1000);
+  const finalizedAt = new Date(meetingEnd.getTime() + 25 * 60 * 1000);
+  const payload = {
+    reportNumber: "DCMR-STG-0001",
+    project: project._id,
+    projectSnapshot: {
+      orderId: project.orderId,
+      projectName: project.details?.projectName || "Fintech Conference Merchandise",
+      clientName: project.details?.client || "CedarPay Africa",
+    },
+    challengeTitle: "Inconsistent print placement across conference shirts",
+    moderator: snapshot(moderator, "Scrum Lead / Moderator"),
+    meeting: { startedAt: meetingStart, endedAt: meetingEnd, location: "Staging boardroom" },
+    attendees: [
+      { ...snapshot(moderator, "Scrum Lead / Moderator"), attendanceStatus: "present" },
+      { ...snapshot(graphics, "Design representative"), attendanceStatus: "present" },
+      { ...snapshot(production, "Production lead"), attendanceStatus: "present" },
+      { ...snapshot(admin, "Management representative"), attendanceStatus: "present" },
+    ],
+    challengeBrief:
+      "During the staging production review, the team found inconsistent logo placement across a test batch of conference shirts. The approved mockup dimensions were not applied uniformly before the batch proceeded.",
+    projectImpact:
+      "The batch required inspection and separation before client delivery, creating rework and schedule risk.",
+    findings: [
+      {
+        title: "Artwork dimensions and cutting instructions",
+        discussion:
+          "The approved dimensions were available, but the production handoff did not include a documented first piece measurement.",
+        evidence: "Approved mockup, production handoff notes, and sample measurements.",
+        conclusion:
+          "Graphics and Production did not complete the required first piece cross check before continuing the batch.",
+      },
+      {
+        title: "Project communication",
+        discussion:
+          "The variation was noticed during production but was not escalated to the project team immediately.",
+        evidence: "Project update timeline and meeting statements.",
+        conclusion:
+          "The production lead should have paused work and reported the variation before more units were completed.",
+      },
+    ],
+    proposals: [
+      { recommendation: "Inspect the full batch, separate acceptable units, and reproduce rejected units.", votesFor: 4, votesAgainst: 0, abstentions: 0, selected: true },
+      { recommendation: "Deliver the batch without further inspection.", votesFor: 0, votesAgainst: 4, abstentions: 0, selected: false },
+    ],
+    accountability: [
+      {
+        ...snapshot(production),
+        summary: "Production continued after a placement variation was visible and did not record a first piece measurement.",
+        severity: "major",
+        penalized: true,
+        penaltyType: "written_warning",
+        penaltyDetails: "Written warning with mandatory first piece verification coaching.",
+        penaltyStatus: "active",
+        correctiveAction: "Introduce and sign a first piece quality checklist before every apparel batch.",
+        correctiveOwner: snapshot(production),
+        correctiveDueDate: daysFromNow(5),
+        correctiveStatus: "open",
+      },
+      {
+        ...snapshot(graphics),
+        summary: "The production handoff did not clearly restate the approved logo placement measurements.",
+        severity: "moderate",
+        penalized: false,
+        penaltyType: "none",
+        penaltyStatus: "not_applicable",
+        correctiveAction: "Add approved measurements to the production handoff checklist.",
+        correctiveOwner: snapshot(graphics),
+        correctiveDueDate: daysFromNow(4),
+        correctiveStatus: "in_progress",
+      },
+    ],
+    committeeConclusion:
+      "Inspect and separate the completed shirts, reproduce rejected units, and require documented first piece approval before the next batch.",
+    managementDecision:
+      "Management approves the committee conclusion and directs Production and Graphics to use signed measurement and first piece checks for every applicable project.",
+    status: "finalized",
+    createdBy: moderator._id,
+    submittedBy: moderator._id,
+    submittedAt: meetingEnd,
+    finalizedBy: admin._id,
+    finalizedAt,
+    auditTrail: [
+      { action: "created", actor: moderator._id, actorName: `${moderator.firstName} ${moderator.lastName}`, at: meetingEnd },
+      { action: "submitted", actor: moderator._id, actorName: `${moderator.firstName} ${moderator.lastName}`, at: meetingEnd },
+      { action: "finalized", actor: admin._id, actorName: `${admin.firstName} ${admin.lastName}`, at: finalizedAt },
+    ],
+  };
+
+  const existing = await DisciplinaryReport.findOne({ reportNumber: payload.reportNumber });
+  if (existing) {
+    existing.set(payload);
+    await existing.save();
+    return { created: 0, updated: 1 };
+  }
+  await DisciplinaryReport.create(payload);
+  return { created: 1, updated: 0 };
+};
+
 const main = async () => {
   if (!process.argv.includes(APPLY_FLAG)) {
     throw new Error(
@@ -643,6 +763,9 @@ const main = async () => {
 
   const userResult = await seedUsers();
   const projectResult = await seedProjects(userResult.usersByEmployeeId);
+  const disciplinaryReportResult = await seedDisciplinaryReports(
+    userResult.usersByEmployeeId,
+  );
 
   const statusCounts = await Project.aggregate([
     { $match: { orderId: { $regex: /^STG-/ } } },
@@ -656,6 +779,7 @@ const main = async () => {
         database: databaseName,
         users: { created: userResult.created, updated: userResult.updated },
         projects: projectResult,
+        disciplinaryReports: disciplinaryReportResult,
         statusCounts: Object.fromEntries(
           statusCounts.map((entry) => [entry._id, entry.count]),
         ),

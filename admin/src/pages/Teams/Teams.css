@@ -135,11 +135,11 @@ html[data-admin-theme="dark"] .team-summary-card.blue { --summary-color: #7aa2ff
 .inspector-form-grid label { min-width: 0; display: grid; gap: 4px; }
 .inspector-form-grid label > span,
 .team-profile-inspector legend { color: var(--team-muted); font-size: 0.45rem; font-weight: 720; letter-spacing: 0.025em; text-transform: uppercase; }
-.inspector-form-grid input,
+.inspector-form-grid input:not([type="checkbox"]),
 .inspector-form-grid select { width: 100%; min-height: 32px; box-sizing: border-box; padding: 0 9px; border: 1px solid var(--team-line); border-radius: 8px; outline: 0; background: var(--team-surface-soft); color: var(--team-text); font: inherit; font-size: 0.52rem; }
-.inspector-form-grid input:focus,
+.inspector-form-grid input:not([type="checkbox"]):focus,
 .inspector-form-grid select:focus { border-color: var(--team-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--team-primary) 14%, transparent); }
-.inspector-form-grid input:disabled,
+.inspector-form-grid input:not([type="checkbox"]):disabled,
 .inspector-form-grid select:disabled { opacity: 1; color: var(--team-muted); cursor: default; }
 .team-profile-inspector fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .team-profile-inspector fieldset:disabled { opacity: 0.76; }
@@ -153,6 +153,21 @@ html[data-admin-theme="dark"] .team-summary-card.blue { --summary-color: #7aa2ff
 .inspector-check-grid input { width: 11px; height: 11px; margin: 0; accent-color: var(--team-primary); }
 .inspector-check-grid.machine-grid input { accent-color: var(--team-success); }
 .inspector-form-grid.selects .wide { grid-column: 1 / -1; }
+.committee-access-field { min-width: 0; display: grid; gap: 4px; }
+.committee-access-field > span { color: var(--team-muted); font-size: 0.45rem; font-weight: 720; letter-spacing: 0.025em; text-transform: uppercase; }
+.scrum-lead-toggle { min-width: 0; display: flex !important; align-items: center; gap: 12px !important; margin: 0 !important; padding: 12px !important; border: 1px solid var(--team-line) !important; border-radius: 8px !important; background: var(--team-surface-soft) !important; color: var(--team-text) !important; cursor: pointer; transition: border-color 700ms cubic-bezier(0.32, 0.72, 0, 1), background 700ms cubic-bezier(0.32, 0.72, 0, 1), transform 700ms cubic-bezier(0.32, 0.72, 0, 1); }
+.scrum-lead-toggle:hover { border-color: color-mix(in srgb, var(--team-primary) 48%, var(--team-line)) !important; }
+.scrum-lead-toggle:active { transform: scale(0.98); }
+.scrum-lead-toggle.selected { border-color: color-mix(in srgb, var(--team-primary) 58%, var(--team-line)) !important; background: var(--team-primary-soft) !important; }
+.scrum-lead-toggle input[type="checkbox"] { appearance: none; width: 20px !important; min-width: 20px; height: 20px !important; min-height: 20px !important; margin: 0; padding: 0 !important; border: 1px solid var(--team-line); border-radius: 4px; outline: 0; background: var(--team-surface); cursor: pointer; position: relative; }
+.scrum-lead-toggle input[type="checkbox"]::after { content: ""; position: absolute; top: 3px; left: 6px; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; opacity: 0; transform: rotate(45deg) scale(0.7); transition: opacity 700ms cubic-bezier(0.32, 0.72, 0, 1), transform 700ms cubic-bezier(0.32, 0.72, 0, 1); }
+.scrum-lead-toggle input[type="checkbox"]:checked { border-color: var(--team-primary); background: var(--team-primary); }
+.scrum-lead-toggle input[type="checkbox"]:checked::after { opacity: 1; transform: rotate(45deg) scale(1); }
+.scrum-lead-toggle input[type="checkbox"]:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--team-primary) 24%, transparent); }
+.scrum-lead-toggle input[type="checkbox"]:disabled { cursor: default; opacity: 0.6; }
+.scrum-lead-toggle-copy { min-width: 0; display: grid !important; gap: 2px !important; text-align: left; text-transform: none !important; }
+.scrum-lead-toggle-copy strong { color: var(--team-text); font-size: 0.75rem; line-height: 1rem; font-weight: 650; }
+.scrum-lead-toggle-copy small { color: var(--team-muted); font-size: 0.75rem; line-height: 1rem; font-weight: 400; text-wrap: pretty; }
 .inspector-actions { display: flex; justify-content: flex-end; gap: 7px; padding-top: 10px; border-top: 1px solid var(--team-line); }
 
 .teams-pagination { min-height: 43px; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 7px 10px; border: 1px solid var(--team-line); border-radius: 10px; background: var(--team-surface); }

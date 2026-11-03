@@ -6,7 +6,9 @@ const ChatThread = require("../models/ChatThread");
 const User = require("../models/User");
 const ProjectCreationDraft = require("../models/ProjectCreationDraft");
 const SampleMovement = require("../models/SampleMovement");
+const DisciplinaryReport = require("../models/DisciplinaryReport");
 const { canAccessSampleMovements } = require("../utils/sampleMovementAccess");
+const { canAccessDisciplinaryReports } = require("../utils/disciplinaryAccess");
 
 const PROJECT_ACCESS_FIELDS =
   "createdBy projectLeadId assistantLeadId departments orderId details.projectName";
@@ -389,6 +391,16 @@ const findSampleMovementForFileUrl = async (relativePath) => {
     .lean();
 };
 
+const findDisciplinaryReportForFileUrl = async (relativePath) => {
+  const candidateUrls = buildCandidateFileUrls(relativePath);
+  if (candidateUrls.length === 0) return null;
+  return DisciplinaryReport.findOne({
+    "evidenceFiles.fileUrl": { $in: candidateUrls },
+  })
+    .select("_id")
+    .lean();
+};
+
 const enforceUploadAccess = async (req, res, next) => {
   try {
     const relativePath = normalizeUploadPath(req.path);
@@ -448,6 +460,16 @@ const enforceUploadAccess = async (req, res, next) => {
         return res
           .status(403)
           .json({ message: "Not authorized to access this sample custody file." });
+      }
+      return next();
+    }
+
+    if (category === "disciplinary-evidence") {
+      const report = await findDisciplinaryReportForFileUrl(relativePath);
+      if (!report || !canAccessDisciplinaryReports(req.user)) {
+        return res.status(403).json({
+          message: "Not authorized to access this disciplinary report evidence.",
+        });
       }
       return next();
     }

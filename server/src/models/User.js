@@ -28,6 +28,11 @@ const UserSchema = new mongoose.Schema({
     enum: ["user", "admin"],
     default: "user",
   },
+  accessTags: {
+    type: [String],
+    enum: ["scrum_lead"],
+    default: [],
+  },
 
   department: {
     type: [String], // Array of strings

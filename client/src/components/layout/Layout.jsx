@@ -183,6 +183,7 @@ const Layout = ({
   onNavigateEngagedProjects, // [New] Production Team
   onNavigateInventory, // [New] Stores Team
   onNavigateHelp,
+  onNavigateDisciplinary,
   onCreateProject,
   activeView,
   user, // Receive user
@@ -1029,6 +1030,8 @@ const Layout = ({
   const showEngagedProjects =
     user?.productionAccess !== "Production Trainee" &&
     (hasProduction || hasGraphics || hasStores || hasPhotography);
+  const showDisciplinaryReports =
+    user?.role === "admin" || user?.accessTags?.includes("scrum_lead");
 
   return (
     <div className="layout-container">
@@ -1047,6 +1050,7 @@ const Layout = ({
         onNavigateEngagedProjects={onNavigateEngagedProjects} // [New]
         onNavigateInventory={onNavigateInventory} // [New]
         onNavigateHelp={onNavigateHelp}
+        onNavigateDisciplinary={onNavigateDisciplinary}
         onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
         onToggleNotification={() => setIsNotificationOpen(!isNotificationOpen)} // Toggle
         notificationCount={notificationCount}
@@ -1235,6 +1239,22 @@ const Layout = ({
                   {engagedCount > 0 && (
                     <span className="drawer-badge">{engagedCount}</span>
                   )}
+                </Link>
+              )}
+              {showDisciplinaryReports && (
+                <Link
+                  to="#"
+                  className={`drawer-item ${
+                    activeView === "disciplinary-reports" ? "active" : ""
+                  }`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setIsMobileMenuOpen(false);
+                    onNavigateDisciplinary();
+                  }}
+                >
+                  <ClipboardListIcon />
+                  Committee Reports
                 </Link>
               )}
               {user?.department?.includes("Front Desk") && (

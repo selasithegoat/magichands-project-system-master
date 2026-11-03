@@ -2,6 +2,11 @@ export const adminNavigationItems = [
   { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
   { to: "/projects", label: "Projects", icon: "projects" },
   { to: "/live-updates", label: "Live Updates", icon: "live" },
+  {
+    to: "/disciplinary-reports",
+    label: "Committee Reports",
+    icon: "committee",
+  },
   { to: "/deadlines", label: "Deadlines", icon: "deadlines" },
   {
     to: "/production-oversight",

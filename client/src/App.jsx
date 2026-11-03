@@ -85,6 +85,9 @@ const PendingAssignments = lazy(
   () => import("./pages/PendingAssignments/PendingAssignments"),
 );
 const MyActivities = lazy(() => import("./pages/MyActivities/MyActivities"));
+const DisciplinaryReports = lazy(
+  () => import("./pages/DisciplinaryReports/DisciplinaryReports"),
+);
 
 const APP_SPLASH_DURATION_MS = 1600;
 const THEME_STORAGE_KEY = "mh-client-theme";
@@ -98,6 +101,13 @@ const isFrontDeskPortalUser = (user) =>
   ).some(
     (department) =>
       String(department || "").trim().toLowerCase() === "front desk",
+  );
+
+const hasDisciplinaryAccess = (user) =>
+  Boolean(
+    user &&
+      (user.role === "admin" ||
+        (Array.isArray(user.accessTags) && user.accessTags.includes("scrum_lead"))),
   );
 
 const ClientLayoutContext = React.createContext(null);
@@ -177,6 +187,7 @@ const ProtectedLayout = ({
         window.location.href = buildPortalUrl("inventory");
       }}
       onNavigateHelp={() => navigateTo("/faq")}
+      onNavigateDisciplinary={() => navigateTo("/disciplinary-reports")}
       onCreateProject={() => navigateTo("/create")}
       onNavigateAdmin={() => {
         window.location.href = buildPortalUrl("admin");
@@ -828,6 +839,24 @@ function App() {
               >
                 <EngagedProjectActions user={user} />
               </ProtectedLayout>
+            )
+          }
+        />
+        <Route
+          path="/disciplinary-reports"
+          element={
+            hasDisciplinaryAccess(user) ? (
+              <ProtectedLayout
+                activeView="disciplinary-reports"
+                user={user}
+                navigate={navigate}
+                projectCount={projectCount}
+                engagedCount={engagedCount}
+              >
+                <DisciplinaryReports user={user} portal="client" />
+              </ProtectedLayout>
+            ) : (
+              <Navigate to={user ? "/client" : "/login"} replace />
             )
           }
         />

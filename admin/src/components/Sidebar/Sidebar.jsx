@@ -26,6 +26,13 @@ const iconPaths = {
       <circle cx="12" cy="12" r="9" />
     </>
   ),
+  committee: (
+    <>
+      <path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2Z" />
+      <path d="M8 8h8M8 12h8M8 16h5" />
+      <path d="m14 17 2 2 4-4" />
+    </>
+  ),
   deadlines: (
     <>
       <rect x="3" y="5" width="18" height="16" rx="2" />

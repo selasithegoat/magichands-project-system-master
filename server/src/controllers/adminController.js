@@ -16,6 +16,7 @@ const registerEmployee = async (req, res) => {
       position,
       employeeType,
       productionAccess,
+      accessTags,
     } = req.body;
 
     // Validation
@@ -66,6 +67,9 @@ const registerEmployee = async (req, res) => {
         productionAccess === "Production Trainee"
           ? "Production Trainee"
           : "Departmental Production",
+      accessTags: Array.isArray(accessTags)
+        ? accessTags.filter((tag) => tag === "scrum_lead")
+        : [],
       role, // Dynamic role assignment
     });
 
@@ -82,6 +86,7 @@ const registerEmployee = async (req, res) => {
         employeeType: user.employeeType,
         productionAccess: user.productionAccess,
         role: user.role,
+        accessTags: user.accessTags,
         avatarUrl: user.avatarUrl,
         createdAt: user.createdAt,
       });
@@ -130,6 +135,11 @@ const updateEmployee = async (req, res) => {
     user.employeeId = req.body.employeeId || user.employeeId;
     user.position = req.body.position || user.position;
     user.employeeType = req.body.employeeType || user.employeeType;
+    if (req.body.accessTags !== undefined) {
+      user.accessTags = Array.isArray(req.body.accessTags)
+        ? req.body.accessTags.filter((tag) => tag === "scrum_lead")
+        : [];
+    }
 
     if (req.body.department) {
       const depts = Array.isArray(req.body.department)
@@ -162,6 +172,7 @@ const updateEmployee = async (req, res) => {
       employeeType: updatedUser.employeeType,
       productionAccess: updatedUser.productionAccess,
       role: updatedUser.role,
+      accessTags: updatedUser.accessTags,
       avatarUrl: updatedUser.avatarUrl,
       createdAt: updatedUser.createdAt,
     });

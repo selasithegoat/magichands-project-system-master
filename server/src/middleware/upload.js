@@ -209,6 +209,10 @@ const FILE_POLICY_BY_FIELD = {
     extensions: FEEDBACK_MEDIA_EXTENSIONS,
     mimeTypes: FEEDBACK_MEDIA_MIME_TYPES,
   },
+  disciplinaryEvidence: {
+    extensions: new Set([...IMAGE_EXTENSIONS, ...DOCUMENT_EXTENSIONS]),
+    mimeTypes: new Set([...IMAGE_MIME_TYPES, ...DOCUMENT_MIME_TYPES]),
+  },
   chatAttachments: {
     extensions: CHAT_SAFE_EXTENSIONS,
     mimeTypes: CHAT_SAFE_MIME_TYPES,
@@ -437,6 +441,7 @@ const getChatThreadId = (req) => {
 };
 
 const getCategory = (file) => {
+  if (file.fieldname === "disciplinaryEvidence") return "disciplinary-evidence";
   if (
     file.fieldname === "samplePhotos" ||
     file.fieldname === "sampleDocuments"
@@ -463,6 +468,16 @@ const getRelativeDir = async (req, file) => {
   const day = String(now.getDate()).padStart(2, "0");
   const dateFolder = `${month}-${day}`;
   const category = getCategory(file);
+
+  if (category === "disciplinary-evidence") {
+    const reportFolder = `report-${sanitizeSegment(
+      String(req.params?.id || "draft"),
+      "draft",
+    )}`;
+    const relativeDirFs = path.join(category, year, dateFolder, reportFolder);
+    const relativeDirUrl = path.posix.join(category, year, dateFolder, reportFolder);
+    return { relativeDirFs, relativeDirUrl };
+  }
 
   if (req.projectCreationDraftUploadId) {
     const ownerFolder = `user-${sanitizeSegment(

@@ -183,6 +183,7 @@ const loginUser = async (req, res) => {
         name: user.name,
         employeeId: user.employeeId,
         role: user.role,
+        accessTags: user.accessTags,
         department: user.department,
         employeeType: user.employeeType,
         productionAccess: user.productionAccess,
@@ -351,6 +352,7 @@ const updateProfile = async (req, res) => {
       notificationSettings: updatedUser.notificationSettings,
       sessionSettings: updatedUser.sessionSettings,
       themePreference: updatedUser.themePreference,
+      accessTags: updatedUser.accessTags,
     });
   } else {
     res.status(404);

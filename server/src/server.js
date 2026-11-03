@@ -43,6 +43,7 @@ const realtimeRoutes = require("./routes/realtimeRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const digestRoutes = require("./routes/digestRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const disciplinaryReportRoutes = require("./routes/disciplinaryReportRoutes");
 const opsWallboardRoutes = require("./routes/opsWallboardRoutes");
 const portalRoutes = require("./routes/portalRoutes");
 const inventoryRoutes = require("./routes/inventoryRoutes");
@@ -412,6 +413,7 @@ const realtimePaths = [
   "/api/sample-movements",
   "/api/billing-documents",
   "/api/billing-receipts",
+  "/api/disciplinary-reports",
 ];
 app.use((req, res, next) => {
   if (!req.originalUrl.startsWith("/api")) return next();
@@ -466,6 +468,7 @@ app.use("/api/realtime", realtimeRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/digests", digestRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/disciplinary-reports", disciplinaryReportRoutes);
 app.use("/api/ops/wallboard", opsWallboardRoutes);
 app.use("/api/portal", portalRoutes);
 app.use("/api/inventory", inventoryRoutes);

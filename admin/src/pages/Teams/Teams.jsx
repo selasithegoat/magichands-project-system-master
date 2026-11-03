@@ -89,6 +89,7 @@ const Teams = () => {
     position: "Member",
     employeeType: "Staff",
     productionAccess: "Departmental Production",
+    accessTags: [],
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -227,6 +228,7 @@ const Teams = () => {
       position: "Member",
       employeeType: "Staff",
       productionAccess: "Departmental Production",
+      accessTags: [],
     });
     setPwdStrength(0);
     setSelectedEmployee(null);
@@ -248,6 +250,7 @@ const Teams = () => {
     employeeType: employee?.employeeType || "Staff",
     productionAccess:
       employee?.productionAccess || "Departmental Production",
+    accessTags: Array.isArray(employee?.accessTags) ? employee.accessTags : [],
   });
 
   const openAddModal = () => {
@@ -327,6 +330,7 @@ const Teams = () => {
           body: JSON.stringify({
             ...formData,
             department: normalizedDepartments,
+            accessTags: formData.accessTags,
           }),
         });
 
@@ -359,6 +363,7 @@ const Teams = () => {
               position: formData.position,
               employeeType: formData.employeeType,
               productionAccess: formData.productionAccess,
+              accessTags: formData.accessTags,
             }),
           },
         );
@@ -675,7 +680,7 @@ const Teams = () => {
                   >
                     <header className="employee-card-header">
                       <span className="initials">{getInitials(emp)}</span>
-                      <div className="employee-card-identity"><h3>{getEmployeeName(emp)} <i /></h3><p>ID: {emp.employeeId || "Not assigned"} <span className={`employee-type ${String(emp.employeeType || "staff").toLowerCase()}`}>{emp.employeeType || "Staff"}</span><span className="employee-position">{emp.position || "Member"}</span></p></div>
+                      <div className="employee-card-identity"><h3>{getEmployeeName(emp)} <i /></h3><p>ID: {emp.employeeId || "Not assigned"} <span className={`employee-type ${String(emp.employeeType || "staff").toLowerCase()}`}>{emp.employeeType || "Staff"}</span><span className="employee-position">{emp.position || "Member"}</span>{emp.accessTags?.includes("scrum_lead") && <span className="employee-position">Scrum Lead</span>}</p></div>
                       <div className="employee-card-tools">
                         <button type="button" className="icon-btn edit-btn" onClick={(event) => { event.stopPropagation(); openEditModal(emp); }} title="Edit employee"><PencilIcon width="15" height="15" /></button>
                         <button type="button" className="icon-btn delete-btn" onClick={(event) => { event.stopPropagation(); openDeletePrompt(emp); }} title="Remove employee"><TrashIcon width="15" height="15" /></button>
@@ -716,6 +721,13 @@ const Teams = () => {
                   <label><span>Position / role</span><select name="position" value={inspectorValues.position} onChange={handleChange} disabled={!selectedEmployee}><option value="Member">Member</option><option value="Leader">Leader</option></select></label>
                   <label><span>Employee type</span><select name="employeeType" value={inspectorValues.employeeType} onChange={handleChange} disabled={!selectedEmployee}><option value="Staff">Staff</option><option value="NSP">NSP</option><option value="Intern">Intern</option><option value="Trainee">Trainee</option></select></label>
                   {inspectorValues.department.includes("Production") && <label className="wide"><span>Production access level</span><select name="productionAccess" value={inspectorValues.productionAccess} onChange={handleChange} disabled={!selectedEmployee}><option value="Departmental Production">Departmental Production</option><option value="Production Trainee">Production Trainee</option></select></label>}
+                  <div className="wide committee-access-field">
+                    <span>Committee access</span>
+                    <label className={`scrum-lead-toggle ${inspectorValues.accessTags?.includes("scrum_lead") ? "selected" : ""}`}>
+                      <input type="checkbox" checked={inspectorValues.accessTags?.includes("scrum_lead")} onChange={() => setFormData((current) => ({ ...current, accessTags: current.accessTags?.includes("scrum_lead") ? [] : ["scrum_lead"] }))} disabled={!selectedEmployee} />
+                      <span className="scrum-lead-toggle-copy"><strong>Scrum Lead</strong><small>Committee report access</small></span>
+                    </label>
+                  </div>
                 </div>
                 <div className="inspector-actions">{selectedEmployee ? <><button type="button" onClick={resetForm}>Discard</button><button type="submit" className="primary">Update employee</button></> : <button type="submit" className="primary">Edit credentials</button>}</div>
               </form>
@@ -887,6 +899,20 @@ const Teams = () => {
                 </p>
               </div>
             )}
+            <div className="form-group">
+              <label>Committee Access</label>
+              <label className={`scrum-lead-toggle ${formData.accessTags?.includes("scrum_lead") ? "selected" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={formData.accessTags?.includes("scrum_lead")}
+                  onChange={() => setFormData((current) => ({
+                    ...current,
+                    accessTags: current.accessTags?.includes("scrum_lead") ? [] : ["scrum_lead"],
+                  }))}
+                />
+                <span className="scrum-lead-toggle-copy"><strong>Scrum Lead</strong><small>Allow access to restricted committee meeting reports</small></span>
+              </label>
+            </div>
           </div>
 
           {!selectedEmployee && (

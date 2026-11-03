@@ -26,6 +26,7 @@ const Header = ({
   onNavigateEngagedProjects, // [New] Production Team
   onNavigateInventory, // [New] Stores Team
   onNavigateHelp,
+  onNavigateDisciplinary,
   onToggleMobileMenu,
   onToggleNotification, // New prop
   notificationCount = 0, // New prop
@@ -59,6 +60,8 @@ const Header = ({
   const hasProduction = userDepartments.some((d) =>
     PRODUCTION_SUB_DEPARTMENTS.includes(d),
   );
+  const showDisciplinaryReports =
+    user?.role === "admin" || user?.accessTags?.includes("scrum_lead");
   const hasGraphics =
     userDepartments.includes("Graphics/Design") ||
     userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
@@ -200,6 +203,20 @@ const Header = ({
               {engagedCount > 0 && (
                 <span className="nav-badge">{engagedCount}</span>
               )}
+            </Link>
+          )}
+          {showDisciplinaryReports && (
+            <Link
+              to="#"
+              className={`nav-item ${
+                activeView === "disciplinary-reports" ? "active" : ""
+              }`}
+              onClick={(event) => {
+                event.preventDefault();
+                onNavigateDisciplinary();
+              }}
+            >
+              Committee Reports
             </Link>
           )}
         </nav>

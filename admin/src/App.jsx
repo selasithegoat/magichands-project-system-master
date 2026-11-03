@@ -50,6 +50,9 @@ const BillingDocuments = lazy(
 const SampleAuthorizations = lazy(
   () => import("./pages/SampleAuthorizations/SampleAuthorizations"),
 );
+const DisciplinaryReports = lazy(
+  () => import("@client/pages/DisciplinaryReports/DisciplinaryReports"),
+);
 const ChatDock = lazy(() => import("@client/components/chat/ChatDock"));
 import DashboardLayout from "./layouts/DashboardLayout/DashboardLayout";
 import useInactivityLogout from "./hooks/useInactivityLogout";
@@ -362,6 +365,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <OrderGroupDetails user={user} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/disciplinary-reports"
+            element={
+              <ProtectedRoute>
+                <DisciplinaryReports user={user} portal="admin" />
               </ProtectedRoute>
             }
           />
