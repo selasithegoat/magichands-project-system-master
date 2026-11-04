@@ -61,6 +61,12 @@ test("lead projects are grouped only by main lead and show assistant and source 
     await getLeadProjects({ params: { leadId: String(mainId) } }, res);
 
     assert.equal(String(queriedProjectFilter.projectLeadId), String(mainId));
+    assert.deepEqual(queriedProjectFilter["cancellation.isCancelled"], { $ne: true });
+    assert.deepEqual(
+      [...queriedProjectFilter.status.$nin].sort(),
+      ["Completed", "Declined", "Delivered", "Finished"].sort(),
+    );
+    assert.equal(queriedProjectFilter.status.$nin.includes("On Hold"), false);
     assert.equal(response.projects.length, 1);
     assert.equal(response.projects[0].assistantLead.name, "Kojo Owusu");
     assert.equal(response.projects[0].status, "Production In Progress");

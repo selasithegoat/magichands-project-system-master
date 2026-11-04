@@ -96,8 +96,8 @@ const LiveUpdates = () => {
   const allProjects = projectsQuery.data?.projects || [];
   const projects = allProjects.filter((project) => {
     if (filter === "attention" && !["critical", "warning"].includes(getProjectSignal(project).level)) return false;
-    if (filter === "active" && !project.isActive) return false;
-    if (filter === "closed" && project.isActive) return false;
+    if (filter === "active" && (!project.isActive || project.isOnHold)) return false;
+    if (filter === "hold" && !project.isOnHold) return false;
     return `${project.name} ${project.orderId} ${project.client} ${project.assistantLead?.name || ""}`
       .toLowerCase().includes(projectSearch.trim().toLowerCase());
   }).sort((left, right) => {
@@ -139,7 +139,7 @@ const LiveUpdates = () => {
         <>
           <section className="live-updates-overview" aria-label="Project overview">
             <div className="live-updates-metric live-updates-metric-primary"><span>Projects needing attention</span><strong>{overview.attentionProjects ?? "—"}</strong><small>On hold or priority requests</small></div>
-            <div className="live-updates-metric"><span>Active projects</span><strong>{overview.activeProjects ?? "—"}</strong><small>Across main leads</small></div>
+            <div className="live-updates-metric"><span>Current projects</span><strong>{overview.activeProjects ?? "—"}</strong><small>Active and on hold</small></div>
             <div className="live-updates-metric"><span>Open Inventory requests</span><strong>{overview.openRequests ?? "—"}</strong><small>Awaiting completion</small></div>
             <div className="live-updates-metric"><span>Project leads</span><strong>{overview.leadCount ?? "—"}</strong><small>With assigned projects</small></div>
           </section>
@@ -163,7 +163,7 @@ const LiveUpdates = () => {
                       <span className="live-updates-chevron" aria-hidden="true">›</span>
                     </span>
                     <span className="live-updates-lead-metrics">
-                      <span><strong>{lead.activeProjects}</strong><small>active projects</small></span>
+                      <span><strong>{lead.activeProjects}</strong><small>current projects</small></span>
                       <span><strong>{lead.openRequests || 0}</strong><small>open requests</small></span>
                     </span>
                     <span className={`live-updates-lead-signal ${lead.attentionProjects ? "attention" : "clear"}`}>
@@ -187,7 +187,7 @@ const LiveUpdates = () => {
           </div>
           <div className="live-updates-toolbar">
             <div className="live-updates-filters" role="group" aria-label="Filter projects">
-              {[["all", "All projects", allProjects.length], ["attention", "Needs attention", attentionCount], ["active", "Active", allProjects.filter((project) => project.isActive).length], ["closed", "Closed", allProjects.filter((project) => !project.isActive).length]].map(([key, label, count]) => (
+              {[["all", "All current", allProjects.length], ["attention", "Needs attention", attentionCount], ["active", "Active", allProjects.filter((project) => project.isActive && !project.isOnHold).length], ["hold", "On hold", allProjects.filter((project) => project.isOnHold).length]].map(([key, label, count]) => (
                 <button key={key} type="button" className={filter === key ? "selected" : ""} onClick={() => setFilter(key)} aria-pressed={filter === key}>{label}<span>{count}</span></button>
               ))}
             </div>

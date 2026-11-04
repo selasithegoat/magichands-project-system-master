@@ -5,12 +5,15 @@ const MaterialRequest = require("../models/MaterialRequest");
 const User = require("../models/User");
 const { normalizeProjectUpdateContent } = require("../utils/projectUpdateText");
 
+const CLOSED_STATUSES = ["Completed", "Delivered", "Declined", "Finished"];
 const CURRENT_PROJECT_FILTER = {
   projectLeadId: { $ne: null },
   isLatestVersion: { $ne: false },
   versionState: { $nin: ["superseded", "archived"] },
+  "cancellation.isCancelled": { $ne: true },
+  status: { $nin: CLOSED_STATUSES },
 };
-const CLOSED_STATUSES = new Set(["Completed", "Finished", "Declined"]);
+const CLOSED_STATUS_SET = new Set(CLOSED_STATUSES);
 
 const toId = (value) => String(value?._id || value || "");
 const displayName = (user, fallback = "Unknown lead") =>
@@ -18,7 +21,7 @@ const displayName = (user, fallback = "Unknown lead") =>
   user?.employeeId ||
   fallback;
 const isActive = (project) =>
-  !project?.cancellation?.isCancelled && !CLOSED_STATUSES.has(project?.status);
+  !project?.cancellation?.isCancelled && !CLOSED_STATUS_SET.has(project?.status);
 const asTime = (value) => {
   const time = value ? new Date(value).getTime() : 0;
   return Number.isFinite(time) ? time : 0;
@@ -29,7 +32,7 @@ exports.getLeadProfiles = async (_req, res) => {
     const projects = await Project.find(CURRENT_PROJECT_FILTER)
       .select("_id projectLeadId status cancellation.isCancelled hold.isOnHold")
       .lean();
-    const activeProjects = projects.filter(isActive);
+    const activeProjects = projects;
     const requests = await MaterialRequest.find({
       requestType: "project",
       project: { $in: activeProjects.map((project) => project._id) },
@@ -53,7 +56,6 @@ exports.getLeadProfiles = async (_req, res) => {
       });
       const group = groups.get(key);
       group.totalProjects += 1;
-      if (!isActive(project)) continue;
       group.activeProjects += 1;
       const projectRequests = requestsByProject.get(toId(project)) || [];
       group.openRequests += projectRequests.length;
